@@ -27,6 +27,7 @@ timeRange.oninput = () => timeVal.innerText = timeRange.value;
 incRange.oninput = () => incVal.innerText = incRange.value;
 fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
 
+// STANDARD CHESS PIECES
 const PIECES = {
     'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
     'N': { img: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg' },
@@ -40,6 +41,29 @@ const PIECES = {
     'r': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg' },
     'q': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg' },
     'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
+};
+
+// CUSTOM MUTANT SVGs (WIKIMEDIA COMMONS)
+const MUTANT_PIECES = {
+    // WHITE MUTANTS
+    'P+N': 'https://upload.wikimedia.org/wikipedia/commons/2/28/WHITE_CHESS_PAWN-KNIGHT.svg',
+    'P+B': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/WHITE_CHESS_PAWN-BISHOP.svg',
+    'P+R': 'https://upload.wikimedia.org/wikipedia/commons/2/2b/WHITE_CHESS_PAWN-ROOK.svg',
+    'P+Q': 'https://upload.wikimedia.org/wikipedia/commons/1/14/WHITE_CHESS_PAWN-QUEEN.svg',
+    'N+B': 'https://upload.wikimedia.org/wikipedia/commons/e/eb/WHITE_CHESS_KNIGHT-BISHOP.svg',
+    'N+R': 'https://upload.wikimedia.org/wikipedia/commons/d/d1/WHITE_CHESS_KNIGHT-ROOK.svg',
+    'N+Q': 'https://upload.wikimedia.org/wikipedia/commons/f/f3/WHITE_CHESS_KNIGHT-QUEEN.svg',
+    'B+R': 'https://upload.wikimedia.org/wikipedia/commons/3/30/WHITE_CHESS_BISHOP-ROOK.svg',
+
+    // BLACK MUTANTS
+    'p+n': 'https://upload.wikimedia.org/wikipedia/commons/1/1e/BLACK_CHESS_PAWN-KNIGHT.svg',
+    'p+b': 'https://upload.wikimedia.org/wikipedia/commons/b/b5/BLACK_CHESS_PAWN-BISHOP.svg',
+    'p+r': 'https://upload.wikimedia.org/wikipedia/commons/a/a3/BLACK_CHESS_PAWN-ROOK.svg',
+    'p+q': 'https://upload.wikimedia.org/wikipedia/commons/e/e0/BLACK_CHESS_PAWN-QUEEN.svg',
+    'n+b': 'https://upload.wikimedia.org/wikipedia/commons/d/d2/BLACK_CHESS_KNIGHT-BISHOP.svg',
+    'n+r': 'https://upload.wikimedia.org/wikipedia/commons/7/7b/BLACK_CHESS_KNIGHT-ROOK.svg',
+    'n+q': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/BLACK_CHESS_KNIGHT-QUEEN.svg',
+    'b+r': 'https://upload.wikimedia.org/wikipedia/commons/0/07/BLACK_CHESS_BISHOP-ROOK.svg'
 };
 
 let roomCode = null, playerColor = null;
@@ -632,13 +656,36 @@ function renderBoard() {
 
             if (pieceArr && pieceArr.length > 0) {
                 container.classList.remove('hidden');
-                mainImg.src = PIECES[pieceArr[0]].img;
-                
-                if (pieceArr.length > 1) {
-                    overlayImg.src = PIECES[pieceArr[1]].img;
-                    overlayImg.classList.remove('hidden');
-                } else {
+
+                if (pieceArr.length === 1) {
+                    // SINGLE PIECE
+                    mainImg.src = PIECES[pieceArr[0]].img;
                     overlayImg.classList.add('hidden');
+                } else if (pieceArr.length > 1) {
+                    // MUTANT PIECE
+                    const hasKing = pieceArr.some(p => p.toLowerCase() === 'k');
+
+                    if (hasKing) {
+                        // KING MUTANT: King is main (BIG), other piece is overlay (CORNER)
+                        const kingChar = pieceArr.find(p => p.toLowerCase() === 'k');
+                        const otherChar = pieceArr.find(p => p.toLowerCase() !== 'k');
+
+                        mainImg.src = PIECES[kingChar].img;
+                        overlayImg.src = PIECES[otherChar].img;
+                        overlayImg.classList.remove('hidden');
+                    } else {
+                        // NON-KING MUTANT: Use Wikimedia custom merged SVG!
+                        const key = pieceArr.join('+');
+                        if (MUTANT_PIECES[key]) {
+                            mainImg.src = MUTANT_PIECES[key];
+                            overlayImg.classList.add('hidden');
+                        } else {
+                            // Fallback if key missing
+                            mainImg.src = PIECES[pieceArr[0]].img;
+                            overlayImg.src = PIECES[pieceArr[1]].img;
+                            overlayImg.classList.remove('hidden');
+                        }
+                    }
                 }
             } else {
                 container.classList.add('hidden');
