@@ -160,6 +160,7 @@ socket.on('ready_update', ({ playersReady }) => {
     });
 });
 
+// OTTIMISIERTER COUNTDOWN (SOFORTIGER START OHNE BLOCKIERENDES GO-BANNER)
 socket.on('start_match_countdown', (data) => {
     if (gameMode === 'class') typeCooldowns = data.typeCooldowns;
     else singleCooldowns = data.singleCooldowns;
@@ -169,12 +170,12 @@ socket.on('start_match_countdown', (data) => {
     statusBannerText.innerText = `Match Starting in ${s}s!`;
     const interval = setInterval(() => {
         s--;
-        if (s > 0) statusBannerText.innerText = `Match Starting in ${s}s!`;
-        else { 
+        if (s > 0) {
+            statusBannerText.innerText = `Match Starting in ${s}s!`;
+        } else { 
             clearInterval(interval); 
-            statusBannerText.innerText = `BATTLE STARTED! GO!`; 
             isGameStarted = true;
-            setTimeout(() => statusBanner.classList.add('hidden'), 2000); 
+            statusBanner.classList.add('hidden'); // Instant freigeschaltet!
         }
     }, 1000);
 });
