@@ -1,10 +1,12 @@
 const socket = io();
 
-// TWITCH NAME ABRUFEN
+// TWITCH DATEN ABRUFEN
 const twitchName = localStorage.getItem('cager_twitch_name');
+const twitchPfp = localStorage.getItem('cager_twitch_pfp') || '';
+
 if (twitchName) {
     document.getElementById('player-name').value = twitchName;
-    document.getElementById('player-name').disabled = true; // Sperren, damit man nicht faken kann
+    document.getElementById('player-name').disabled = true;
 }
 
 const INITIAL_BOARD = [
@@ -19,7 +21,8 @@ const INITIAL_BOARD = [
 ];
 
 let roomCode = null, playerId = null, playerColor = null, gameMode = 'class';
-let myName = '', opponentName = '', selectedSquare = null, opponentSelectedSquare = null;
+let myName = '', opponentName = '', opponentPfp = '';
+let selectedSquare = null, opponentSelectedSquare = null;
 let validMoves = [], isGameOver = false, pendingPromotion = null, enPassantTarget = null, isBoardDomCreated = false;
 let isGameStarted = false;
 
@@ -59,14 +62,14 @@ function getVisualCoords(r, c) {
 
 document.getElementById('btn-create').onclick = () => {
     myName = document.getElementById('player-name').value.trim() || 'Player 1';
-    socket.emit('create_room', { playerName: myName, mode: document.getElementById('game-mode').value });
+    socket.emit('create_room', { playerName: myName, mode: document.getElementById('game-mode').value, pfp: twitchPfp });
 };
 
 document.getElementById('btn-join').onclick = () => {
     myName = document.getElementById('player-name').value.trim() || 'Player 2';
     const code = document.getElementById('room-code-input').value.trim();
     if (!code) return showError('Enter code!');
-    socket.emit('join_room', { roomCode: code, playerName: myName });
+    socket.emit('join_room', { roomCode: code, playerName: myName, pfp: twitchPfp });
 };
 
 document.getElementById('btn-leave-lobby').onclick = leaveGame;
@@ -107,11 +110,15 @@ socket.on('room_created', (data) => {
 });
 
 socket.on('room_joined', (data) => {
-    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode; opponentName = data.opponentName;
+    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode; 
+    opponentName = data.opponentName; opponentPfp = data.opponentPfp;
     startGame();
 });
 
-socket.on('opponent_joined', ({ opponentName: opp }) => { opponentName = opp; startGame(); });
+socket.on('opponent_joined', (data) => { 
+    opponentName = data.opponentName; opponentPfp = data.opponentPfp; 
+    startGame(); 
+});
 
 socket.on('ready_update', ({ playersReady }) => {
     playersReady.forEach(p => {
@@ -149,18 +156,30 @@ socket.on('error_msg', (msg) => showError(msg));
 function startGame() {
     isGameStarted = false;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.add('hidden'); gameScreen.classList.remove('hidden');
+    
+    // UI Texte anpassen
     document.getElementById('my-role-tag').innerText = playerColor === 'w' ? 'WHITE' : 'BLACK';
     let modeText = 'CLASS LOCK';
     if (gameMode === 'single') modeText = 'SINGLE PIECE';
     if (gameMode === 'fast_single') modeText = 'BLITZ (2S ALL)';
     document.getElementById('mode-display-tag').innerText = modeText;
+    
     if (gameMode === 'fast_single') {
         ['lg-k-val', 'lg-p-val', 'lg-n-val', 'lg-r-val', 'lg-q-val'].forEach(id => {
             const el = document.getElementById(id); if (el) { el.innerText = '2.0s'; el.className = 'time fast'; }
         });
     }
+    
+    // NAMEN UND BILDER SETZEN
     document.getElementById('bottom-player-name').innerText = myName + ' (You)';
     document.getElementById('top-player-name').innerText = opponentName || 'Opponent';
+    
+    const bottomPfpEl = document.getElementById('bottom-pfp');
+    if (twitchPfp) { bottomPfpEl.src = twitchPfp; bottomPfpEl.classList.remove('hidden'); }
+    
+    const topPfpEl = document.getElementById('top-pfp');
+    if (opponentPfp) { topPfpEl.src = opponentPfp; topPfpEl.classList.remove('hidden'); }
+
     if (playerColor === 'b') boardEl.classList.add('flipped');
     createBoardDOMOnce(); renderBoard(); requestAnimationFrame(updateCooldowns);
 }
