@@ -1,45 +1,67 @@
 :root {
+    /* Original Schachbrett-Farben aus Quick Chess */
     --board-light: #ebecd0;
     --board-dark: #739552;
-    --highlight: rgba(246, 246, 105, 0.6);
-    --merge-glow: rgba(155, 89, 182, 0.7);
+    --highlight: rgba(246, 246, 105, 0.5);
     --danger: #fa4622;
     --accent: #81b64c;
     --warning: #e67e22;
 }
 
+/* HUB STYLE FÜR HINTERGRUND & SCHRIFT */
 body { 
     background-color: #ffffff; 
     color: #111; 
     font-family: 'Patrick Hand', cursive, sans-serif;
     background-image: radial-gradient(#ddd 1px, transparent 1px);
     background-size: 20px 20px;
-    display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    min-height: 100vh; 
+    margin: 0; 
 }
 
 .hidden { display: none !important; }
 
-/* SCRIBBLE BOXES */
+/* SCRIBBLE STYLE FÜR BOXEN (EXAKT QUICK CHESS) */
 .scribble-box {
-    border: 3px solid #000;
-    border-radius: 12px 6px 14px 8px / 8px 14px 8px 12px;
+    border: 4px solid #000;
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
     background: #fff;
-    box-shadow: 5px 5px 0px rgba(0,0,0,0.9);
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
 }
 
-.card { padding: 30px; width: 380px; text-align: center; position: relative; z-index: 10; }
+.card { 
+    padding: 30px; 
+    width: 380px; 
+    text-align: center; 
+    position: relative; 
+    z-index: 10; 
+}
+
 .card h1 { margin: 0 0 5px 0; font-size: 38px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 25px; font-size: 20px; }
 
-.input-group { margin-bottom: 12px; text-align: left; }
-.input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 4px; font-weight: bold; }
+.input-group { margin-bottom: 18px; text-align: left; }
+.input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 5px; font-weight: bold; }
 
-input[type="text"], .scribble-input { 
-    width: 100%; padding: 10px; 
+/* EINGABEFELDER IM SCRIBBLE STIL */
+input[type="text"], .select-input { 
+    width: 100%; 
+    padding: 12px; 
     background: #fff; 
     border: 3px solid #000; 
-    border-radius: 8px 12px 10px 6px / 6px 10px 8px 12px;
-    color: #000; font-size: 18px; box-sizing: border-box; 
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
+    color: #000; 
+    font-size: 18px; 
+    box-sizing: border-box; 
     font-family: 'Patrick Hand', cursive, sans-serif;
 }
 
@@ -49,21 +71,29 @@ input[type="text"], .scribble-input {
     cursor: pointer;
 }
 
+/* BUTTONS IM SCRIBBLE STIL */
 .btn { 
-    width: 100%; padding: 12px; 
+    width: 100%; 
+    padding: 12px; 
     border: 3px solid #000; 
-    border-radius: 8px 12px 10px 6px / 6px 10px 8px 12px;
-    font-size: 22px; font-weight: bold; cursor: pointer; transition: transform 0.1s; 
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
+    font-size: 22px; 
+    font-weight: bold; 
+    cursor: pointer; 
+    transition: transform 0.1s; 
     font-family: 'Patrick Hand', cursive, sans-serif;
     box-shadow: 3px 3px 0px rgba(0,0,0,0.9);
 }
-.btn:hover { transform: scale(1.02); }
-.btn:active { transform: scale(0.98); box-shadow: 1px 1px 0px rgba(0,0,0,0.9); }
+.btn:hover { transform: scale(1.05); }
+.btn:active { transform: scale(0.95); box-shadow: 1px 1px 0px rgba(0,0,0,0.9); }
 
 .btn-primary { background: #f1c40f; color: #000; }
 .btn-secondary { background: #ecf0f1; color: #000; }
 .btn-danger { background: #e74c3c; color: #fff; }
-.btn-ready { background: #f39c12; color: #fff; font-size: 26px; padding: 12px; margin-bottom: 12px; }
+.btn-ready { background: #f39c12; color: #fff; font-size: 26px; padding: 14px; margin-bottom: 15px; }
 .btn-ready.is-ready { background: #2ecc71; cursor: default; }
 
 .btn-back-center {
@@ -75,24 +105,47 @@ input[type="text"], .scribble-input {
     text-align: center;
 }
 
-.divider { margin: 12px 0; color: #666; font-size: 16px; text-align:center;}
+.divider { margin: 15px 0; color: #666; font-size: 16px; text-align: center; }
 .join-box { display: flex; gap: 8px; }
 .join-box input { text-transform: uppercase; text-align: center; }
-.code-display { font-size: 42px; font-weight: bold; color: #000; background: #eee; padding: 15px; margin: 20px 0; border: 3px solid #000; border-radius: 8px 16px; }
+.code-display { 
+    font-size: 42px; 
+    font-weight: bold; 
+    color: #000; 
+    background: #eee; 
+    padding: 15px; 
+    margin: 20px 0; 
+    border: 3px solid #000; 
+    border-radius: 10px 30px; 
+}
 
 .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
 #game-container { position: relative; border-radius: 4px; overflow: hidden; }
 
-/* PLAYER BAR & CLOCKS & FUSION DOTS */
+/* PLAYER BAR & AVATARE (EXAKT QUICK CHESS) */
 .player-bar { 
-    background: #fff; padding: 6px 12px; font-weight: bold; font-size: 20px;
-    display: flex; justify-content: space-between; align-items: center; 
-    margin-bottom: 10px; margin-top: 10px;
-    border: 3px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px;
+    background: #fff; 
+    padding: 8px 12px; 
+    font-weight: bold; 
+    font-size: 20px;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 10px; 
+    margin-top: 10px;
+    border: 3px solid #000; 
+    border-radius: 5px 25px 10px 20px / 15px 10px 20px 5px;
 }
-.player-info { display: flex; align-items: center; gap: 8px; }
-.chess-avatar { width: 35px; height: 35px; border: 2px solid #000; border-radius: 50%; object-fit: cover; }
+.player-info { display: flex; align-items: center; gap: 10px; }
+.chess-avatar { 
+    width: 35px; 
+    height: 35px; 
+    border: 2px solid #000; 
+    border-radius: 50% 40% 50% 40% / 40% 50% 40% 50%; 
+    object-fit: cover; 
+}
 
+/* FUSIONS PUNKTE NEBEN DEM NAMEN */
 .fusion-dots {
     display: flex;
     gap: 4px;
@@ -116,25 +169,50 @@ input[type="text"], .scribble-input {
     box-shadow: none;
 }
 
+/* SCHACHUHR BOXEN */
 .clock-box {
     font-size: 22px;
     font-weight: bold;
     padding: 4px 12px;
     background: #2c3e50;
     color: #fff;
-    border-radius: 6px;
     border: 2px solid #000;
+    border-radius: 5px 15px 10px 20px / 15px 10px 20px 5px;
 }
 
 .clock-box.active {
     background: #f1c40f;
     color: #000;
-    border-color: #000;
 }
 
-.status-banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(243, 156, 18, 0.95); color: white; text-align: center; padding: 16px; border-radius: 8px; font-weight: bold; z-index: 130; border: 4px solid #000; font-size: 26px; }
-#board-wrapper { position: relative; width: 600px; height: 600px; box-shadow: 6px 6px 0px rgba(0,0,0,0.9); border: 4px solid #000; background: var(--board-light); }
+.status-banner { 
+    position: absolute; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%); 
+    width: 80%; 
+    background: rgba(243, 156, 18, 0.95); 
+    color: white; 
+    text-align: center; 
+    padding: 16px; 
+    border-radius: 8px; 
+    font-weight: bold; 
+    z-index: 130; 
+    border: 4px solid #000; 
+    font-size: 24px; 
+}
 
+#board-wrapper { 
+    position: relative; 
+    width: 600px; 
+    height: 600px; 
+    transition: filter 0.3s, opacity 0.3s; 
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9); 
+    border: 4px solid #000; 
+    background: var(--board-light); 
+}
+
+/* SCHACHBRETT GRID */
 #board, .square, .piece-container { user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 #board { display: grid; grid-template-columns: repeat(8, 12.5%); grid-template-rows: repeat(8, 12.5%); width: 600px; height: 600px; }
 #board.flipped { transform: rotate(180deg); }
@@ -145,10 +223,28 @@ input[type="text"], .scribble-input {
 .dark { background-color: var(--board-dark); }
 .selected { background-color: var(--highlight) !important; }
 
-.valid-move::after { content: ''; width: 22px; height: 22px; background: rgba(0,0,0,0.2); border-radius: 50%; position: absolute; pointer-events: none; }
-.capture-move::after { content: ''; width: 65px; height: 65px; border-radius: 50%; border: 5px solid rgba(231, 76, 60, 0.6); position: absolute; pointer-events: none; }
+/* ZUGS-INDIKATOREN */
+.valid-move::after { 
+    content: ''; 
+    width: 22px; 
+    height: 22px; 
+    background: rgba(0,0,0,0.15); 
+    border-radius: 50%; 
+    position: absolute; 
+    pointer-events: none; 
+}
 
-/* REVISED HIGH-VISIBILITY FUSION OVERLAY & BADGE */
+.capture-move::after { 
+    content: ''; 
+    width: 65px; 
+    height: 65px; 
+    border-radius: 50%; 
+    border: 5px solid rgba(0,0,0,0.15); 
+    position: absolute; 
+    pointer-events: none; 
+}
+
+/* FUSION OVERLAY & BADGE */
 .merge-move::after { 
     content: 'FUSION'; 
     position: absolute;
@@ -159,7 +255,7 @@ input[type="text"], .scribble-input {
     font-size: 11px;
     font-weight: bold;
     padding: 2px 5px;
-    border: 1.5px solid #000;
+    border: 2px solid #000;
     border-radius: 4px;
     z-index: 20;
     box-shadow: 1px 1px 0px #000;
@@ -181,39 +277,59 @@ input[type="text"], .scribble-input {
 .piece-img { width: 100%; height: 100%; object-fit: contain; z-index: 10; pointer-events: none; }
 .piece-img.overlay { position: absolute; top: -5px; right: -5px; width: 65%; height: 65%; z-index: 12; filter: drop-shadow(2px 2px 0px #e74c3c); }
 
+/* PROMOTION MODAL */
 #promotion-modal {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(255,255,255,0.85); z-index: 150;
+    background: rgba(255,255,255,0.8); z-index: 150;
     display: flex; justify-content: center; align-items: center;
 }
-.promotion-box { background: var(--board-light); padding: 15px; display: flex; gap: 10px; border: 3px solid #000; }
+.promotion-box { background: var(--board-light); padding: 15px; display: flex; gap: 10px; border: 4px solid #000; }
 .promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.1s; }
 .promo-piece:hover { transform: scale(1.1); }
 
-.sidebar { padding: 18px; width: 280px; display: flex; flex-direction: column; }
-.logo-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px;}
+/* SIDEBAR & SEKTIONEN (EXAKT QUICK CHESS) */
+.sidebar { padding: 20px; width: 280px; display: flex; flex-direction: column; }
+.logo-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;}
 .tag { background: #f1c40f; padding: 3px 8px; border: 2px solid #000; border-radius: 4px; font-size: 14px; font-weight: bold; }
 
-.mode-badge-box { display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 8px 12px; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; margin-bottom: 12px;}
+.mode-badge-box { 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    background: #fff; 
+    padding: 8px 12px; 
+    border: 2px solid #000; 
+    border-radius: 5px 15px 10px 20px / 15px 10px 20px 5px; 
+    margin-bottom: 15px;
+}
 .sidebar-title { font-size: 16px; font-weight: bold; text-transform: uppercase; color: #555; text-decoration: underline; text-decoration-thickness: 2px; }
-.mode-tag { color: #2ecc71; font-weight: bold; font-size: 16px; }
+.mode-tag { color: #f39c12; font-weight: bold; font-size: 16px; }
 
-.history-section { background: #fff; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; padding: 10px; margin-bottom: 12px; }
+.rules-section, .history-section { 
+    background: #fff; 
+    border: 2px solid #000; 
+    border-radius: 15px 5px 20px 10px / 5px 20px 10px 15px; 
+    padding: 12px; 
+    margin-bottom: 15px; 
+}
+
 .history-list { max-height: 90px; overflow-y: auto; font-size: 15px; font-family: monospace; display: flex; flex-direction: column; gap: 4px; }
 .history-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #ccc; padding-bottom: 2px; }
 
-.actions-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.actions-row { display: flex; gap: 8px; margin-bottom: 15px; }
 .actions-row .btn { padding: 8px; font-size: 18px; }
 
-.rules-section { background: #fff; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; padding: 10px; margin-bottom: 12px; }
-.rules-list { margin: 0; padding-left: 0; list-style: none; font-size: 15px; color: #222; line-height: 1.4; }
+.rules-list { margin: 0; padding-left: 0; list-style: none; font-size: 16px; color: #222; line-height: 1.5; }
 
+/* MODALS */
 #game-over, #draw-modal { 
-    position: absolute; top:0; left:0; width:100%; height:100%; 
+    display: none;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
     background: rgba(255,255,255,0.85); z-index: 140; 
     justify-content: center; align-items: center; flex-direction: column; 
 }
 
+/* SPLASH SCREEN & LOADER */
 #splash-screen {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background-color: rgba(255,255,255,0.9);
@@ -231,6 +347,16 @@ input[type="text"], .scribble-input {
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-.flork-bg { position: fixed; bottom: -15px; width: 200px; z-index: 0; pointer-events: none; opacity: 0.9; }
+.disabled-ui { pointer-events: none; opacity: 0.4; filter: grayscale(100%); }
+
+/* FLORK BACKGROUND STYLE */
+.flork-bg {
+    position: fixed;
+    bottom: -15px;
+    width: 200px; 
+    z-index: 0;
+    pointer-events: none; 
+    opacity: 0.9;
+}
 .flork-left { left: 2%; }
 .flork-right { right: 2%; transform: scaleX(-1); }
