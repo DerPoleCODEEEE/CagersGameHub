@@ -38,7 +38,7 @@ const PIECES = {
     'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
 };
 
-let roomCode = null, playerId = null, playerColor = null;
+let roomCode = null, playerColor = null;
 let myName = '', opponentName = '', opponentPfp = '';
 let selectedSquare = null;
 let validMoves = [], isGameOver = false, isBoardDomCreated = false;
@@ -112,12 +112,12 @@ document.getElementById('btn-leave-game').onclick = leaveGame;
 
 document.getElementById('btn-resign').onclick = () => {
     if (confirm("Are you sure you want to resign?")) {
-        socket.emit('resign_game', { roomCode, playerId });
+        socket.emit('resign_game', { roomCode });
     }
 };
 
 document.getElementById('btn-offer-draw').onclick = () => {
-    socket.emit('offer_draw', { roomCode, playerId });
+    socket.emit('offer_draw', { roomCode });
     alert("Draw offer sent!");
 };
 
@@ -132,7 +132,7 @@ document.getElementById('btn-decline-draw').onclick = () => {
 };
 
 btnReady.onclick = () => {
-    socket.emit('player_ready', { roomCode, playerId });
+    socket.emit('player_ready', { roomCode });
     btnReady.innerText = 'READY!'; btnReady.classList.add('is-ready'); btnReady.disabled = true;
 };
 
@@ -140,14 +140,14 @@ function leaveGame() { location.reload(); }
 function showError(msg) { errorMsg.innerText = msg; }
 
 socket.on('mutant_room_created', (data) => {
-    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
+    roomCode = data.roomCode; playerColor = data.color;
     if (data.clocks) clocks = data.clocks;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
 });
 
 socket.on('mutant_room_joined', (data) => {
-    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
+    roomCode = data.roomCode; playerColor = data.color;
     opponentName = data.opponentName; opponentPfp = data.opponentPfp;
     if (data.clocks) clocks = data.clocks;
     startGame();
@@ -164,9 +164,11 @@ socket.on('mutant_opponent_left', () => {
 });
 
 socket.on('ready_update', ({ playersReady }) => {
+    statusBanner.classList.remove('hidden');
     playersReady.forEach(p => {
         if (p.ready) {
-            statusBannerText.innerText = `${p.color === playerColor ? myName : opponentName} is Ready!`;
+            const displayName = p.color === playerColor ? myName : (opponentName || p.name || 'Opponent');
+            statusBannerText.innerText = `${displayName} is Ready!`;
         }
     });
 });
@@ -392,7 +394,6 @@ function getValidMoves(r, c) {
                         else if (pieceArr.length + target.length <= 2) moves.push({ r: nr, c: nc, type: 'merge' });
                     }
                 }
-                // ROCHADE CHECK
                 const kRow = pColor === 'w' ? 7 : 0;
                 const kKey = pColor === 'w' ? 'wK' : 'bK';
                 const rookChar = pColor === 'w' ? 'R' : 'r';
@@ -425,7 +426,6 @@ function handleSquareClick(r, c) {
         if (moveInfo) {
             const movingPiece = board[selectedSquare.r][selectedSquare.c];
 
-            // PROMOTION CHECK (ONLY PURE PAWNS)
             if (movingPiece && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p' && (r === 0 || r === 7)) {
                 triggerPromotion(selectedSquare.r, selectedSquare.c, r, c, moveInfo);
                 return;
@@ -470,7 +470,7 @@ function triggerPromotion(fromR, fromC, toR, toC, moveInfo) {
 
 function sendMoveToServer(fromR, fromC, toR, toC, moveInfo, promotedTo) {
     socket.emit('request_mutant_move', {
-        roomCode, playerId, fromR, fromC, toR, toC, moveInfo, promotedTo
+        roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo
     });
 }
 
@@ -511,7 +511,6 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, newBoard, nextTurn) {
     const targetPiece = board[toR][toC];
     if (!movingPiece) return;
 
-    // UPDATE HAS MOVED
     if (movingPiece.includes('K')) hasMoved.wK = true;
     if (movingPiece.includes('k')) hasMoved.bK = true;
     if (movingPiece.includes('R') && fromR === 7 && fromC === 0) hasMoved.wR_left = true;
@@ -519,7 +518,6 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, newBoard, nextTurn) {
     if (movingPiece.includes('r') && fromR === 0 && fromC === 0) hasMoved.bR_left = true;
     if (movingPiece.includes('r') && fromR === 0 && fromC === 7) hasMoved.bR_right = true;
 
-    // UPDATE EN PASSANT TARGET
     if (movingPiece.some(p => p.toLowerCase() === 'p') && Math.abs(toR - fromR) === 2) {
         enPassantTarget = { r: (fromR + toR) / 2, c: fromC, color: getPieceColor(movingPiece) };
     } else {
@@ -528,7 +526,6 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, newBoard, nextTurn) {
 
     addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, moveInfo ? moveInfo.type : 'normal');
 
-    // INSTANT EXECUTION
     board = newBoard;
     currentTurn = nextTurn;
     updateTurnDisplay();
