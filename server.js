@@ -240,7 +240,7 @@ mutantIo.on('connection', (socket) => {
         }
     });
 
-    socket.on('request_mutant_move', ({ roomCode, playerId, fromR, fromC, toR, toC, moveInfo, duration }) => {
+    socket.on('request_mutant_move', ({ roomCode, playerId, fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
         const room = mutantRooms.get(roomCode);
         if (!room) return;
 
@@ -259,14 +259,40 @@ mutantIo.on('connection', (socket) => {
 
         const targetPiece = room.board[toR][toC];
 
-        if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
+        // ROCHADE (CASTLING)
+        if (moveInfo && moveInfo.type === 'castle') {
+            room.board[toR][toC] = sortCanonically(movingPiece);
+            room.board[fromR][fromC] = null;
+            
+            const rookFromC = toC === 6 ? 7 : 0;
+            const rookToC = toC === 6 ? 5 : 3;
+            const rookPiece = room.board[fromR][rookFromC];
+            room.board[fromR][rookToC] = rookPiece;
+            room.board[fromR][rookFromC] = null;
+        }
+        // EN PASSANT
+        else if (moveInfo && moveInfo.type === 'en_passant') {
+            const capturedPawnRow = pieceColor === 'w' ? toR + 1 : toR - 1;
+            room.board[capturedPawnRow][toC] = null;
+            room.board[toR][toC] = sortCanonically(movingPiece);
+            room.board[fromR][fromC] = null;
+        }
+        // PROMOTION (Only pure pawns)
+        else if (promotedTo && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p') {
+            room.board[toR][toC] = [promotedTo];
+            room.board[fromR][fromC] = null;
+        }
+        // MERGE FUSION
+        else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
             if (movingPiece.length + targetPiece.length <= 2) {
                 room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
                 room.board[fromR][fromC] = null;
             } else {
                 return socket.emit('error_msg', 'Maximum 2 pieces per square!');
             }
-        } else {
+        } 
+        // NORMAL MOVE / CAPTURE
+        else {
             let isKingCaptured = false;
             if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) {
                 isKingCaptured = true;
@@ -282,7 +308,7 @@ mutantIo.on('connection', (socket) => {
         room.turn = room.turn === 'w' ? 'b' : 'w';
 
         mutantIo.to(roomCode).emit('apply_mutant_move', {
-            playerId, fromR, fromC, toR, toC, moveInfo, duration, board: room.board, nextTurn: room.turn,
+            playerId, fromR, fromC, toR, toC, moveInfo, board: room.board, nextTurn: room.turn,
             clocks: room.clocks
         });
     });
