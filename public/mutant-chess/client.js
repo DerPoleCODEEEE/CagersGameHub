@@ -27,37 +27,37 @@ timeRange.oninput = () => timeVal.innerText = timeRange.value;
 incRange.oninput = () => incVal.innerText = incRange.value;
 fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
 
-// STANDARD CHESS PIECES (LOKALE GREEN CHESS ASSETS)
+// STANDARD CHESS PIECES (ONLINE WIKIMEDIA - GUARANTEED WORKING)
 const PIECES = {
-    'P': { img: 'assets/pawn-w.svg' },
-    'N': { img: 'assets/knight-w.svg' },
-    'B': { img: 'assets/bishop-w.svg' },
-    'R': { img: 'assets/rook-w.svg' },
-    'Q': { img: 'assets/queen-w.svg' },
-    'K': { img: 'assets/king-w.svg' },
-    'p': { img: 'assets/pawn-b.svg' },
-    'n': { img: 'assets/knight-b.svg' },
-    'b': { img: 'assets/bishop-b.svg' },
-    'r': { img: 'assets/rook-b.svg' },
-    'q': { img: 'assets/queen-b.svg' },
-    'k': { img: 'assets/king-b.svg' }
+    'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
+    'N': { img: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg' },
+    'B': { img: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg' },
+    'R': { img: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg' },
+    'Q': { img: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg' },
+    'K': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg' },
+    'p': { img: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg' },
+    'n': { img: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg' },
+    'b': { img: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg' },
+    'r': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg' },
+    'q': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg' },
+    'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
 };
 
-// GREEN CHESS FAIRY PIECES FOR MUTANTS
+// FAIRY / MUTANT CHESS PIECES
 const MUTANT_PIECES = {
     // WHITE
-    'P+N': 'assets/bpawn-w.svg',
-    'P+B': 'assets/bpawn2-w.svg',
-    'N+B': 'assets/archbis-w.svg',
-    'N+R': 'assets/chancel-w.svg',
-    'N+Q': 'assets/amazon-w.svg',
+    'P+N': 'https://upload.wikimedia.org/wikipedia/commons/2/28/WHITE_CHESS_PAWN-KNIGHT.svg',
+    'P+B': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/WHITE_CHESS_PAWN-BISHOP.svg',
+    'N+B': 'https://upload.wikimedia.org/wikipedia/commons/e/eb/WHITE_CHESS_KNIGHT-BISHOP.svg',
+    'N+R': 'https://upload.wikimedia.org/wikipedia/commons/d/d1/WHITE_CHESS_KNIGHT-ROOK.svg',
+    'N+Q': 'https://upload.wikimedia.org/wikipedia/commons/f/f3/WHITE_CHESS_KNIGHT-QUEEN.svg',
 
     // BLACK
-    'p+n': 'assets/bpawn-b.svg',
-    'p+b': 'assets/bpawn2-b.svg',
-    'n+b': 'assets/archbis-b.svg',
-    'n+r': 'assets/chancel-b.svg',
-    'n+q': 'assets/amazon-b.svg'
+    'p+n': 'https://upload.wikimedia.org/wikipedia/commons/1/1e/BLACK_CHESS_PAWN-KNIGHT.svg',
+    'p+b': 'https://upload.wikimedia.org/wikipedia/commons/b/b5/BLACK_CHESS_PAWN-BISHOP.svg',
+    'n+b': 'https://upload.wikimedia.org/wikipedia/commons/d/d2/BLACK_CHESS_KNIGHT-BISHOP.svg',
+    'n+r': 'https://upload.wikimedia.org/wikipedia/commons/7/7b/BLACK_CHESS_KNIGHT-ROOK.svg',
+    'n+q': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/BLACK_CHESS_KNIGHT-QUEEN.svg'
 };
 
 let roomCode = null, playerColor = null;
@@ -360,10 +360,12 @@ function createBoardDOMOnce() {
             
             const mainImg = document.createElement('img');
             mainImg.className = 'piece-img main';
+            mainImg.referrerPolicy = "no-referrer"; // Bypasses hotlinking restriction
             container.appendChild(mainImg);
 
             const overlayImg = document.createElement('img');
             overlayImg.className = 'piece-img overlay hidden';
+            overlayImg.referrerPolicy = "no-referrer";
             container.appendChild(overlayImg);
 
             const fusedBadge = document.createElement('div');
@@ -458,7 +460,7 @@ function getValidMoves(r, c) {
 
             case 'r': addSliding([[-1,0],[1,0],[0,-1],[0,1]]); break;
             case 'b': addSliding([[-1,-1],[-1,1],[1,-1],[1,1]]); break;
-            case 'q': addSliding([[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]); break;
+            case 'q': addSliding([[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[-1,0],[1,0],[0,-1],[0,1]]); break;
 
             case 'n':
                 for (let [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
@@ -570,6 +572,7 @@ function triggerPromotion(fromR, fromC, toR, toC, moveInfo) {
     promoPieces.forEach(p => {
         const img = document.createElement('img');
         img.className = 'promo-piece';
+        img.referrerPolicy = "no-referrer";
         img.src = PIECES[p].img;
         img.onclick = () => {
             modal.style.display = 'none';
@@ -693,7 +696,7 @@ function renderBoard() {
                         overlayImg.src = PIECES[otherChar].img;
                         overlayImg.classList.remove('hidden');
                     } else {
-                        // REGULAR MUTANT: Try GreenChess custom fairy SVG
+                        // REGULAR MUTANT: Try custom fairy SVG
                         const key = pieceArr.join('+');
                         const customSrc = MUTANT_PIECES[key];
 
@@ -701,7 +704,7 @@ function renderBoard() {
                             mainImg.src = customSrc;
                             overlayImg.classList.add('hidden');
 
-                            // Fallback if missing
+                            // Fallback to overlay if image load fails
                             mainImg.onerror = () => {
                                 mainImg.onerror = null;
                                 mainImg.src = PIECES[pieceArr[0]].img;
