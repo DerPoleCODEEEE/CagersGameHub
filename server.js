@@ -16,8 +16,8 @@ const io = new Server(server, { cors: { origin: "*" } });
 // 1. MONGODB
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
-        .then(() => console.log('✅ MongoDB verbunden!'))
-        .catch(err => console.log('❌ MongoDB Fehler:', err));
+        .then(() => console.log('✅ MongoDB connected!'))
+        .catch(err => console.log('❌ MongoDB Error:', err));
 }
 
 // 2. SESSION & TWITCH LOGIN
@@ -62,7 +62,7 @@ app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 
-// 4. CAGERS QUICK CHESS (UNVERÄNDERT)
+// 4. CAGERS QUICK CHESS (UNCHANGED)
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
@@ -123,7 +123,7 @@ io.on('connection', (socket) => {
     socket.on('leave_room', ({ roomCode }) => { socket.to(roomCode).emit('opponent_left'); socket.leave(roomCode); });
 });
 
-// 5. MUTANT MERGE CHESS (ISOLIERTER NAMESPACE)
+// 5. MUTANT MERGE CHESS (ISOLATED NAMESPACE)
 const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
 
@@ -161,6 +161,11 @@ mutantIo.on('connection', (socket) => {
             hostColor = Math.random() < 0.5 ? 'w' : 'b';
         }
 
+        const initialClocks = {
+            w: (totalTime || 3) * 60,
+            b: (totalTime || 3) * 60
+        };
+
         const roomData = {
             players: {
                 w: hostColor === 'w' ? { id: socket.id, name: playerName, pfp, ready: false } : null,
@@ -172,10 +177,7 @@ mutantIo.on('connection', (socket) => {
                 minutes: totalTime || 3,
                 increment: increment || 2
             },
-            clocks: {
-                w: (totalTime || 3) * 60,
-                b: (totalTime || 3) * 60
-            },
+            clocks: { ...initialClocks },
             lastTurnTimestamp: null,
             hostColor
         };
@@ -184,7 +186,8 @@ mutantIo.on('connection', (socket) => {
         socket.join(roomCode);
         socket.emit('mutant_room_created', { 
             roomCode, playerId: socket.id, color: hostColor, playerName, pfp,
-            timeControl: roomData.timeControl
+            timeControl: roomData.timeControl,
+            clocks: roomData.clocks
         });
     });
 
@@ -192,10 +195,10 @@ mutantIo.on('connection', (socket) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
 
-        if (!room) return socket.emit('error_msg', 'Raum nicht gefunden!');
+        if (!room) return socket.emit('error_msg', 'Room not found!');
         
         let joinerColor = room.players.w ? 'b' : 'w';
-        if (room.players[joinerColor]) return socket.emit('error_msg', 'Raum ist voll!');
+        if (room.players[joinerColor]) return socket.emit('error_msg', 'Room is full!');
 
         room.players[joinerColor] = { id: socket.id, name: playerName, pfp, ready: false };
         socket.join(code);
@@ -209,7 +212,8 @@ mutantIo.on('connection', (socket) => {
             color: joinerColor,
             opponentName: opponent.name,
             opponentPfp: opponent.pfp,
-            timeControl: room.timeControl
+            timeControl: room.timeControl,
+            clocks: room.clocks
         });
 
         socket.to(code).emit('mutant_opponent_joined', {
@@ -246,7 +250,6 @@ mutantIo.on('connection', (socket) => {
         const pieceColor = getPieceColor(movingPiece);
         if (room.turn !== pieceColor) return;
 
-        // Uhrenberechnung mit Inkrement
         const now = Date.now();
         if (room.lastTurnTimestamp) {
             const elapsedSeconds = (now - room.lastTurnTimestamp) / 1000;
@@ -261,7 +264,7 @@ mutantIo.on('connection', (socket) => {
                 room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
                 room.board[fromR][fromC] = null;
             } else {
-                return socket.emit('error_msg', 'Maximal 2 Figuren pro Feld!');
+                return socket.emit('error_msg', 'Maximum 2 pieces per square!');
             }
         } else {
             let isKingCaptured = false;
@@ -284,7 +287,6 @@ mutantIo.on('connection', (socket) => {
         });
     });
 
-    // TIME OUT EVENT
     socket.on('time_out', ({ roomCode, loserColor }) => {
         const room = mutantRooms.get(roomCode);
         if (!room) return;
@@ -292,7 +294,6 @@ mutantIo.on('connection', (socket) => {
         mutantIo.to(roomCode).emit('game_over', { winnerColor, reason: 'time' });
     });
 
-    // RESIGN & DRAW
     socket.on('resign_game', ({ roomCode, playerId }) => {
         const room = mutantRooms.get(roomCode);
         if (!room) return;
