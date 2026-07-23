@@ -13,26 +13,18 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// ==========================================
-// 1. MONGODB DATENBANK VERBINDUNG
-// ==========================================
+// 1. MONGODB
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
         .then(() => console.log('✅ MongoDB verbunden!'))
         .catch(err => console.log('❌ MongoDB Fehler:', err));
-} else {
-    console.log('⚠️ Keine MongoDB URL gefunden. Spiel startet ohne Datenbank.');
 }
 
-// ==========================================
-// 2. SESSION & TWITCH LOGIN SETUP
-// ==========================================
+// 2. SESSION & TWITCH LOGIN
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thecager_geheim_123',
-    resave: false,
-    saveUninitialized: false
+    resave: false, saveUninitialized: false
 }));
-
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -46,85 +38,59 @@ if (process.env.TWITCH_CLIENT_ID) {
         try {
             let user = await User.findOne({ twitchId: profile.id });
             if (!user) {
-                user = await User.create({
-                    twitchId: profile.id,
-                    displayName: profile.display_name,
-                    profileImageUrl: profile.profile_image_url
-                });
+                user = await User.create({ twitchId: profile.id, displayName: profile.display_name, profileImageUrl: profile.profile_image_url });
             } else {
-                user.displayName = profile.display_name;
-                user.profileImageUrl = profile.profile_image_url;
-                await user.save();
+                user.displayName = profile.display_name; user.profileImageUrl = profile.profile_image_url; await user.save();
             }
             return done(null, user);
-        } catch (err) {
-            return done(err);
-        }
+        } catch (err) { return done(err); }
     }));
 }
 
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
-    try {
-        const user = await User.findById(id);
-        done(null, user);
-    } catch (err) {
-        done(err);
-    }
+    try { const user = await User.findById(id); done(null, user); } catch (err) { done(err); }
 });
 
-// ==========================================
-// 3. ROUTES FÜR AUTHENTIFIZIERUNG & HUB
-// ==========================================
+// 3. ROUTES
 app.get('/auth/twitch', passport.authenticate('twitch'));
-app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => {
-    res.redirect('/');
-});
-app.get('/auth/logout', (req, res) => {
-    req.logout(() => { res.redirect('/'); });
-});
-app.get('/api/user', (req, res) => {
-    res.json(req.user || null); // Sendet Twitch-Profil an das Frontend
-});
+app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
+app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
+app.get('/api/user', (req, res) => res.json(req.user || null));
 
-// ==========================================
-// 4. ROUTING: HUB UND GAMES
-// ==========================================
-// Das Hub ist die Startseite (/)
 app.use(express.static(path.join(__dirname, 'public/hub')));
-
-// Das Schachspiel ist unter /chess erreichbar
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 
-// ==========================================
-// 5. SCHACH MULTIPLAYER LOGIK (UNVERÄNDERT)
-// ==========================================
+// 4. SCHACH MULTIPLAYER (Jetzt mit pfp Übertragung!)
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
 io.on('connection', (socket) => {
-    socket.on('create_room', ({ playerName, mode }) => {
+    socket.on('create_room', ({ playerName, mode, pfp }) => {
         const roomCode = generateRoomCode();
-        const playerId = socket.id;
         rooms.set(roomCode, {
             mode: mode || 'class',
-            players: { w: { id: playerId, name: playerName, ready: false }, b: null },
+            players: { w: { id: socket.id, name: playerName, pfp: pfp || '', ready: false }, b: null },
             board: null, typeCooldowns: null, singleCooldowns: null
         });
         socket.join(roomCode);
-        socket.emit('room_created', { roomCode, playerId, color: 'w', mode });
+        socket.emit('room_created', { roomCode, playerId: socket.id, color: 'w', mode });
     });
 
-    socket.on('join_room', ({ roomCode, playerName }) => {
+    socket.on('join_room', ({ roomCode, playerName, pfp }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = rooms.get(code);
         if (!room) return socket.emit('error_msg', 'Room not found!');
         if (room.players.b) return socket.emit('error_msg', 'Room is full!');
-        const playerId = socket.id;
-        room.players.b = { id: playerId, name: playerName, ready: false };
+        
+        room.players.b = { id: socket.id, name: playerName, pfp: pfp || '', ready: false };
         socket.join(code);
-        socket.emit('room_joined', { roomCode: code, playerId, color: 'b', mode: room.mode, opponentName: room.players.w.name });
-        socket.to(code).emit('opponent_joined', { opponentName: playerName });
+        
+        socket.emit('room_joined', { 
+            roomCode: code, playerId: socket.id, color: 'b', mode: room.mode, 
+            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp 
+        });
+        socket.to(code).emit('opponent_joined', { opponentName: playerName, opponentPfp: pfp });
     });
 
     socket.on('player_ready', ({ roomCode, playerId }) => {
@@ -141,10 +107,7 @@ io.on('connection', (socket) => {
 
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
             if (room.mode === 'class') {
-                room.typeCooldowns = {
-                    'w': { 'p': 0, 'n': 0, 'b': 0, 'r': 0, 'q': 0, 'k': 0 },
-                    'b': { 'p': 0, 'n': 0, 'b': 0, 'r': 0, 'q': 0, 'k': 0 }
-                };
+                room.typeCooldowns = { 'w': { 'p':0,'n':0,'b':0,'r':0,'q':0,'k':0 }, 'b': { 'p':0,'n':0,'b':0,'r':0,'q':0,'k':0 } };
             } else {
                 room.singleCooldowns = Array(8).fill(null).map(() => Array(8).fill(0));
             }
