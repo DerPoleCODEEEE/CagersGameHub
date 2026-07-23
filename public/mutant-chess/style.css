@@ -124,14 +124,39 @@ input[type="text"], .scribble-input {
 
 .valid-move::after { content: ''; width: 22px; height: 22px; background: rgba(0,0,0,0.2); border-radius: 50%; position: absolute; pointer-events: none; }
 .capture-move::after { content: ''; width: 65px; height: 65px; border-radius: 50%; border: 5px solid rgba(231, 76, 60, 0.6); position: absolute; pointer-events: none; }
-.merge-move::after { content: ''; width: 65px; height: 65px; border-radius: 50%; border: 5px solid rgba(155, 89, 182, 0.8); background: rgba(155, 89, 182, 0.2); position: absolute; pointer-events: none; }
+
+/* GEFIXTER FUSION-KREIS MIT FUSION TEXT */
+.merge-move::after { 
+    content: 'FUSION'; 
+    width: 60px; 
+    height: 60px; 
+    border-radius: 50%; 
+    border: 3px solid rgba(155, 89, 182, 0.9); 
+    background: rgba(155, 89, 182, 0.35); 
+    position: absolute; 
+    pointer-events: none; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #2c0e37;
+    letter-spacing: 0.5px;
+}
 
 .piece-container { width: 100%; height: 100%; position: relative; display: flex; justify-content: center; align-items: center; pointer-events: none; }
 .piece-img { width: 100%; height: 100%; object-fit: contain; z-index: 10; pointer-events: none; }
 .piece-img.overlay { position: absolute; top: -5px; right: -5px; width: 65%; height: 65%; z-index: 12; filter: drop-shadow(2px 2px 0px #e74c3c); }
 
-#animation-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 35; }
-.animating-wrapper { position: absolute; width: 12.5%; height: 12.5%; pointer-events: none; transition-property: transform; }
+/* PROMOTION MODAL */
+#promotion-modal {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,0.85); z-index: 150;
+    display: flex; justify-content: center; align-items: center;
+}
+.promotion-box { background: var(--board-light); padding: 15px; display: flex; gap: 10px; border: 3px solid #000; }
+.promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.1s; }
+.promo-piece:hover { transform: scale(1.1); }
 
 .sidebar { padding: 18px; width: 280px; display: flex; flex-direction: column; }
 .logo-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px;}
@@ -174,8 +199,6 @@ input[type="text"], .scribble-input {
     animation: spin 1s linear infinite;
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-.disabled-ui { pointer-events: none; opacity: 0.4; filter: grayscale(100%); }
 
 .flork-bg { position: fixed; bottom: -15px; width: 200px; z-index: 0; pointer-events: none; opacity: 0.9; }
 .flork-left { left: 2%; }
