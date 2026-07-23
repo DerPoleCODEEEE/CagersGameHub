@@ -1,5 +1,38 @@
 const socket = io();
 
+// UI STATUS UND RECONNECT LOGIK
+function updateUIConnectionStatus(status) {
+    const indicator = document.getElementById('status-indicator');
+    const gameBoard = document.getElementById('board-wrapper');
+    const splash = document.getElementById('splash-screen');
+    
+    if (status === 'online') {
+        if (indicator) {
+            indicator.className = 'status-online';
+            indicator.innerText = 'Verbunden';
+        }
+        if (gameBoard) gameBoard.classList.remove('disabled-ui');
+        if (splash) splash.style.display = 'none';
+    } else {
+        if (indicator) {
+            indicator.className = 'status-offline';
+            indicator.innerText = 'Verbindung verloren... Reconnect...';
+        }
+        if (gameBoard) gameBoard.classList.add('disabled-ui');
+    }
+}
+
+socket.on('connect', () => {
+    updateUIConnectionStatus('online');
+    if (isGameStarted && roomCode) {
+        socket.emit('request_sync', { roomCode }); // Zustand nach Reconnect abrufen
+    }
+});
+
+socket.on('disconnect', () => {
+    updateUIConnectionStatus('offline');
+});
+
 // TWITCH DATEN ABRUFEN
 const twitchName = localStorage.getItem('cager_twitch_name');
 const twitchPfp = localStorage.getItem('cager_twitch_pfp') || '';
