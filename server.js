@@ -58,13 +58,12 @@ app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedire
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
-// Statische Ordner für die Frontends
+// Statische Ordner servieren
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
-// NEU: Route für Mutant Merge Chess
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 
-// 4. SCHACH MULTIPLAYER (Quick Chess)
+// 4. SCHACH MULTIPLAYER (Cagers Quick Chess - Unverändert)
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
@@ -129,59 +128,137 @@ io.on('connection', (socket) => {
 const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
 
-mutantIo.on('connection', (socket) => {
+function createInitialMutantBoard() {
+    const board = Array(8).fill(null).map(() => Array(8).fill(null));
+    const backRow = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
+    for (let c = 0; c < 8; c++) {
+        board[0][c] = { color: 'b', types: [backRow[c]] };
+        board[1][c] = { color: 'b', types: ['p'] };
+        board[6][c] = { color: 'w', types: ['p'] };
+        board[7][c] = { color: 'w', types: [backRow[c]] };
+    }
+    return board;
+}
+
+function isValidMutantMove(board, startR, startC, targetR, targetC, playerColor) {
+    const piece = board[startR][startC];
+    const target = board[targetR][targetC];
     
-    socket.on('create_mutant_room', ({ playerName, pfp }) => {
-        const roomCode = generateRoomCode();
-        mutantRooms.set(roomCode, {
-            players: { w: { id: socket.id, name: playerName, pfp: pfp || '' }, b: null },
-            board: {} // Hier kommt später dein Startbrett-Setup rein
-        });
-        socket.join(roomCode);
-        socket.emit('mutant_room_created', { roomCode, playerId: socket.id, color: 'w' });
-    });
+    if (target && target.color === playerColor) {
+        if (piece.types.length + target.types.length > 2) return false;
+    }
 
+    const dr = targetR - startR;
+    const dc = targetC - startC;
+    const absDr = Math.abs(dr);
+    const absDc = Math.abs(dc);
+
+    for (const type of piece.types) {
+        if (type === 'p') {
+            const dir = piece.color === 'w' ? -1 : 1;
+            const startRow = piece.color === 'w' ? 6 : 1;
+            if (dc === 0 && dr === dir && !target) return true;
+            if (dc === 0 && startR === startRow && dr === 2 * dir && !target && !board[startR + dir][startC]) return true;
+            if (absDc === 1 && dr === dir && target) return true;
+        }
+        if (type === 'n') {
+            if ((absDr === 2 && absDc === 1) || (absDr === 1 && absDc === 2)) return true;
+        }
+        if (type === 'k') {
+            if (absDr <= 1 && absDc <= 1) return true;
+        }
+        if (type === 'r' || type === 'q') {
+            if (dr === 0 || dc === 0) {
+                const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
+                const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
+                let checkR = startR + stepR, checkC = startC + stepC;
+                let blocked = false;
+                while (checkR !== targetR || checkC !== targetC) {
+                    if (board[checkR][checkC]) blocked = true;
+                    checkR += stepR; checkC += stepC;
+                }
+                if (!blocked) return true;
+            }
+        }
+        if (type === 'b' || type === 'q') {
+            if (absDr === absDc) {
+                const stepR = dr > 0 ? 1 : -1;
+                const stepC = dc > 0 ? 1 : -1;
+                let checkR = startR + stepR, checkC = startC + stepC;
+                let blocked = false;
+                while (checkR !== targetR || checkC !== targetC) {
+                    if (board[checkR][checkC]) blocked = true;
+                    checkR += stepR; checkC += stepC;
+                }
+                if (!blocked) return true;
+            }
+        }
+    }
+    return false;
+}
+
+mutantIo.on('connection', (socket) => {
     socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
-        const room = mutantRooms.get(code);
+        const code = roomCode || 'CHAOS';
+        let room = mutantRooms.get(code);
         
-        if (!room) return socket.emit('error_msg', 'Raum nicht gefunden!');
-        if (room.players.b) return socket.emit('error_msg', 'Raum ist voll!');
-        
-        room.players.b = { id: socket.id, name: playerName, pfp: pfp || '' };
-        socket.join(code);
-        
-        socket.emit('mutant_room_joined', { 
-            roomCode: code, playerId: socket.id, color: 'b',
-            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp 
-        });
-        socket.to(code).emit('mutant_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
+        if (!room) {
+            room = {
+                players: { w: { id: socket.id, name: playerName, pfp: pfp }, b: null },
+                board: createInitialMutantBoard(),
+                turn: 'w'
+            };
+            mutantRooms.set(code, room);
+            socket.join(code);
+            socket.emit('game_started', { color: 'w', board: room.board, turn: room.turn });
+        } else if (!room.players.b && room.players.w.id !== socket.id) {
+            room.players.b = { id: socket.id, name: playerName, pfp: pfp };
+            socket.join(code);
+            socket.emit('game_started', { color: 'b', board: room.board, turn: room.turn, opp: room.players.w });
+            socket.to(code).emit('opponent_joined', { name: playerName, pfp: pfp });
+        } else {
+            const isWhite = room.players.w && room.players.w.id === socket.id;
+            socket.join(code);
+            socket.emit('game_started', { color: isWhite ? 'w' : 'b', board: room.board, turn: room.turn });
+        }
     });
 
-    // Die Fusions-Logik für Mutant Merge
-    socket.on('request_mutant_move', (data) => {
-        const { roomCode, from, to, piece, target } = data;
+    socket.on('make_move', ({ roomCode, start, target }) => {
         const room = mutantRooms.get(roomCode);
         if (!room) return;
 
-        // Fusions-Check: Eigene Figur auf dem Zielfeld?
-        if (target && target.color === piece.color) {
-            if (piece.types.length + target.types.length <= 2) {
-                mutantIo.to(roomCode).emit('apply_mutation', { from, to, newTypes: [...target.types, ...piece.types] });
-                return;
-            } else {
-                socket.emit('error_msg', 'Eine Mutante darf aus maximal 2 Figuren bestehen!');
-                return;
-            }
+        const [sr, sc] = start;
+        const [tr, tc] = target;
+        const piece = room.board[sr][sc];
+        
+        const callerColor = room.players.w && room.players.w.id === socket.id ? 'w' : 'b';
+        
+        if (!piece || piece.color !== callerColor || room.turn !== callerColor) {
+            return socket.emit('invalid_move', 'Nicht am Zug oder ungültige Figur!');
         }
 
-        // Normaler Zug (wird an alle im Raum weitergeleitet)
-        mutantIo.to(roomCode).emit('apply_mutant_move', data);
-    });
-
-    socket.on('leave_mutant_room', ({ roomCode }) => { 
-        socket.to(roomCode).emit('mutant_opponent_left'); 
-        socket.leave(roomCode); 
+        if (isValidMutantMove(room.board, sr, sc, tr, tc, callerColor)) {
+            const targetPiece = room.board[tr][tc];
+            
+            // Fusions-Logik
+            if (targetPiece && targetPiece.color === callerColor) {
+                targetPiece.types = [...targetPiece.types, ...piece.types];
+            } 
+            // Normales Schlagen & Ziehen
+            else {
+                if (targetPiece && targetPiece.types.includes('k')) {
+                    mutantIo.to(roomCode).emit('game_over', { winner: callerColor });
+                }
+                room.board[tr][tc] = piece;
+            }
+            
+            room.board[sr][sc] = null;
+            room.turn = room.turn === 'w' ? 'b' : 'w';
+            
+            mutantIo.to(roomCode).emit('board_update', { board: room.board, turn: room.turn });
+        } else {
+            socket.emit('invalid_move', 'Ungültiger Zug für diese Mutante!');
+        }
     });
 });
 
