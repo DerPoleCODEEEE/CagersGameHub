@@ -125,7 +125,6 @@ input[type="text"], .scribble-input {
 .valid-move::after { content: ''; width: 22px; height: 22px; background: rgba(0,0,0,0.2); border-radius: 50%; position: absolute; pointer-events: none; }
 .capture-move::after { content: ''; width: 65px; height: 65px; border-radius: 50%; border: 5px solid rgba(231, 76, 60, 0.6); position: absolute; pointer-events: none; }
 
-/* GEFIXTER FUSION-KREIS MIT FUSION TEXT */
 .merge-move::after { 
     content: 'FUSION'; 
     width: 60px; 
@@ -148,7 +147,6 @@ input[type="text"], .scribble-input {
 .piece-img { width: 100%; height: 100%; object-fit: contain; z-index: 10; pointer-events: none; }
 .piece-img.overlay { position: absolute; top: -5px; right: -5px; width: 65%; height: 65%; z-index: 12; filter: drop-shadow(2px 2px 0px #e74c3c); }
 
-/* PROMOTION MODAL */
 #promotion-modal {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(255,255,255,0.85); z-index: 150;
@@ -176,7 +174,6 @@ input[type="text"], .scribble-input {
 .rules-section { background: #fff; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; padding: 10px; margin-bottom: 12px; }
 .rules-list { margin: 0; padding-left: 0; list-style: none; font-size: 15px; color: #222; line-height: 1.4; }
 
-/* MODALS OVERLAY FIX */
 #game-over, #draw-modal { 
     position: absolute; top:0; left:0; width:100%; height:100%; 
     background: rgba(255,255,255,0.85); z-index: 140; 
