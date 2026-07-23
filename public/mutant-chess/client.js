@@ -17,11 +17,15 @@ if (twitchName && twitchName !== 'undefined' && twitchName !== 'null') {
 // SLIDER INPUTS
 const timeRange = document.getElementById('time-range');
 const incRange = document.getElementById('inc-range');
+const fusionRange = document.getElementById('fusion-range');
+
 const timeVal = document.getElementById('time-val');
 const incVal = document.getElementById('inc-val');
+const fusionVal = document.getElementById('fusion-val');
 
 timeRange.oninput = () => timeVal.innerText = timeRange.value;
 incRange.oninput = () => incVal.innerText = incRange.value;
+fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
 
 const PIECES = {
     'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
@@ -52,6 +56,9 @@ let enPassantTarget = null;
 let pendingPromotion = null;
 let hasMoved = { wK: false, wR_left: false, wR_right: false, bK: false, bR_left: false, bR_right: false };
 
+let maxFusions = 3;
+let fusionsLeft = { w: 3, b: 3 };
+
 let board = [
     [['r'], ['n'], ['b'], ['q'], ['k'], ['b'], ['n'], ['r']],
     [['p'], ['p'], ['p'], ['p'], ['p'], ['p'], ['p'], ['p']],
@@ -72,6 +79,9 @@ const historyList = document.getElementById('history-list');
 
 const bottomClockEl = document.getElementById('bottom-clock');
 const topClockEl = document.getElementById('top-clock');
+
+const bottomFusionDots = document.getElementById('bottom-fusion-dots');
+const topFusionDots = document.getElementById('top-fusion-dots');
 
 function getPieceColor(pieceArr) {
     if (!pieceArr || !pieceArr.length) return null;
@@ -96,8 +106,11 @@ document.getElementById('btn-create').onclick = () => {
     const colorChoice = document.getElementById('color-choice').value;
     const totalTime = parseInt(timeRange.value, 10);
     const increment = parseInt(incRange.value, 10);
+    const maxF = parseInt(fusionRange.value, 10);
 
-    socket.emit('create_mutant_room', { playerName: myName, pfp: twitchPfp, colorChoice, totalTime, increment });
+    socket.emit('create_mutant_room', { 
+        playerName: myName, pfp: twitchPfp, colorChoice, totalTime, increment, maxFusions: maxF 
+    });
 };
 
 document.getElementById('btn-join').onclick = () => {
@@ -142,6 +155,8 @@ function showError(msg) { errorMsg.innerText = msg; }
 socket.on('mutant_room_created', (data) => {
     roomCode = data.roomCode; playerColor = data.color;
     if (data.clocks) clocks = data.clocks;
+    if (data.maxFusions) maxFusions = data.maxFusions;
+    if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
 });
@@ -150,6 +165,8 @@ socket.on('mutant_room_joined', (data) => {
     roomCode = data.roomCode; playerColor = data.color;
     opponentName = data.opponentName; opponentPfp = data.opponentPfp;
     if (data.clocks) clocks = data.clocks;
+    if (data.maxFusions) maxFusions = data.maxFusions;
+    if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
     startGame();
 });
 
@@ -175,6 +192,9 @@ socket.on('ready_update', ({ playersReady }) => {
 
 socket.on('start_match_countdown', (data) => {
     if (data && data.clocks) clocks = data.clocks;
+    if (data && data.fusionsLeft) fusionsLeft = data.fusionsLeft;
+    if (data && data.maxFusions) maxFusions = data.maxFusions;
+
     isGameStarted = false;
     statusBanner.classList.remove('hidden');
     let secondsLeft = 5;
@@ -196,6 +216,7 @@ socket.on('start_match_countdown', (data) => {
 
 socket.on('apply_mutant_move', (moveData) => {
     if (moveData.clocks) clocks = moveData.clocks;
+    if (moveData.fusionsLeft) fusionsLeft = moveData.fusionsLeft;
     executeMove(moveData.fromR, moveData.fromC, moveData.toR, moveData.toC, moveData.moveInfo, moveData.board, moveData.nextTurn);
 });
 
@@ -226,6 +247,27 @@ socket.on('game_over', ({ winnerColor, reason }) => {
 
 socket.on('error_msg', (msg) => showError(msg));
 
+function renderFusionDots() {
+    if (!bottomFusionDots || !topFusionDots) return;
+    
+    const myFusions = fusionsLeft[playerColor];
+    const oppColor = playerColor === 'w' ? 'b' : 'w';
+    const oppFusions = fusionsLeft[oppColor];
+
+    bottomFusionDots.innerHTML = '';
+    topFusionDots.innerHTML = '';
+
+    for (let i = 0; i < maxFusions; i++) {
+        const myDot = document.createElement('div');
+        myDot.className = `fusion-dot ${i >= myFusions ? 'used' : ''}`;
+        bottomFusionDots.appendChild(myDot);
+
+        const oppDot = document.createElement('div');
+        oppDot.className = `fusion-dot ${i >= oppFusions ? 'used' : ''}`;
+        topFusionDots.appendChild(oppDot);
+    }
+}
+
 function startGame() {
     menuScreen.classList.add('hidden'); lobbyScreen.classList.add('hidden'); gameScreen.classList.remove('hidden');
     document.getElementById('my-role-tag').innerText = playerColor === 'w' ? 'WHITE' : 'BLACK';
@@ -240,7 +282,7 @@ function startGame() {
     if (opponentPfp) { topPfpEl.src = opponentPfp; topPfpEl.classList.remove('hidden'); }
 
     if (playerColor === 'b') boardEl.classList.add('flipped');
-    createBoardDOMOnce(); renderBoard(); updateTurnDisplay(); updateClockDisplay();
+    createBoardDOMOnce(); renderBoard(); updateTurnDisplay(); updateClockDisplay(); renderFusionDots();
 }
 
 function startClockTicker() {
@@ -322,6 +364,7 @@ function getValidMoves(r, c) {
     if (pColor !== playerColor || currentTurn !== playerColor) return [];
 
     let moves = [];
+    const canMerge = fusionsLeft[playerColor] > 0;
 
     pieceArr.forEach(typeChar => {
         const charLower = typeChar.toLowerCase();
@@ -338,8 +381,12 @@ function getValidMoves(r, c) {
                     } else {
                         if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
-                        } else if (pieceArr.length + target.length <= 2) {
-                            moves.push({ r: nr, c: nc, type: 'merge' });
+                        } else if (canMerge && pieceArr.length + target.length <= 2) {
+                            // Check same piece type
+                            const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
+                            if (!hasSameType) {
+                                moves.push({ r: nr, c: nc, type: 'merge' });
+                            }
                         }
                         break;
                     }
@@ -359,8 +406,14 @@ function getValidMoves(r, c) {
                     if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
                         const target = board[targetR][targetC];
                         if (target) {
-                            if (getPieceColor(target) !== pColor) moves.push({ r: targetR, c: targetC, type: 'capture' });
-                            else if (pieceArr.length + target.length <= 2) moves.push({ r: targetR, c: targetC, type: 'merge' });
+                            if (getPieceColor(target) !== pColor) {
+                                moves.push({ r: targetR, c: targetC, type: 'capture' });
+                            } else if (canMerge && pieceArr.length + target.length <= 2) {
+                                const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
+                                if (!hasSameType) {
+                                    moves.push({ r: targetR, c: targetC, type: 'merge' });
+                                }
+                            }
                         } else if (enPassantTarget && enPassantTarget.color !== pColor && enPassantTarget.r === targetR && enPassantTarget.c === targetC) {
                             moves.push({ r: targetR, c: targetC, type: 'en_passant' });
                         }
@@ -377,9 +430,16 @@ function getValidMoves(r, c) {
                     let nr = r + dr, nc = c + dc;
                     if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
                         const target = board[nr][nc];
-                        if (!target) moves.push({ r: nr, c: nc, type: 'normal' });
-                        else if (getPieceColor(target) !== pColor) moves.push({ r: nr, c: nc, type: 'capture' });
-                        else if (pieceArr.length + target.length <= 2) moves.push({ r: nr, c: nc, type: 'merge' });
+                        if (!target) {
+                            moves.push({ r: nr, c: nc, type: 'normal' });
+                        } else if (getPieceColor(target) !== pColor) {
+                            moves.push({ r: nr, c: nc, type: 'capture' });
+                        } else if (canMerge && pieceArr.length + target.length <= 2) {
+                            const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
+                            if (!hasSameType) {
+                                moves.push({ r: nr, c: nc, type: 'merge' });
+                            }
+                        }
                     }
                 }
                 break;
@@ -389,9 +449,16 @@ function getValidMoves(r, c) {
                     let nr = r + dr, nc = c + dc;
                     if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
                         const target = board[nr][nc];
-                        if (!target) moves.push({ r: nr, c: nc, type: 'normal' });
-                        else if (getPieceColor(target) !== pColor) moves.push({ r: nr, c: nc, type: 'capture' });
-                        else if (pieceArr.length + target.length <= 2) moves.push({ r: nr, c: nc, type: 'merge' });
+                        if (!target) {
+                            moves.push({ r: nr, c: nc, type: 'normal' });
+                        } else if (getPieceColor(target) !== pColor) {
+                            moves.push({ r: nr, c: nc, type: 'capture' });
+                        } else if (canMerge && pieceArr.length + target.length <= 2) {
+                            const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
+                            if (!hasSameType) {
+                                moves.push({ r: nr, c: nc, type: 'merge' });
+                            }
+                        }
                     }
                 }
                 const kRow = pColor === 'w' ? 7 : 0;
@@ -530,6 +597,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, newBoard, nextTurn) {
     currentTurn = nextTurn;
     updateTurnDisplay();
     updateClockDisplay();
+    renderFusionDots();
     renderBoard();
 }
 
