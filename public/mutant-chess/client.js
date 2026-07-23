@@ -45,9 +45,18 @@ const PIECES = {
 
 let roomCode = null, playerId = null, playerColor = null;
 let myName = '', opponentName = '', opponentPfp = '';
-let selectedSquare = null, opponentSelectedSquare = null;
+let selectedSquare = null;
 let validMoves = [], isGameOver = false, isBoardDomCreated = false;
+let isGameStarted = false;
 let currentTurn = 'w';
+let moveCount = 1;
+
+const PIECE_RANK = { 'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6 };
+
+function sortCanonically(pieceArr) {
+    if (!pieceArr) return pieceArr;
+    return pieceArr.slice().sort((a, b) => PIECE_RANK[a.toLowerCase()] - PIECE_RANK[b.toLowerCase()]);
+}
 
 let board = [
     [['r'], ['n'], ['b'], ['q'], ['k'], ['b'], ['n'], ['r']],
@@ -65,6 +74,7 @@ const gameScreen = document.getElementById('game-screen'), errorMsg = document.g
 const boardEl = document.getElementById('board'), animationLayer = document.getElementById('animation-layer');
 const btnReady = document.getElementById('btn-ready'), statusBanner = document.getElementById('status-banner');
 const statusBannerText = document.getElementById('status-banner-text');
+const historyList = document.getElementById('history-list');
 
 function getPieceColor(pieceArr) {
     if (!pieceArr || !pieceArr.length) return null;
@@ -75,6 +85,12 @@ function getVisualCoords(r, c) {
     const rect = boardEl.getBoundingClientRect();
     const squareSize = rect.width / 8;
     return playerColor === 'b' ? { x: (7 - c) * squareSize, y: (7 - r) * squareSize } : { x: c * squareSize, y: r * squareSize };
+}
+
+function toAlgebraic(r, c) {
+    const colStr = String.fromCharCode('a'.charCodeAt(0) + c);
+    const rowStr = (8 - r).toString();
+    return colStr + rowStr;
 }
 
 document.getElementById('btn-create').onclick = () => {
@@ -100,26 +116,6 @@ btnReady.onclick = () => {
 function leaveGame() { location.reload(); }
 function showError(msg) { errorMsg.innerText = msg; }
 
-boardEl.addEventListener('mousemove', (e) => {
-    if (!roomCode || isGameOver) return;
-    const rect = boardEl.getBoundingClientRect();
-    let xPct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    let yPct = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    socket.emit('mouse_move', { roomCode, xPct: playerColor === 'b' ? (100 - xPct) : xPct, yPct: playerColor === 'b' ? (100 - yPct) : yPct });
-});
-
-boardEl.addEventListener('mouseleave', () => { if (roomCode) socket.emit('mouse_leave', { roomCode }); });
-
-socket.on('opponent_mouse_move', ({ xPct, yPct }) => {
-    const oppCursor = document.getElementById('opponent-cursor'); oppCursor.classList.remove('hidden');
-    oppCursor.style.left = `${playerColor === 'b' ? (100 - xPct) : xPct}%`;
-    oppCursor.style.top = `${playerColor === 'b' ? (100 - yPct) : yPct}%`;
-    document.getElementById('opponent-cursor-name').innerText = opponentName || 'Opponent';
-});
-
-socket.on('opponent_mouse_leave', () => document.getElementById('opponent-cursor').classList.add('hidden'));
-socket.on('opponent_select_square', ({ r, c }) => { opponentSelectedSquare = (r !== null) ? { r, c } : null; renderBoard(); });
-
 socket.on('mutant_room_created', (data) => {
     roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
@@ -144,17 +140,26 @@ socket.on('ready_update', ({ playersReady }) => {
     });
 });
 
-socket.on('start_match', (data) => {
-    board = data.board;
-    currentTurn = data.turn;
-    updateTurnDisplay();
+socket.on('start_match_countdown', () => {
+    isGameStarted = false;
     statusBanner.classList.remove('hidden');
-    statusBannerText.innerText = `BATTLE STARTED!`; 
-    setTimeout(() => statusBanner.classList.add('hidden'), 1800);
+    let secondsLeft = 5;
+    statusBannerText.innerText = `Match beginnt in ${secondsLeft}s!`;
+    
+    const interval = setInterval(() => {
+        secondsLeft--;
+        if (secondsLeft > 0) {
+            statusBannerText.innerText = `Match beginnt in ${secondsLeft}s!`;
+        } else {
+            clearInterval(interval);
+            statusBannerText.innerText = `BATTLE STARTED! GO!`;
+            isGameStarted = true;
+            setTimeout(() => statusBanner.classList.add('hidden'), 1500);
+        }
+    }, 1000);
 });
 
 socket.on('apply_mutant_move', (moveData) => {
-    if (moveData.playerId !== playerId) opponentSelectedSquare = null;
     executeMove(moveData.fromR, moveData.fromC, moveData.toR, moveData.toC, moveData.moveInfo, moveData.duration, moveData.board, moveData.nextTurn);
 });
 
@@ -226,7 +231,6 @@ function calculateMoveDuration(fR, fC, tR, tC) {
     return Math.round(200 + Math.sqrt((tR-fR)**2 + (tC-fC)**2) * 180);
 }
 
-// FUSIONS- UND MUTANTEN ZUG-BERECHNUNG
 function getValidMoves(r, c) {
     const pieceArr = board[r][c];
     if (!pieceArr) return [];
@@ -309,14 +313,13 @@ function getValidMoves(r, c) {
         }
     });
 
-    // Duplikate filtern (falls Figur 2 den gleichen Zug wie Figur 1 ermöglicht)
     const uniqueMap = new Map();
     moves.forEach(m => uniqueMap.set(`${m.r}-${m.c}`, m));
     return Array.from(uniqueMap.values());
 }
 
 function handleSquareClick(r, c) {
-    if (isGameOver || currentTurn !== playerColor) return;
+    if (!isGameStarted || isGameOver || currentTurn !== playerColor) return;
     const clickedPiece = board[r][c];
 
     if (selectedSquare) {
@@ -326,24 +329,57 @@ function handleSquareClick(r, c) {
             socket.emit('request_mutant_move', {
                 roomCode, playerId, fromR: selectedSquare.r, fromC: selectedSquare.c, toR: r, toC: c, moveInfo, duration
             });
-            selectedSquare = null; validMoves = []; socket.emit('select_square', { roomCode, r: null, c: null }); renderBoard(); return;
+            selectedSquare = null; validMoves = []; renderBoard(); return;
         }
     }
 
     if (clickedPiece && getPieceColor(clickedPiece) === playerColor) {
         selectedSquare = { r, c };
         validMoves = getValidMoves(r, c);
-        socket.emit('select_square', { roomCode, r, c });
         renderBoard();
         return;
     }
 
-    selectedSquare = null; validMoves = []; socket.emit('select_square', { roomCode, r: null, c: null }); renderBoard();
+    selectedSquare = null; validMoves = []; renderBoard();
+}
+
+function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, moveType) {
+    const dest = toAlgebraic(toR, toC);
+    const start = toAlgebraic(fromR, fromC);
+    let str = "";
+
+    const formatPieces = (arr) => arr.map(p => p.toUpperCase()).join('+');
+
+    if (moveType === 'merge') {
+        // FUSION: Z.B. N+P@e4
+        const movingStr = formatPieces(movingPiece);
+        const targetStr = formatPieces(targetPiece);
+        str = `${movingStr}+${targetStr}@${dest}`;
+    } else {
+        const isMutant = movingPiece.length > 1;
+        const pStr = isMutant ? `(${formatPieces(movingPiece)})` : movingPiece[0].toUpperCase();
+        
+        if (moveType === 'capture') {
+            str = `${pStr}x${dest}`;
+        } else {
+            str = `${pStr}${start}-${dest}`;
+        }
+    }
+
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.innerText = `${moveCount}. ${str}`;
+    historyList.appendChild(row);
+    historyList.scrollTop = historyList.scrollHeight;
+    moveCount++;
 }
 
 function executeMove(fromR, fromC, toR, toC, moveInfo, duration, newBoard, nextTurn) {
     const movingPiece = board[fromR][fromC];
+    const targetPiece = board[toR][toC];
     if (!movingPiece) return;
+
+    addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, moveInfo ? moveInfo.type : 'normal');
 
     const startCoords = getVisualCoords(fromR, fromC), targetCoords = getVisualCoords(toR, toC);
     
@@ -376,7 +412,6 @@ function renderBoard() {
             const square = boardEl.querySelector(`.square[data-r="${r}"][data-c="${c}"]`); if (!square) continue;
             
             square.classList.toggle('selected', !!(selectedSquare && selectedSquare.r === r && selectedSquare.c === c));
-            square.classList.toggle('opponent-selected', !!(opponentSelectedSquare && opponentSelectedSquare.r === r && opponentSelectedSquare.c === c));
             
             let moveInfo = validMoves.find(m => m.r === r && m.c === c);
             square.classList.toggle('valid-move', !!(moveInfo && moveInfo.type === 'normal'));
