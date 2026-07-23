@@ -51,6 +51,11 @@
             <input type="range" id="inc-range" min="0" max="10" value="2" class="slider">
         </div>
 
+        <div class="input-group">
+            <label>Max Fusions: <span id="fusion-val">3</span></label>
+            <input type="range" id="fusion-range" min="1" max="15" value="3" class="slider">
+        </div>
+
         <div class="button-group">
             <button id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
             <div class="divider">or</div>
@@ -80,11 +85,12 @@
                     <span id="status-banner-text">Prepare for Battle!</span>
                 </div>
 
-                <!-- Opponent Bar with Clock -->
+                <!-- Opponent Bar with Clock & Fusion Dots -->
                 <div class="player-bar top">
                     <div class="player-info">
                         <img id="top-pfp" class="chess-avatar hidden" src="">
                         <span id="top-player-name">Opponent</span>
+                        <div id="top-fusion-dots" class="fusion-dots"></div>
                     </div>
                     <div id="top-clock" class="clock-box scribble-box">03:00</div>
                 </div>
@@ -97,11 +103,12 @@
                     </div>
                 </div>
 
-                <!-- Player Bar with Clock -->
+                <!-- Player Bar with Clock & Fusion Dots -->
                 <div class="player-bar bottom">
                     <div class="player-info">
                         <img id="bottom-pfp" class="chess-avatar hidden" src="">
                         <span id="bottom-player-name">You</span>
+                        <div id="bottom-fusion-dots" class="fusion-dots"></div>
                     </div>
                     <div id="bottom-clock" class="clock-box scribble-box">03:00</div>
                 </div>
@@ -155,7 +162,7 @@
                 <div class="rules-section">
                     <div class="sidebar-title" style="margin-bottom: 8px;">Mutant Rules</div>
                     <ul class="rules-list">
-                        <li>🧬 <b>Fusion:</b> Drag friendly pieces onto each other to merge! (Max 2).</li>
+                        <li>🧬 <b>Fusion:</b> Drag different friendly pieces onto each other to merge! (Max 2).</li>
                         <li>⚡ <b>Powers:</b> Mutants combine all movement patterns!</li>
                         <li>👑 <b>King Survival:</b> Capture the enemy King to win!</li>
                     </ul>
