@@ -153,7 +153,7 @@ function getPieceColor(pieceArr) {
 }
 
 mutantIo.on('connection', (socket) => {
-    socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment }) => {
+    socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions }) => {
         const roomCode = generateRoomCode();
         
         let hostColor = colorChoice;
@@ -161,10 +161,7 @@ mutantIo.on('connection', (socket) => {
             hostColor = Math.random() < 0.5 ? 'w' : 'b';
         }
 
-        const initialClocks = {
-            w: (totalTime || 3) * 60,
-            b: (totalTime || 3) * 60
-        };
+        const limitFusions = maxFusions || 3;
 
         const roomData = {
             players: {
@@ -173,11 +170,10 @@ mutantIo.on('connection', (socket) => {
             },
             board: createInitialMutantBoard(),
             turn: 'w',
-            timeControl: {
-                minutes: totalTime || 3,
-                increment: increment || 2
-            },
-            clocks: { ...initialClocks },
+            timeControl: { minutes: totalTime || 3, increment: increment || 2 },
+            clocks: { w: (totalTime || 3) * 60, b: (totalTime || 3) * 60 },
+            maxFusions: limitFusions,
+            fusionsLeft: { w: limitFusions, b: limitFusions },
             lastTurnTimestamp: null,
             hostColor
         };
@@ -187,7 +183,9 @@ mutantIo.on('connection', (socket) => {
         socket.emit('mutant_room_created', { 
             roomCode, playerId: socket.id, color: hostColor, playerName, pfp,
             timeControl: roomData.timeControl,
-            clocks: roomData.clocks
+            clocks: roomData.clocks,
+            maxFusions: roomData.maxFusions,
+            fusionsLeft: roomData.fusionsLeft
         });
     });
 
@@ -213,7 +211,9 @@ mutantIo.on('connection', (socket) => {
             opponentName: opponent.name,
             opponentPfp: opponent.pfp,
             timeControl: room.timeControl,
-            clocks: room.clocks
+            clocks: room.clocks,
+            maxFusions: room.maxFusions,
+            fusionsLeft: room.fusionsLeft
         });
 
         socket.to(code).emit('mutant_opponent_joined', {
@@ -239,7 +239,11 @@ mutantIo.on('connection', (socket) => {
 
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
             room.lastTurnTimestamp = Date.now();
-            mutantIo.to(code).emit('start_match_countdown', { clocks: room.clocks });
+            mutantIo.to(code).emit('start_match_countdown', { 
+                clocks: room.clocks, 
+                maxFusions: room.maxFusions, 
+                fusionsLeft: room.fusionsLeft 
+            });
         }
     });
 
@@ -263,6 +267,7 @@ mutantIo.on('connection', (socket) => {
 
         const targetPiece = room.board[toR][toC];
 
+        // ROCHADE (CASTLING)
         if (moveInfo && moveInfo.type === 'castle') {
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
@@ -273,24 +278,37 @@ mutantIo.on('connection', (socket) => {
             room.board[fromR][rookToC] = rookPiece;
             room.board[fromR][rookFromC] = null;
         }
+        // EN PASSANT
         else if (moveInfo && moveInfo.type === 'en_passant') {
             const capturedPawnRow = pieceColor === 'w' ? toR + 1 : toR - 1;
             room.board[capturedPawnRow][toC] = null;
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
         }
+        // PROMOTION
         else if (promotedTo && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p') {
             room.board[toR][toC] = [promotedTo];
             room.board[fromR][fromC] = null;
         }
+        // MERGE FUSION
         else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
+            // Check identical piece type
+            const hasSameType = movingPiece.some(p => targetPiece.some(t => t.toLowerCase() === p.toLowerCase()));
+            if (hasSameType) {
+                return socket.emit('error_msg', 'Cannot merge identical piece types!');
+            }
+            if (room.fusionsLeft[pieceColor] <= 0) {
+                return socket.emit('error_msg', 'No fusions remaining!');
+            }
             if (movingPiece.length + targetPiece.length <= 2) {
                 room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
                 room.board[fromR][fromC] = null;
+                room.fusionsLeft[pieceColor]--;
             } else {
                 return socket.emit('error_msg', 'Maximum 2 pieces per square!');
             }
         } 
+        // NORMAL MOVE / CAPTURE
         else {
             let isKingCaptured = false;
             if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) {
@@ -308,7 +326,7 @@ mutantIo.on('connection', (socket) => {
 
         mutantIo.to(code).emit('apply_mutant_move', {
             fromR, fromC, toR, toC, moveInfo, board: room.board, nextTurn: room.turn,
-            clocks: room.clocks
+            clocks: room.clocks, fusionsLeft: room.fusionsLeft
         });
     });
 
