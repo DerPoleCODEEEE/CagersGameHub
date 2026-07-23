@@ -36,11 +36,19 @@ body {
 .flork-left { left: 20px; }
 .flork-right { right: 20px; }
 
-/* SCRIBBLE BASE DESIGN */
-.scribble-box, .scribble-btn, .scribble-input {
+/* SCRIBBLE CONTAINERS (Große Karten/Panel) */
+.scribble-box {
     border: 3px solid #000;
-    border-radius: 15px 255px 225px 15px / 255px 15px 225px 15px;
-    box-shadow: 5px 5px 0px rgba(0,0,0,0.9);
+    border-radius: 16px 24px 18px 22px / 22px 18px 24px 16px;
+    box-shadow: 6px 6px 0px #000;
+    background: #fff;
+}
+
+/* SCRIBBLE BUTTONS & INPUTS (Kleine flache Elemente - Gefixt gegen Verzerren!) */
+.scribble-btn, .scribble-input {
+    border: 3px solid #000;
+    border-radius: 10px 14px 12px 10px / 12px 10px 14px 12px;
+    box-shadow: 4px 4px 0px #000;
     background: #fff;
 }
 
@@ -49,7 +57,7 @@ body {
     font-family: 'Patrick Hand', cursive;
     font-size: 1.4rem;
     font-weight: bold;
-    padding: 12px;
+    padding: 10px;
     text-align: center;
     text-decoration: none;
     color: #000;
@@ -59,8 +67,8 @@ body {
 }
 
 .scribble-btn:active {
-    transform: translate(3px, 3px);
-    box-shadow: 2px 2px 0px rgba(0,0,0,0.9);
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px #000;
 }
 
 .scribble-input {
@@ -69,6 +77,11 @@ body {
     padding: 10px 15px;
     width: 100%;
     outline: none;
+}
+
+.scribble-input:focus {
+    border-color: #000;
+    background-color: #fffde7;
 }
 
 .text-center { text-align: center; }
@@ -81,10 +94,10 @@ body {
 .btn-ready { background: var(--accent-orange); font-size: 1.6rem; }
 .btn-danger { background: var(--accent-red); color: #fff; }
 
-/* LOBBY CARD (Match Image 1) */
+/* LOBBY CARD */
 .lobby-card {
     width: 100%;
-    max-width: 450px;
+    max-width: 420px;
     padding: 30px;
     display: flex;
     flex-direction: column;
@@ -130,7 +143,7 @@ body {
 .join-row input { flex: 1; }
 .join-row button { flex: 1; }
 
-/* INGAME LAYOUT (Match Image 2) */
+/* INGAME LAYOUT */
 .game-layout {
     display: flex;
     gap: 20px;
@@ -139,7 +152,6 @@ body {
     align-items: flex-start;
 }
 
-/* LEFT COLUMN */
 .left-column {
     flex: 1.2;
     display: flex;
@@ -219,6 +231,22 @@ body {
     font-size: 2rem;
 }
 
+.room-code-box {
+    background: #f1f2f6;
+    border: 2px dashed #000;
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.room-code-box span {
+    color: var(--accent-red);
+    font-size: 1.4rem;
+    letter-spacing: 2px;
+}
+
 /* BADGES */
 .badge {
     padding: 4px 10px;
@@ -253,7 +281,6 @@ body {
     gap: 8px;
 }
 
-/* RESPONSIVE */
 @media (max-width: 850px) {
     .game-layout {
         flex-direction: column;
