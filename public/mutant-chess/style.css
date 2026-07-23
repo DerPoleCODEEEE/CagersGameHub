@@ -19,7 +19,7 @@ body {
 
 .hidden { display: none !important; }
 
-/* GEFIXTE ECKIGE SCRIBBLE BORDER */
+/* SCRIBBLE BOXEN */
 .scribble-box {
     border: 3px solid #000;
     border-radius: 12px 6px 14px 8px / 8px 14px 8px 12px;
@@ -31,16 +31,22 @@ body {
 .card h1 { margin: 0 0 5px 0; font-size: 38px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 25px; font-size: 20px; }
 
-.input-group { margin-bottom: 18px; text-align: left; }
+.input-group { margin-bottom: 15px; text-align: left; }
 .input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 5px; font-weight: bold; }
 
-input[type="text"] { 
-    width: 100%; padding: 12px; 
+input[type="text"], .scribble-input { 
+    width: 100%; padding: 10px; 
     background: #fff; 
     border: 3px solid #000; 
     border-radius: 8px 12px 10px 6px / 6px 10px 8px 12px;
     color: #000; font-size: 18px; box-sizing: border-box; 
     font-family: 'Patrick Hand', cursive, sans-serif;
+}
+
+.slider {
+    width: 100%;
+    accent-color: #f1c40f;
+    cursor: pointer;
 }
 
 .btn { 
@@ -77,16 +83,34 @@ input[type="text"] {
 .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
 #game-container { position: relative; border-radius: 4px; overflow: hidden; }
 
+/* PLAYER BAR & CHESS CLOCKS */
 .player-bar { 
-    background: #fff; padding: 8px 12px; font-weight: bold; font-size: 20px;
+    background: #fff; padding: 6px 12px; font-weight: bold; font-size: 20px;
     display: flex; justify-content: space-between; align-items: center; 
     margin-bottom: 10px; margin-top: 10px;
     border: 3px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px;
 }
 .player-info { display: flex; align-items: center; gap: 10px; }
 .chess-avatar { width: 35px; height: 35px; border: 2px solid #000; border-radius: 50%; object-fit: cover; }
-.badge { font-size: 14px; padding: 4px 8px; border-radius: 6px; background: #eee; border: 2px solid #000; }
-.badge.ready { background: #2ecc71; color: white; }
+
+.clock-box {
+    font-size: 22px;
+    font-weight: bold;
+    padding: 4px 12px;
+    background: #2c3e50;
+    color: #fff;
+    border-radius: 6px;
+    border: 2px solid #000;
+}
+.clock-box.active {
+    background: #f1c40f;
+    color: #000;
+    animation: pulse-clock 1s infinite alternate;
+}
+@keyframes pulse-clock {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.05); }
+}
 
 .status-banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(243, 156, 18, 0.95); color: white; text-align: center; padding: 16px; border-radius: 8px; font-weight: bold; z-index: 130; border: 4px solid #000; font-size: 26px; }
 #board-wrapper { position: relative; width: 600px; height: 600px; box-shadow: 6px 6px 0px rgba(0,0,0,0.9); border: 4px solid #000; background: var(--board-light); }
@@ -120,15 +144,17 @@ input[type="text"] {
 .sidebar-title { font-size: 16px; font-weight: bold; text-transform: uppercase; color: #555; text-decoration: underline; text-decoration-thickness: 2px; }
 .mode-tag { color: #2ecc71; font-weight: bold; font-size: 16px; }
 
-/* MOVE HISTORY BOX */
 .history-section { background: #fff; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; padding: 10px; margin-bottom: 12px; }
-.history-list { max-height: 110px; overflow-y: auto; font-size: 15px; font-family: monospace; display: flex; flex-direction: column; gap: 4px; }
+.history-list { max-height: 90px; overflow-y: auto; font-size: 15px; font-family: monospace; display: flex; flex-direction: column; gap: 4px; }
 .history-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #ccc; padding-bottom: 2px; }
+
+.actions-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.actions-row .btn { padding: 8px; font-size: 18px; }
 
 .rules-section { background: #fff; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; padding: 10px; margin-bottom: 12px; }
 .rules-list { margin: 0; padding-left: 0; list-style: none; font-size: 15px; color: #222; line-height: 1.4; }
 
-#game-over { display: none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.85); z-index: 140; justify-content: center; align-items: center; flex-direction: column; }
+#game-over, #draw-modal { display: none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.85); z-index: 140; justify-content: center; align-items: center; flex-direction: column; }
 
 #splash-screen {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
