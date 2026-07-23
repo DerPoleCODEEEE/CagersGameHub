@@ -1,5 +1,4 @@
 :root {
-    /* Original Schachbrett-Farben aus Quick Chess */
     --board-light: #ebecd0;
     --board-dark: #739552;
     --highlight: rgba(246, 246, 105, 0.5);
@@ -8,7 +7,6 @@
     --warning: #e67e22;
 }
 
-/* HUB STYLE FÜR HINTERGRUND & SCHRIFT */
 body { 
     background-color: #ffffff; 
     color: #111; 
@@ -24,7 +22,7 @@ body {
 
 .hidden { display: none !important; }
 
-/* SCRIBBLE STYLE FÜR BOXEN (EXAKT QUICK CHESS) */
+/* SCRIBBLE STYLE FÜR BOXEN */
 .scribble-box {
     border: 4px solid #000;
     border-bottom-left-radius: 15px 255px;
@@ -49,7 +47,6 @@ body {
 .input-group { margin-bottom: 12px; text-align: left; }
 .input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 4px; font-weight: bold; }
 
-/* EINGABEFELDER IM SCRIBBLE STIL */
 input[type="text"], .select-input { 
     width: 100%; 
     padding: 10px; 
@@ -71,7 +68,6 @@ input[type="text"], .select-input {
     cursor: pointer;
 }
 
-/* BUTTONS IM SCRIBBLE STIL */
 .btn { 
     width: 100%; 
     padding: 12px; 
@@ -122,7 +118,6 @@ input[type="text"], .select-input {
 .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
 #game-container { position: relative; border-radius: 4px; overflow: hidden; }
 
-/* PLAYER BAR & AVATARE (EXAKT QUICK CHESS) */
 .player-bar { 
     background: #fff; 
     padding: 8px 12px; 
@@ -145,7 +140,6 @@ input[type="text"], .select-input {
     object-fit: cover; 
 }
 
-/* FUSIONS PUNKTE NEBEN DEM NAMEN */
 .fusion-dots {
     display: flex;
     gap: 4px;
@@ -169,7 +163,6 @@ input[type="text"], .select-input {
     box-shadow: none;
 }
 
-/* SCHACHUHR BOXEN */
 .clock-box {
     font-size: 22px;
     font-weight: bold;
@@ -212,7 +205,6 @@ input[type="text"], .select-input {
     background: var(--board-light); 
 }
 
-/* SCHACHBRETT GRID */
 #board, .square, .piece-container { user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 #board { display: grid; grid-template-columns: repeat(8, 12.5%); grid-template-rows: repeat(8, 12.5%); width: 600px; height: 600px; }
 #board.flipped { transform: rotate(180deg); }
@@ -223,7 +215,6 @@ input[type="text"], .select-input {
 .dark { background-color: var(--board-dark); }
 .selected { background-color: var(--highlight) !important; }
 
-/* ZUGS-INDIKATOREN */
 .valid-move::after { 
     content: ''; 
     width: 22px; 
@@ -244,7 +235,6 @@ input[type="text"], .select-input {
     pointer-events: none; 
 }
 
-/* HIGH-VISIBILITY FUSION BADGE IN THE CORNER */
 .merge-move::after { 
     content: 'FUSION'; 
     position: absolute;
@@ -277,7 +267,23 @@ input[type="text"], .select-input {
 .piece-img { width: 100%; height: 100%; object-fit: contain; z-index: 10; pointer-events: none; }
 .piece-img.overlay { position: absolute; top: -5px; right: -5px; width: 65%; height: 65%; z-index: 12; filter: drop-shadow(2px 2px 0px #e74c3c); }
 
-/* PROMOTION MODAL */
+/* VISUELLES BADGE FÜR DIE AUS LÄUFER+TURM ENTSTANDENE DAME */
+.fused-queen-badge {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    background: #8e44ad;
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 4px;
+    border: 1.5px solid #000;
+    border-radius: 3px;
+    z-index: 25;
+    pointer-events: none;
+    box-shadow: 1px 1px 0px #000;
+}
+
 #promotion-modal {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(255,255,255,0.8); z-index: 150;
@@ -287,7 +293,6 @@ input[type="text"], .select-input {
 .promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.1s; }
 .promo-piece:hover { transform: scale(1.1); }
 
-/* SIDEBAR & SEKTIONEN (EXAKT QUICK CHESS) */
 .sidebar { padding: 20px; width: 280px; display: flex; flex-direction: column; }
 .logo-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;}
 .tag { background: #f1c40f; padding: 3px 8px; border: 2px solid #000; border-radius: 4px; font-size: 14px; font-weight: bold; }
@@ -321,7 +326,6 @@ input[type="text"], .select-input {
 
 .rules-list { margin: 0; padding-left: 0; list-style: none; font-size: 15px; color: #222; line-height: 1.5; }
 
-/* MODALS */
 #game-over, #draw-modal { 
     display: none;
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
@@ -329,7 +333,6 @@ input[type="text"], .select-input {
     justify-content: center; align-items: center; flex-direction: column; 
 }
 
-/* SPLASH SCREEN & LOADER */
 #splash-screen {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background-color: rgba(255,255,255,0.9);
@@ -349,7 +352,6 @@ input[type="text"], .select-input {
 
 .disabled-ui { pointer-events: none; opacity: 0.4; filter: grayscale(100%); }
 
-/* FLORK BACKGROUND STYLE */
 .flork-bg {
     position: fixed;
     bottom: -15px;
