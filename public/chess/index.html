@@ -8,6 +8,13 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+    <!-- Splash Screen für Server Kaltstarts -->
+    <div id="splash-screen">
+        <div class="loader"></div>
+        <h2 style="color: white; margin-top: 20px;">Server wird verbunden...</h2>
+        <p style="color: #ccc;">Dies kann beim ersten Aufruf einen Moment dauern.</p>
+    </div>
+
     <div id="menu-screen" class="card">
         <h1>Cagers Quick Chess</h1>
         <p class="subtitle">Real-Time Multiplayer Chess</p>
@@ -46,6 +53,9 @@
     <div id="game-screen" class="hidden">
         <div class="layout">
             <div id="game-container">
+                <!-- Status Indikator für Verbindungsabbrüche -->
+                <div id="status-indicator" class="status-offline" style="position: absolute; top: 10px; right: 10px; z-index: 200;">Verbinde...</div>
+
                 <div id="status-banner" class="status-banner hidden">
                     <span id="status-banner-text">Prepare for Battle!</span>
                 </div>
