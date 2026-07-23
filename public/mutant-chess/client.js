@@ -1,13 +1,5 @@
 const socket = io('/mutant-chess');
 
-// Twitch Profil-Daten laden
-const twitchName = localStorage.getItem('cager_twitch_name') || 'Gast';
-let twitchPfp = localStorage.getItem('cager_twitch_pfp');
-
-if (!twitchPfp || twitchPfp === 'undefined' || twitchPfp === 'null') {
-    twitchPfp = 'https://www.pngmart.com/files/23/Flork-PNG-Transparent.png';
-}
-
 // UI Elements
 const lobbyScreen = document.getElementById('lobby-screen');
 const gameScreen = document.getElementById('game-screen');
@@ -28,6 +20,7 @@ const oppAvatarEl = document.getElementById('opp-avatar');
 const oppStatusBadge = document.getElementById('opp-status-badge');
 
 const playerColorBadge = document.getElementById('player-color-badge');
+const displayRoomCode = document.getElementById('display-room-code');
 const chessboardEl = document.getElementById('chessboard');
 
 // State
@@ -35,23 +28,37 @@ let currentRoomCode = null;
 let myColor = 'w';
 let isReady = false;
 
-// Initialisierung
-playerNameInput.value = twitchName;
-selfNameEl.innerText = `${twitchName} (You)`;
-selfAvatarEl.src = twitchPfp;
+// Twitch-Daten abfragen
+const twitchName = localStorage.getItem('cager_twitch_name');
+let twitchPfp = localStorage.getItem('cager_twitch_pfp');
 
-// Unicode Figuren (Platzhalter für Vorschau)
+if (!twitchPfp || twitchPfp === 'undefined' || twitchPfp === 'null') {
+    twitchPfp = 'https://www.pngmart.com/files/23/Flork-PNG-Transparent.png';
+}
+
+// LOGIK: Wenn via Twitch angemeldet -> fixieren. Sonst -> Freie Eingabe erlauben!
+if (twitchName && twitchName !== 'undefined' && twitchName !== 'null') {
+    playerNameInput.value = twitchName;
+    playerNameInput.readOnly = true;
+    playerNameInput.style.backgroundColor = '#f0f0f0';
+} else {
+    playerNameInput.value = 'Gast_' + Math.floor(100 + Math.random() * 900);
+    playerNameInput.readOnly = false;
+}
+
 const pieceMap = { 'p': '♙', 'r': '♖', 'n': '♘', 'b': '♗', 'q': '♕', 'k': '♔' };
 
-// LOBBY LOGIK (Umschalten zwischen Menü und Ingame)
+// LOBBY ACTIONS
 btnCreateRoom.addEventListener('click', () => {
-    socket.emit('create_mutant_room', { playerName: twitchName, pfp: twitchPfp });
+    const finalName = playerNameInput.value.trim() || 'Gast';
+    socket.emit('create_mutant_room', { playerName: finalName, pfp: twitchPfp });
 });
 
 btnJoinRoom.addEventListener('click', () => {
+    const finalName = playerNameInput.value.trim() || 'Gast';
     const code = roomCodeInput.value.trim().toUpperCase();
-    if (!code) return alert('Bitte gib einen Code ein!');
-    socket.emit('join_mutant_room', { roomCode: code, playerName: twitchName, pfp: twitchPfp });
+    if (!code) return alert('Bitte gib einen 6-stelligen Raumcode ein!');
+    socket.emit('join_mutant_room', { roomCode: code, playerName: finalName, pfp: twitchPfp });
 });
 
 btnReady.addEventListener('click', () => {
@@ -73,26 +80,24 @@ btnLeaveGame.addEventListener('click', () => {
     window.location.href = '/';
 });
 
-// SOCKET EVENTS (Für Menü-Flow)
+// SOCKET LISTENERS
 socket.on('mutant_room_created', (data) => {
     currentRoomCode = data.roomCode;
     myColor = data.color;
-    playerColorBadge.innerText = myColor === 'w' ? 'WHITE' : 'BLACK';
-    switchToGameScreen();
+    setupGameUI(data);
 });
 
 socket.on('mutant_room_joined', (data) => {
     currentRoomCode = data.roomCode;
     myColor = data.color;
-    playerColorBadge.innerText = myColor === 'w' ? 'WHITE' : 'BLACK';
-    
+    setupGameUI(data);
+
     if (data.opponentName) {
         oppNameEl.innerText = data.opponentName;
         oppAvatarEl.src = data.opponentPfp || 'https://www.pngmart.com/files/23/Flork-PNG-Transparent.png';
         oppStatusBadge.innerText = 'Verbunden';
         oppStatusBadge.className = 'badge badge-green';
     }
-    switchToGameScreen();
 });
 
 socket.on('mutant_opponent_joined', (data) => {
@@ -102,13 +107,23 @@ socket.on('mutant_opponent_joined', (data) => {
     oppStatusBadge.className = 'badge badge-green';
 });
 
-function switchToGameScreen() {
+socket.on('error_msg', (msg) => {
+    alert(msg);
+});
+
+function setupGameUI(data) {
+    const activeName = playerNameInput.value.trim() || 'Gast';
+    selfNameEl.innerText = `${activeName} (You)`;
+    selfAvatarEl.src = twitchPfp;
+
+    displayRoomCode.innerText = currentRoomCode;
+    playerColorBadge.innerText = myColor === 'w' ? 'WHITE' : 'BLACK';
+
     lobbyScreen.style.display = 'none';
     gameScreen.style.display = 'flex';
     renderPreviewBoard();
 }
 
-// Rendert das leere Vorschau-Schachbrett im exakten Design
 function renderPreviewBoard() {
     chessboardEl.innerHTML = '';
     const initialBoard = [
