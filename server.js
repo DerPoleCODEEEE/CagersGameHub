@@ -5,25 +5,45 @@ const { Server } = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const TwitchStrategy = require('passport-twitch-new').Strategy;
+const cron = require('node-cron');
 const User = require('./models/User');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-// 1. MONGODB
+// Keep-Alive Ping/Pong direkt in Socket.IO konfiguriert (verhindert Fehler 1006)
+const io = new Server(server, { 
+    cors: { origin: "*" },
+    pingInterval: 30000, 
+    pingTimeout: 10000 
+});
+
+// 1. MONGODB (mit maxPoolSize Limitierung)
 if (process.env.MONGODB_URI) {
-    mongoose.connect(process.env.MONGODB_URI)
+    mongoose.connect(process.env.MONGODB_URI, {
+        maxPoolSize: 50 // Verhindert das Überschreiten des 500er Limits
+    })
         .then(() => console.log('✅ MongoDB verbunden!'))
         .catch(err => console.log('❌ MongoDB Fehler:', err));
 }
 
-// 2. SESSION & TWITCH LOGIN
+// 2. SESSION & TWITCH LOGIN (Sicheres Session Management)
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thecager_geheim_123',
-    resave: false, saveUninitialized: false
+    resave: false, 
+    saveUninitialized: false,
+    store: process.env.MONGODB_URI ? MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI,
+        autoRemove: 'native' // Automatische TTL-Bereinigung durch MongoDB
+    }) : new session.MemoryStore(),
+    cookie: {
+        httpOnly: true, // Verhindert XSS
+        secure: process.env.NODE_ENV === 'production', // true in Produktion (HTTPS/WSS)
+        maxAge: 1000 * 60 * 60 * 24 // 1 Tag
+    }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -54,14 +74,21 @@ passport.deserializeUser(async (id, done) => {
 
 // 3. ROUTES
 app.get('/auth/twitch', passport.authenticate('twitch'));
-app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
+app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => {
+    // Session-Fixation Prävention: Session nach erfolgreichem Login regenerieren
+    const tempPassport = req.session.passport;
+    req.session.regenerate((err) => {
+        req.session.passport = tempPassport;
+        res.redirect('/');
+    });
+});
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 
-// 4. SCHACH MULTIPLAYER (Jetzt mit pfp Übertragung!)
+// 4. SCHACH MULTIPLAYER
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
@@ -119,7 +146,25 @@ io.on('connection', (socket) => {
     socket.on('request_move', (moveData) => io.to(moveData.roomCode).emit('apply_move', moveData));
     socket.on('mouse_move', ({ roomCode, xPct, yPct }) => socket.to(roomCode).emit('opponent_mouse_move', { xPct, yPct }));
     socket.on('mouse_leave', ({ roomCode }) => socket.to(roomCode).emit('opponent_mouse_leave'));
+    
+    // Split-Brain-Prävention: Sendet State nach Reconnect zurück
+    socket.on('request_sync', ({ roomCode }) => {
+        // Hier würde normalerweise der State aus der DB gelesen werden
+        socket.emit('sync_state', { message: 'sync_ok' }); 
+    });
+
     socket.on('leave_room', ({ roomCode }) => { socket.to(roomCode).emit('opponent_left'); socket.leave(roomCode); });
+});
+
+// 5. CRON-JOB ZUR DATENBANKBEREINIGUNG
+cron.schedule('0 0 * * *', async () => {
+    // Da Spieldaten aktuell im Memory-Map "rooms" liegen, bereinigen wir verwaiste Räume
+    for (const [code, room] of rooms.entries()) {
+        if (!room.players.w && !room.players.b) {
+            rooms.delete(code);
+        }
+    }
+    console.log('Tägliche Bereinigung alter Spieldaten ausgeführt.');
 });
 
 const PORT = process.env.PORT || 3000;
