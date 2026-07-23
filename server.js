@@ -31,6 +31,8 @@ if (process.env.MONGODB_URI) {
 }
 
 // 2. SESSION & TWITCH LOGIN (Sicheres Session Management)
+app.set('trust proxy', 1); // WICHTIG: Erlaubt sichere Cookies hinter dem Render-Proxy!
+
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thecager_geheim_123',
     resave: false, 
@@ -41,7 +43,8 @@ app.use(session({
     }) : new session.MemoryStore(),
     cookie: {
         httpOnly: true, // Verhindert XSS
-        secure: process.env.NODE_ENV === 'production', // true in Produktion (HTTPS/WSS)
+        // Wir schalten die harte Secure-Pflicht hier etwas entspannter für Render
+        secure: process.env.NODE_ENV === 'production' || process.env.RENDER === 'true',
         maxAge: 1000 * 60 * 60 * 24 // 1 Tag
     }
 }));
@@ -74,14 +77,8 @@ passport.deserializeUser(async (id, done) => {
 
 // 3. ROUTES
 app.get('/auth/twitch', passport.authenticate('twitch'));
-app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => {
-    // Session-Fixation Prävention: Session nach erfolgreichem Login regenerieren
-    const tempPassport = req.session.passport;
-    req.session.regenerate((err) => {
-        req.session.passport = tempPassport;
-        res.redirect('/');
-    });
-});
+// Wieder dein originaler, direkt funktionierender Callback:
+app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
