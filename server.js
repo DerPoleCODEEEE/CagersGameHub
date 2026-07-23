@@ -292,11 +292,17 @@ mutantIo.on('connection', (socket) => {
         }
         // MERGE FUSION
         else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
-            // Check identical piece type
-            const hasSameType = movingPiece.some(p => targetPiece.some(t => t.toLowerCase() === p.toLowerCase()));
-            if (hasSameType) {
+            const combined = [...movingPiece, ...targetPiece].map(p => p.toLowerCase());
+            
+            // 1. Disallow identical piece types
+            if (new Set(combined).size !== combined.length) {
                 return socket.emit('error_msg', 'Cannot merge identical piece types!');
             }
+            // 2. Disallow redundant Queen fusions (Q+B or Q+R bring no change)
+            if (combined.includes('q') && (combined.includes('b') || combined.includes('r'))) {
+                return socket.emit('error_msg', 'Queen already moves like Bishop and Rook!');
+            }
+
             if (room.fusionsLeft[pieceColor] <= 0) {
                 return socket.emit('error_msg', 'No fusions remaining!');
             }
