@@ -1,25 +1,11 @@
 const socket = io('/mutant-chess');
 
-// UI STATUS & RECONNECT LOGIK
-function updateUIConnectionStatus(status) {
-    const indicator = document.getElementById('status-indicator');
-    const gameBoard = document.getElementById('board-wrapper');
+socket.on('connect', () => {
     const splash = document.getElementById('splash-screen');
-    
-    if (status === 'online') {
-        if (indicator) { indicator.className = 'status-online'; indicator.innerText = 'Verbunden'; }
-        if (gameBoard) gameBoard.classList.remove('disabled-ui');
-        if (splash) splash.style.display = 'none';
-    } else {
-        if (indicator) { indicator.className = 'status-offline'; indicator.innerText = 'Verbindung verloren... Reconnect...'; }
-        if (gameBoard) gameBoard.classList.add('disabled-ui');
-    }
-}
+    if (splash) splash.style.display = 'none';
+});
 
-socket.on('connect', () => { updateUIConnectionStatus('online'); });
-socket.on('disconnect', () => { updateUIConnectionStatus('offline'); });
-
-// TWITCH DATEN
+// TWITCH DATA
 const twitchName = localStorage.getItem('cager_twitch_name');
 const twitchPfp = localStorage.getItem('cager_twitch_pfp') || '';
 
@@ -60,7 +46,6 @@ let isGameStarted = false;
 let currentTurn = 'w';
 let moveCount = 1;
 
-// SCHACHUHREN STATE
 let clocks = { w: 180, b: 180 };
 let clockTimer = null;
 
@@ -121,7 +106,7 @@ document.getElementById('btn-create').onclick = () => {
 document.getElementById('btn-join').onclick = () => {
     myName = document.getElementById('player-name').value.trim() || 'Player 2';
     const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-    if (!code) return showError('Bitte Code eingeben!');
+    if (!code) return showError('Please enter a room code!');
     socket.emit('join_mutant_room', { roomCode: code, playerName: myName, pfp: twitchPfp });
 };
 
@@ -129,14 +114,14 @@ document.getElementById('btn-leave-lobby').onclick = leaveGame;
 document.getElementById('btn-leave-game').onclick = leaveGame;
 
 document.getElementById('btn-resign').onclick = () => {
-    if (confirm("Möchtest du wirklich aufgeben?")) {
+    if (confirm("Are you sure you want to resign?")) {
         socket.emit('resign_game', { roomCode, playerId });
     }
 };
 
 document.getElementById('btn-offer-draw').onclick = () => {
     socket.emit('offer_draw', { roomCode, playerId });
-    alert("Remis-Angebot gesendet!");
+    alert("Draw offer sent!");
 };
 
 document.getElementById('btn-accept-draw').onclick = () => {
@@ -159,6 +144,7 @@ function showError(msg) { errorMsg.innerText = msg; }
 
 socket.on('mutant_room_created', (data) => {
     roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
+    if (data.clocks) clocks = data.clocks;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
 });
@@ -166,6 +152,7 @@ socket.on('mutant_room_created', (data) => {
 socket.on('mutant_room_joined', (data) => {
     roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
     opponentName = data.opponentName; opponentPfp = data.opponentPfp;
+    if (data.clocks) clocks = data.clocks;
     startGame();
 });
 
@@ -176,13 +163,13 @@ socket.on('mutant_opponent_joined', (data) => {
 
 socket.on('mutant_opponent_left', () => {
     statusBanner.classList.remove('hidden');
-    statusBannerText.innerText = "Gegner hat das Spiel verlassen!";
+    statusBannerText.innerText = "Opponent has left the game!";
 });
 
 socket.on('ready_update', ({ playersReady }) => {
     playersReady.forEach(p => {
         if (p.ready) {
-            statusBannerText.innerText = `${p.color === playerColor ? myName : opponentName} ist Bereit!`;
+            statusBannerText.innerText = `${p.color === playerColor ? myName : opponentName} is Ready!`;
         }
     });
 });
@@ -192,12 +179,12 @@ socket.on('start_match_countdown', (data) => {
     isGameStarted = false;
     statusBanner.classList.remove('hidden');
     let secondsLeft = 5;
-    statusBannerText.innerText = `Match beginnt in ${secondsLeft}s!`;
+    statusBannerText.innerText = `Match starting in ${secondsLeft}s!`;
     
     const interval = setInterval(() => {
         secondsLeft--;
         if (secondsLeft > 0) {
-            statusBannerText.innerText = `Match beginnt in ${secondsLeft}s!`;
+            statusBannerText.innerText = `Match starting in ${secondsLeft}s!`;
         } else {
             clearInterval(interval);
             statusBannerText.innerText = `BATTLE STARTED! GO!`;
@@ -218,7 +205,7 @@ socket.on('draw_offered', () => {
 });
 
 socket.on('draw_declined', () => {
-    alert("Gegner hat das Remis abgelehnt!");
+    alert("Opponent declined the draw offer!");
 });
 
 socket.on('game_over', ({ winnerColor, reason }) => {
@@ -227,11 +214,11 @@ socket.on('game_over', ({ winnerColor, reason }) => {
     
     let text = "";
     if (winnerColor === null) {
-        text = "Unentschieden! (Remis)";
+        text = "Draw! (Agreed Draw)";
     } else if (winnerColor === playerColor) {
-        text = reason === 'time' ? "Sieg durch Zeitüberschreitung!" : (reason === 'resign' ? "Gegner hat aufgegeben!" : "Sieg! König vernichtet!");
+        text = reason === 'time' ? "Victory by time out!" : (reason === 'resign' ? "Opponent resigned!" : "Victory! Enemy King destroyed!");
     } else {
-        text = reason === 'time' ? "Niederlage! Zeit abgelaufen!" : (reason === 'resign' ? "Du hast aufgegeben." : "Niederlage!");
+        text = reason === 'time' ? "Defeat! Time ran out!" : (reason === 'resign' ? "You resigned." : "Defeat! Your King was destroyed!");
     }
 
     document.getElementById('winner-text').innerText = text;
@@ -292,10 +279,10 @@ function updateClockDisplay() {
 function updateTurnDisplay() {
     const turnTag = document.getElementById('turn-display-tag');
     if (currentTurn === playerColor) {
-        turnTag.innerText = "DEIN ZUG!";
+        turnTag.innerText = "YOUR TURN!";
         turnTag.style.color = "#2ecc71";
     } else {
-        turnTag.innerText = "GEGNER ZIEHT...";
+        turnTag.innerText = "OPPONENT'S TURN...";
         turnTag.style.color = "#e74c3c";
     }
 }
