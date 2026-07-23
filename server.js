@@ -131,7 +131,11 @@ const PIECE_RANK = { 'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6 };
 
 function sortCanonically(pieceArr) {
     if (!pieceArr) return pieceArr;
-    return pieceArr.slice().sort((a, b) => PIECE_RANK[a.toLowerCase()] - PIECE_RANK[b.toLowerCase()]);
+    return pieceArr.slice().sort((a, b) => {
+        const charA = a.toLowerCase().replace('_fused', '');
+        const charB = b.toLowerCase().replace('_fused', '');
+        return (PIECE_RANK[charA] || 5) - (PIECE_RANK[charB] || 5);
+    });
 }
 
 function createInitialMutantBoard() {
@@ -149,7 +153,7 @@ function createInitialMutantBoard() {
 
 function getPieceColor(pieceArr) {
     if (!pieceArr || !pieceArr.length) return null;
-    return pieceArr[0] === pieceArr[0].toUpperCase() ? 'w' : 'b';
+    return pieceArr[0][0] === pieceArr[0][0].toUpperCase() ? 'w' : 'b';
 }
 
 mutantIo.on('connection', (socket) => {
@@ -292,7 +296,12 @@ mutantIo.on('connection', (socket) => {
         }
         // MERGE FUSION
         else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
-            const combined = [...movingPiece, ...targetPiece].map(p => p.toLowerCase());
+            const combined = [...movingPiece, ...targetPiece].map(p => p.toLowerCase().replace('_fused', ''));
+
+            // Block if either piece is ALREADY a fused queen
+            if (movingPiece.some(p => p.includes('_fused')) || targetPiece.some(p => p.includes('_fused'))) {
+                return socket.emit('error_msg', 'This fused piece cannot be fused again!');
+            }
             
             // 1. Disallow identical piece types
             if (new Set(combined).size !== combined.length) {
@@ -306,8 +315,14 @@ mutantIo.on('connection', (socket) => {
             if (room.fusionsLeft[pieceColor] <= 0) {
                 return socket.emit('error_msg', 'No fusions remaining!');
             }
+
             if (movingPiece.length + targetPiece.length <= 2) {
-                room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
+                // SPECIAL RULE: ROOK + BISHOP = FUSED QUEEN
+                if (combined.includes('r') && combined.includes('b')) {
+                    room.board[toR][toC] = [pieceColor === 'w' ? 'Q_fused' : 'q_fused'];
+                } else {
+                    room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
+                }
                 room.board[fromR][fromC] = null;
                 room.fusionsLeft[pieceColor]--;
             } else {
