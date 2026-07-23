@@ -2,21 +2,22 @@
     --bg-color: #fdfdfd;
     --accent-red: #e74c3c;
     --accent-yellow: #f1c40f;
+    --light-square: #fff;
+    --dark-square: #d1d8e0;
 }
 
 body {
     font-family: 'Patrick Hand', cursive;
     background: radial-gradient(circle, #e8e8e8 2px, var(--bg-color) 2px);
-    background-size: 30px 30px; /* Notizblock-Punkte */
+    background-size: 30px 30px;
     margin: 0;
     padding: 20px;
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
 }
 
-/* DEIN VORGEGEBENES SCRIBBLE DESIGN */
 .scribble-box, .scribble-btn {
     border: 3px solid #000;
     border-radius: 15px 255px 225px 15px / 255px 15px 225px 15px;
@@ -30,6 +31,9 @@ body {
     font-family: 'Patrick Hand', cursive;
     font-size: 1.2rem;
     padding: 10px 20px;
+    text-decoration: none;
+    color: black;
+    display: inline-block;
     transition: transform 0.1s ease;
 }
 
@@ -38,30 +42,91 @@ body {
     box-shadow: 3px 3px 0px rgba(0,0,0,0.9);
 }
 
-/* UI-Zustände */
-.offline {
-    pointer-events: none;
-    opacity: 0.5;
-    filter: grayscale(100%);
+#game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 600px;
 }
 
-#splash-screen {
-    position: absolute;
-    padding: 40px;
-    text-align: center;
-    z-index: 100;
+header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px;
+    width: 100%;
 }
 
-/* Mutant-Spezifisch */
+#player-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 1.5rem;
+}
+
+#twitch-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 3px solid #000;
+    object-fit: cover;
+}
+
+.turn-indicator {
+    margin-top: 10px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    padding: 5px 15px;
+    border: 2px solid #000;
+    border-radius: 10px;
+}
+
+.turn-w { background: #fff; color: #000; }
+.turn-b { background: #000; color: #fff; }
+
+#chessboard {
+    width: 100%;
+    max-width: 500px;
+    aspect-ratio: 1 / 1;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    background-color: #000;
+    gap: 2px;
+    padding: 5px;
+}
+
+.square {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.square.light { background-color: var(--light-square); }
+.square.dark { background-color: var(--dark-square); }
+
+.square.highlight { background-color: var(--accent-yellow) !important; }
+
 .piece {
-    width: 80%;
-    height: 80%;
+    font-size: 2.5rem;
     cursor: grab;
-    transition: all 0.2s;
+    user-select: none;
+    position: relative;
 }
 
-/* Wenn eine Figur mutiert ist (2 Typen), kritzelt sich das CSS übereinander */
-.piece.mutant {
-    transform: scale(1.2);
-    filter: drop-shadow(4px 4px 0px var(--accent-red));
+.piece:active { cursor: grabbing; }
+
+.piece.color-w { color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; }
+.piece.color-b { color: #000; }
+
+.mutant-layer {
+    position: absolute;
+    top: -5px;
+    left: 5px;
+    opacity: 0.8;
+    color: var(--accent-red);
 }
