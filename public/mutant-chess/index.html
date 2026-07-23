@@ -26,10 +26,31 @@
     <div id="menu-screen" class="card scribble-box">
         <h1>Mutant Merge Chess</h1>
         <p class="subtitle">Piece Fusion Multiplayer Chess</p>
+        
         <div class="input-group">
             <label>Your Name</label>
             <input type="text" id="player-name" placeholder="Name eingeben..." maxlength="15">
         </div>
+
+        <div class="input-group">
+            <label>Farbe wählen</label>
+            <select id="color-choice" class="select-input scribble-input">
+                <option value="w">Weiß (White)</option>
+                <option value="b">Schwarz (Black)</option>
+                <option value="random">Zufall (Random)</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Gesamtzeit: <span id="time-val">3</span> Min.</label>
+            <input type="range" id="time-range" min="1" max="10" value="3" class="slider">
+        </div>
+
+        <div class="input-group">
+            <label>Inkrement: <span id="inc-val">2</span> Sek.</label>
+            <input type="range" id="inc-range" min="0" max="10" value="2" class="slider">
+        </div>
+
         <div class="button-group">
             <button id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
             <div class="divider">or</div>
@@ -61,13 +82,13 @@
                     <span id="status-banner-text">Prepare for Battle!</span>
                 </div>
 
-                <!-- Opponent Bar -->
+                <!-- Opponent Bar mit Chess Clock -->
                 <div class="player-bar top">
                     <div class="player-info">
                         <img id="top-pfp" class="chess-avatar hidden" src="">
                         <span id="top-player-name">Opponent</span>
                     </div>
-                    <span id="top-ready-badge" class="badge">Not Ready</span>
+                    <div id="top-clock" class="clock-box scribble-box">03:00</div>
                 </div>
 
                 <!-- Board -->
@@ -76,13 +97,13 @@
                     <div id="animation-layer"></div>
                 </div>
 
-                <!-- Player Bar -->
+                <!-- Player Bar mit Chess Clock -->
                 <div class="player-bar bottom">
                     <div class="player-info">
                         <img id="bottom-pfp" class="chess-avatar hidden" src="">
                         <span id="bottom-player-name">You</span>
                     </div>
-                    <span id="bottom-ready-badge" class="badge">Not Ready</span>
+                    <div id="bottom-clock" class="clock-box scribble-box">03:00</div>
                 </div>
 
                 <!-- Game Over Modal -->
@@ -90,6 +111,17 @@
                     <div class="scribble-box" style="padding: 30px; text-align: center; background: white;">
                         <span id="winner-text" style="font-size: 32px; display: block; margin-bottom: 20px;">White Wins!</span>
                         <button class="btn btn-primary scribble-btn" onclick="leaveGame()">Back to Menu</button>
+                    </div>
+                </div>
+
+                <!-- Draw Offer Modal -->
+                <div id="draw-modal" class="hidden">
+                    <div class="scribble-box" style="padding: 25px; text-align: center; background: white;">
+                        <span style="font-size: 24px; display: block; margin-bottom: 15px;">Gegner bietet Remis an!</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="btn-accept-draw" class="btn btn-primary scribble-btn">Annehmen</button>
+                            <button id="btn-decline-draw" class="btn btn-danger scribble-btn">Ablehnen</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -114,6 +146,12 @@
                     <div id="history-list" class="history-list"></div>
                 </div>
 
+                <!-- Ingame Actions (Draw & Resign) -->
+                <div id="game-actions" class="actions-row">
+                    <button id="btn-offer-draw" class="btn btn-secondary scribble-btn">Draw</button>
+                    <button id="btn-resign" class="btn btn-danger scribble-btn">Resign</button>
+                </div>
+
                 <div class="rules-section">
                     <div class="sidebar-title" style="margin-bottom: 8px;">Mutant Rules</div>
                     <ul class="rules-list">
@@ -123,7 +161,7 @@
                     </ul>
                 </div>
 
-                <button id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn" style="margin-top: 10px;">Leave Game</button>
+                <button id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn">Leave Game</button>
             </div>
         </div>
     </div>
