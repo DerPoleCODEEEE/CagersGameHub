@@ -51,3 +51,25 @@ main { width: 100%; max-width: 900px; }
 .play-btn:hover:not(.disabled) { background-color: #f39c12; transform: scale(1.1); }
 .disabled { background-color: #ccc; cursor: not-allowed; color: #666; }
 .locked { opacity: 0.7; }
+/* FLORK BACKGROUND STYLE */
+.flork-bg {
+    position: fixed;
+    bottom: -15px;
+    width: 200px; /* Größe der Florks */
+    z-index: 0;
+    pointer-events: none; /* Damit man nicht aus Versehen draufklickt */
+    opacity: 0.9;
+}
+.flork-left {
+    left: 2%;
+}
+.flork-right {
+    right: 2%;
+    transform: scaleX(-1); /* Dreht den Flork um, damit er in die Mitte schaut */
+}
+
+/* Wichtig: Hebt den Hub-Inhalt über die Florks */
+header, main {
+    position: relative;
+    z-index: 10;
+}
