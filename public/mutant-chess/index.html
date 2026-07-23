@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Mutant Merge Chess | Cager Game Hub</title>
+    <!-- Google Fonts: Patrick Hand -->
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Splash Screen für Server Kaltstart / Disconnect -->
+    <div id="splash-screen" class="scribble-box">
+        <h2>Verbinde zum Hub...</h2>
+        <p>Zeichne das Schachbrett...</p>
+    </div>
+
+    <!-- Haupt-UI (wird bei Disconnect ausgegraut) -->
+    <div id="game-container" style="display: none;">
+        
+        <header class="scribble-box">
+            <h1>Mutant Merge Chess</h1>
+            <div id="player-info">
+                <img id="twitch-avatar" src="" alt="Avatar">
+                <span id="twitch-name">Lade Spieler...</span>
+            </div>
+            <div id="room-info">Raum: <span id="room-code">---</span></div>
+        </header>
+
+        <main>
+            <div id="chessboard" class="scribble-box">
+                <!-- Felder werden via client.js generiert -->
+            </div>
+        </main>
+
+        <div class="controls">
+            <button id="btn-leave" class="scribble-btn">Zurück zum Hub</button>
+        </div>
+    </div>
+
+    <!-- Socket.IO und Client-Logik -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
