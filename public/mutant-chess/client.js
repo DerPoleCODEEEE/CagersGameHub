@@ -382,9 +382,11 @@ function getValidMoves(r, c) {
                         if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
                         } else if (canMerge && pieceArr.length + target.length <= 2) {
-                            // Check same piece type
-                            const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
-                            if (!hasSameType) {
+                            const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
+                            const hasSameType = new Set(combined).size !== combined.length;
+                            const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                            
+                            if (!hasSameType && !isRedundantQueen) {
                                 moves.push({ r: nr, c: nc, type: 'merge' });
                             }
                         }
@@ -409,8 +411,11 @@ function getValidMoves(r, c) {
                             if (getPieceColor(target) !== pColor) {
                                 moves.push({ r: targetR, c: targetC, type: 'capture' });
                             } else if (canMerge && pieceArr.length + target.length <= 2) {
-                                const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
-                                if (!hasSameType) {
+                                const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
+                                const hasSameType = new Set(combined).size !== combined.length;
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+
+                                if (!hasSameType && !isRedundantQueen) {
                                     moves.push({ r: targetR, c: targetC, type: 'merge' });
                                 }
                             }
@@ -435,8 +440,11 @@ function getValidMoves(r, c) {
                         } else if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
                         } else if (canMerge && pieceArr.length + target.length <= 2) {
-                            const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
-                            if (!hasSameType) {
+                            const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
+                            const hasSameType = new Set(combined).size !== combined.length;
+                            const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+
+                            if (!hasSameType && !isRedundantQueen) {
                                 moves.push({ r: nr, c: nc, type: 'merge' });
                             }
                         }
@@ -454,8 +462,11 @@ function getValidMoves(r, c) {
                         } else if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
                         } else if (canMerge && pieceArr.length + target.length <= 2) {
-                            const hasSameType = pieceArr.some(p => target.some(t => t.toLowerCase() === p.toLowerCase()));
-                            if (!hasSameType) {
+                            const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
+                            const hasSameType = new Set(combined).size !== combined.length;
+                            const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+
+                            if (!hasSameType && !isRedundantQueen) {
                                 moves.push({ r: nr, c: nc, type: 'merge' });
                             }
                         }
