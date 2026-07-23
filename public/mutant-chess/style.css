@@ -1,0 +1,67 @@
+:root {
+    --bg-color: #fdfdfd;
+    --accent-red: #e74c3c;
+    --accent-yellow: #f1c40f;
+}
+
+body {
+    font-family: 'Patrick Hand', cursive;
+    background: radial-gradient(circle, #e8e8e8 2px, var(--bg-color) 2px);
+    background-size: 30px 30px; /* Notizblock-Punkte */
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+/* DEIN VORGEGEBENES SCRIBBLE DESIGN */
+.scribble-box, .scribble-btn {
+    border: 3px solid #000;
+    border-radius: 15px 255px 225px 15px / 255px 15px 225px 15px;
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
+    background: #fff;
+}
+
+.scribble-btn {
+    cursor: pointer;
+    background: var(--accent-yellow);
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.2rem;
+    padding: 10px 20px;
+    transition: transform 0.1s ease;
+}
+
+.scribble-btn:active {
+    transform: translate(3px, 3px);
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.9);
+}
+
+/* UI-Zustände */
+.offline {
+    pointer-events: none;
+    opacity: 0.5;
+    filter: grayscale(100%);
+}
+
+#splash-screen {
+    position: absolute;
+    padding: 40px;
+    text-align: center;
+    z-index: 100;
+}
+
+/* Mutant-Spezifisch */
+.piece {
+    width: 80%;
+    height: 80%;
+    cursor: grab;
+    transition: all 0.2s;
+}
+
+/* Wenn eine Figur mutiert ist (2 Typen), kritzelt sich das CSS übereinander */
+.piece.mutant {
+    transform: scale(1.2);
+    filter: drop-shadow(4px 4px 0px var(--accent-red));
+}
