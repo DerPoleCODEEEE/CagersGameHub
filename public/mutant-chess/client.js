@@ -19,7 +19,7 @@ function updateUIConnectionStatus(status) {
 socket.on('connect', () => { updateUIConnectionStatus('online'); });
 socket.on('disconnect', () => { updateUIConnectionStatus('offline'); });
 
-// TWITCH DATEN ABRUFEN
+// TWITCH DATEN
 const twitchName = localStorage.getItem('cager_twitch_name');
 const twitchPfp = localStorage.getItem('cager_twitch_pfp') || '';
 
@@ -27,6 +27,15 @@ if (twitchName && twitchName !== 'undefined' && twitchName !== 'null') {
     document.getElementById('player-name').value = twitchName;
     document.getElementById('player-name').disabled = true;
 }
+
+// SLIDER INPUTS
+const timeRange = document.getElementById('time-range');
+const incRange = document.getElementById('inc-range');
+const timeVal = document.getElementById('time-val');
+const incVal = document.getElementById('inc-val');
+
+timeRange.oninput = () => timeVal.innerText = timeRange.value;
+incRange.oninput = () => incVal.innerText = incRange.value;
 
 const PIECES = {
     'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
@@ -51,12 +60,9 @@ let isGameStarted = false;
 let currentTurn = 'w';
 let moveCount = 1;
 
-const PIECE_RANK = { 'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6 };
-
-function sortCanonically(pieceArr) {
-    if (!pieceArr) return pieceArr;
-    return pieceArr.slice().sort((a, b) => PIECE_RANK[a.toLowerCase()] - PIECE_RANK[b.toLowerCase()]);
-}
+// SCHACHUHREN STATE
+let clocks = { w: 180, b: 180 };
+let clockTimer = null;
 
 let board = [
     [['r'], ['n'], ['b'], ['q'], ['k'], ['b'], ['n'], ['r']],
@@ -76,6 +82,9 @@ const btnReady = document.getElementById('btn-ready'), statusBanner = document.g
 const statusBannerText = document.getElementById('status-banner-text');
 const historyList = document.getElementById('history-list');
 
+const bottomClockEl = document.getElementById('bottom-clock');
+const topClockEl = document.getElementById('top-clock');
+
 function getPieceColor(pieceArr) {
     if (!pieceArr || !pieceArr.length) return null;
     return pieceArr[0] === pieceArr[0].toUpperCase() ? 'w' : 'b';
@@ -93,9 +102,20 @@ function toAlgebraic(r, c) {
     return colStr + rowStr;
 }
 
+function formatTime(seconds) {
+    const sec = Math.max(0, Math.floor(seconds));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
 document.getElementById('btn-create').onclick = () => {
     myName = document.getElementById('player-name').value.trim() || 'Player 1';
-    socket.emit('create_mutant_room', { playerName: myName, pfp: twitchPfp });
+    const colorChoice = document.getElementById('color-choice').value;
+    const totalTime = parseInt(timeRange.value, 10);
+    const increment = parseInt(incRange.value, 10);
+
+    socket.emit('create_mutant_room', { playerName: myName, pfp: twitchPfp, colorChoice, totalTime, increment });
 };
 
 document.getElementById('btn-join').onclick = () => {
@@ -107,6 +127,27 @@ document.getElementById('btn-join').onclick = () => {
 
 document.getElementById('btn-leave-lobby').onclick = leaveGame;
 document.getElementById('btn-leave-game').onclick = leaveGame;
+
+document.getElementById('btn-resign').onclick = () => {
+    if (confirm("Möchtest du wirklich aufgeben?")) {
+        socket.emit('resign_game', { roomCode, playerId });
+    }
+};
+
+document.getElementById('btn-offer-draw').onclick = () => {
+    socket.emit('offer_draw', { roomCode, playerId });
+    alert("Remis-Angebot gesendet!");
+};
+
+document.getElementById('btn-accept-draw').onclick = () => {
+    document.getElementById('draw-modal').style.display = 'none';
+    socket.emit('respond_draw', { roomCode, accepted: true });
+};
+
+document.getElementById('btn-decline-draw').onclick = () => {
+    document.getElementById('draw-modal').style.display = 'none';
+    socket.emit('respond_draw', { roomCode, accepted: false });
+};
 
 btnReady.onclick = () => {
     socket.emit('player_ready', { roomCode, playerId });
@@ -133,14 +174,21 @@ socket.on('mutant_opponent_joined', (data) => {
     startGame(); 
 });
 
+socket.on('mutant_opponent_left', () => {
+    statusBanner.classList.remove('hidden');
+    statusBannerText.innerText = "Gegner hat das Spiel verlassen!";
+});
+
 socket.on('ready_update', ({ playersReady }) => {
     playersReady.forEach(p => {
-        const badgeEl = document.getElementById(p.color === playerColor ? 'bottom-ready-badge' : 'top-ready-badge');
-        if (p.ready) { badgeEl.innerText = 'READY'; badgeEl.classList.add('ready'); }
+        if (p.ready) {
+            statusBannerText.innerText = `${p.color === playerColor ? myName : opponentName} ist Bereit!`;
+        }
     });
 });
 
-socket.on('start_match_countdown', () => {
+socket.on('start_match_countdown', (data) => {
+    if (data && data.clocks) clocks = data.clocks;
     isGameStarted = false;
     statusBanner.classList.remove('hidden');
     let secondsLeft = 5;
@@ -154,18 +202,39 @@ socket.on('start_match_countdown', () => {
             clearInterval(interval);
             statusBannerText.innerText = `BATTLE STARTED! GO!`;
             isGameStarted = true;
+            startClockTicker();
             setTimeout(() => statusBanner.classList.add('hidden'), 1500);
         }
     }, 1000);
 });
 
 socket.on('apply_mutant_move', (moveData) => {
+    if (moveData.clocks) clocks = moveData.clocks;
     executeMove(moveData.fromR, moveData.fromC, moveData.toR, moveData.toC, moveData.moveInfo, moveData.duration, moveData.board, moveData.nextTurn);
 });
 
-socket.on('game_over', ({ winnerColor }) => {
+socket.on('draw_offered', () => {
+    document.getElementById('draw-modal').style.display = 'flex';
+});
+
+socket.on('draw_declined', () => {
+    alert("Gegner hat das Remis abgelehnt!");
+});
+
+socket.on('game_over', ({ winnerColor, reason }) => {
     isGameOver = true;
-    document.getElementById('winner-text').innerText = (winnerColor === playerColor ? 'Du hast gewonnen!' : 'Gegner hat gewonnen!');
+    clearInterval(clockTimer);
+    
+    let text = "";
+    if (winnerColor === null) {
+        text = "Unentschieden! (Remis)";
+    } else if (winnerColor === playerColor) {
+        text = reason === 'time' ? "Sieg durch Zeitüberschreitung!" : (reason === 'resign' ? "Gegner hat aufgegeben!" : "Sieg! König vernichtet!");
+    } else {
+        text = reason === 'time' ? "Niederlage! Zeit abgelaufen!" : (reason === 'resign' ? "Du hast aufgegeben." : "Niederlage!");
+    }
+
+    document.getElementById('winner-text').innerText = text;
     document.getElementById('game-over').style.display = 'flex';
 });
 
@@ -185,7 +254,39 @@ function startGame() {
     if (opponentPfp) { topPfpEl.src = opponentPfp; topPfpEl.classList.remove('hidden'); }
 
     if (playerColor === 'b') boardEl.classList.add('flipped');
-    createBoardDOMOnce(); renderBoard(); updateTurnDisplay();
+    createBoardDOMOnce(); renderBoard(); updateTurnDisplay(); updateClockDisplay();
+}
+
+function startClockTicker() {
+    clearInterval(clockTimer);
+    clockTimer = setInterval(() => {
+        if (!isGameStarted || isGameOver) return;
+        
+        clocks[currentTurn] = Math.max(0, clocks[currentTurn] - 0.1);
+        updateClockDisplay();
+
+        if (clocks[currentTurn] <= 0) {
+            clearInterval(clockTimer);
+            socket.emit('time_out', { roomCode, loserColor: currentTurn });
+        }
+    }, 100);
+}
+
+function updateClockDisplay() {
+    const myClockVal = clocks[playerColor];
+    const oppColor = playerColor === 'w' ? 'b' : 'w';
+    const oppClockVal = clocks[oppColor];
+
+    bottomClockEl.innerText = formatTime(myClockVal);
+    topClockEl.innerText = formatTime(oppClockVal);
+
+    if (currentTurn === playerColor) {
+        bottomClockEl.classList.add('active');
+        topClockEl.classList.remove('active');
+    } else {
+        topClockEl.classList.add('active');
+        bottomClockEl.classList.remove('active');
+    }
 }
 
 function updateTurnDisplay() {
@@ -351,7 +452,6 @@ function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, move
     const formatPieces = (arr) => arr.map(p => p.toUpperCase()).join('+');
 
     if (moveType === 'merge') {
-        // FUSION: Z.B. N+P@e4
         const movingStr = formatPieces(movingPiece);
         const targetStr = formatPieces(targetPiece);
         str = `${movingStr}+${targetStr}@${dest}`;
@@ -401,6 +501,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, duration, newBoard, nextT
         board = newBoard;
         currentTurn = nextTurn;
         updateTurnDisplay();
+        updateClockDisplay();
         renderBoard();
     }, duration);
 }
