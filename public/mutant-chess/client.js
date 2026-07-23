@@ -27,43 +27,37 @@ timeRange.oninput = () => timeVal.innerText = timeRange.value;
 incRange.oninput = () => incVal.innerText = incRange.value;
 fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
 
-// STANDARD CHESS PIECES
+// STANDARD CHESS PIECES (LOKALE GREEN CHESS ASSETS)
 const PIECES = {
-    'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
-    'N': { img: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg' },
-    'B': { img: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg' },
-    'R': { img: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg' },
-    'Q': { img: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg' },
-    'K': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg' },
-    'p': { img: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg' },
-    'n': { img: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg' },
-    'b': { img: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg' },
-    'r': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg' },
-    'q': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg' },
-    'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
+    'P': { img: 'assets/pawn-w.svg' },
+    'N': { img: 'assets/knight-w.svg' },
+    'B': { img: 'assets/bishop-w.svg' },
+    'R': { img: 'assets/rook-w.svg' },
+    'Q': { img: 'assets/queen-w.svg' },
+    'K': { img: 'assets/king-w.svg' },
+    'p': { img: 'assets/pawn-b.svg' },
+    'n': { img: 'assets/knight-b.svg' },
+    'b': { img: 'assets/bishop-b.svg' },
+    'r': { img: 'assets/rook-b.svg' },
+    'q': { img: 'assets/queen-b.svg' },
+    'k': { img: 'assets/king-b.svg' }
 };
 
-// CUSTOM MUTANT SVGs (WIKIMEDIA COMMONS)
+// GREEN CHESS FAIRY PIECES FOR MUTANTS
 const MUTANT_PIECES = {
-    // WHITE MUTANTS
-    'P+N': 'https://upload.wikimedia.org/wikipedia/commons/2/28/WHITE_CHESS_PAWN-KNIGHT.svg',
-    'P+B': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/WHITE_CHESS_PAWN-BISHOP.svg',
-    'P+R': 'https://upload.wikimedia.org/wikipedia/commons/2/2b/WHITE_CHESS_PAWN-ROOK.svg',
-    'P+Q': 'https://upload.wikimedia.org/wikipedia/commons/1/14/WHITE_CHESS_PAWN-QUEEN.svg',
-    'N+B': 'https://upload.wikimedia.org/wikipedia/commons/e/eb/WHITE_CHESS_KNIGHT-BISHOP.svg',
-    'N+R': 'https://upload.wikimedia.org/wikipedia/commons/d/d1/WHITE_CHESS_KNIGHT-ROOK.svg',
-    'N+Q': 'https://upload.wikimedia.org/wikipedia/commons/f/f3/WHITE_CHESS_KNIGHT-QUEEN.svg',
-    'B+R': 'https://upload.wikimedia.org/wikipedia/commons/3/30/WHITE_CHESS_BISHOP-ROOK.svg',
+    // WHITE
+    'P+N': 'assets/bpawn-w.svg',
+    'P+B': 'assets/bpawn2-w.svg',
+    'N+B': 'assets/archbis-w.svg',
+    'N+R': 'assets/chancel-w.svg',
+    'N+Q': 'assets/amazon-w.svg',
 
-    // BLACK MUTANTS
-    'p+n': 'https://upload.wikimedia.org/wikipedia/commons/1/1e/BLACK_CHESS_PAWN-KNIGHT.svg',
-    'p+b': 'https://upload.wikimedia.org/wikipedia/commons/b/b5/BLACK_CHESS_PAWN-BISHOP.svg',
-    'p+r': 'https://upload.wikimedia.org/wikipedia/commons/a/a3/BLACK_CHESS_PAWN-ROOK.svg',
-    'p+q': 'https://upload.wikimedia.org/wikipedia/commons/e/e0/BLACK_CHESS_PAWN-QUEEN.svg',
-    'n+b': 'https://upload.wikimedia.org/wikipedia/commons/d/d2/BLACK_CHESS_KNIGHT-BISHOP.svg',
-    'n+r': 'https://upload.wikimedia.org/wikipedia/commons/7/7b/BLACK_CHESS_KNIGHT-ROOK.svg',
-    'n+q': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/BLACK_CHESS_KNIGHT-QUEEN.svg',
-    'b+r': 'https://upload.wikimedia.org/wikipedia/commons/0/07/BLACK_CHESS_BISHOP-ROOK.svg'
+    // BLACK
+    'p+n': 'assets/bpawn-b.svg',
+    'p+b': 'assets/bpawn2-b.svg',
+    'n+b': 'assets/archbis-b.svg',
+    'n+r': 'assets/chancel-b.svg',
+    'n+q': 'assets/amazon-b.svg'
 };
 
 let roomCode = null, playerColor = null;
@@ -109,7 +103,7 @@ const topFusionDots = document.getElementById('top-fusion-dots');
 
 function getPieceColor(pieceArr) {
     if (!pieceArr || !pieceArr.length) return null;
-    return pieceArr[0] === pieceArr[0].toUpperCase() ? 'w' : 'b';
+    return pieceArr[0][0] === pieceArr[0][0].toUpperCase() ? 'w' : 'b';
 }
 
 function toAlgebraic(r, c) {
@@ -372,6 +366,11 @@ function createBoardDOMOnce() {
             overlayImg.className = 'piece-img overlay hidden';
             container.appendChild(overlayImg);
 
+            const fusedBadge = document.createElement('div');
+            fusedBadge.className = 'fused-queen-badge hidden';
+            fusedBadge.innerText = 'FUSED';
+            container.appendChild(fusedBadge);
+
             square.appendChild(container);
             square.onclick = () => handleSquareClick(r, c);
             boardEl.appendChild(square);
@@ -389,9 +388,10 @@ function getValidMoves(r, c) {
 
     let moves = [];
     const canMerge = fusionsLeft[playerColor] > 0;
+    const isPieceFused = pieceArr.some(p => p.includes('_fused'));
 
     pieceArr.forEach(typeChar => {
-        const charLower = typeChar.toLowerCase();
+        const charLower = typeChar.toLowerCase().replace('_fused', '');
         const dir = pColor === 'w' ? -1 : 1;
         const startRow = pColor === 'w' ? 6 : 1;
 
@@ -405,13 +405,16 @@ function getValidMoves(r, c) {
                     } else {
                         if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
-                        } else if (canMerge && pieceArr.length + target.length <= 2) {
-                            const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
-                            const hasSameType = new Set(combined).size !== combined.length;
-                            const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
-                            
-                            if (!hasSameType && !isRedundantQueen) {
-                                moves.push({ r: nr, c: nc, type: 'merge' });
+                        } else if (canMerge && !isPieceFused && pieceArr.length + target.length <= 2) {
+                            const targetFused = target.some(p => p.includes('_fused'));
+                            if (!targetFused) {
+                                const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
+                                const hasSameType = new Set(combined).size !== combined.length;
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                                
+                                if (!hasSameType && !isRedundantQueen) {
+                                    moves.push({ r: nr, c: nc, type: 'merge' });
+                                }
                             }
                         }
                         break;
@@ -434,13 +437,16 @@ function getValidMoves(r, c) {
                         if (target) {
                             if (getPieceColor(target) !== pColor) {
                                 moves.push({ r: targetR, c: targetC, type: 'capture' });
-                            } else if (canMerge && pieceArr.length + target.length <= 2) {
-                                const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
-                                const hasSameType = new Set(combined).size !== combined.length;
-                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                            } else if (canMerge && !isPieceFused && pieceArr.length + target.length <= 2) {
+                                const targetFused = target.some(p => p.includes('_fused'));
+                                if (!targetFused) {
+                                    const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
+                                    const hasSameType = new Set(combined).size !== combined.length;
+                                    const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
 
-                                if (!hasSameType && !isRedundantQueen) {
-                                    moves.push({ r: targetR, c: targetC, type: 'merge' });
+                                    if (!hasSameType && !isRedundantQueen) {
+                                        moves.push({ r: targetR, c: targetC, type: 'merge' });
+                                    }
                                 }
                             }
                         } else if (enPassantTarget && enPassantTarget.color !== pColor && enPassantTarget.r === targetR && enPassantTarget.c === targetC) {
@@ -463,13 +469,16 @@ function getValidMoves(r, c) {
                             moves.push({ r: nr, c: nc, type: 'normal' });
                         } else if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
-                        } else if (canMerge && pieceArr.length + target.length <= 2) {
-                            const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
-                            const hasSameType = new Set(combined).size !== combined.length;
-                            const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                        } else if (canMerge && !isPieceFused && pieceArr.length + target.length <= 2) {
+                            const targetFused = target.some(p => p.includes('_fused'));
+                            if (!targetFused) {
+                                const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
+                                const hasSameType = new Set(combined).size !== combined.length;
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
 
-                            if (!hasSameType && !isRedundantQueen) {
-                                moves.push({ r: nr, c: nc, type: 'merge' });
+                                if (!hasSameType && !isRedundantQueen) {
+                                    moves.push({ r: nr, c: nc, type: 'merge' });
+                                }
                             }
                         }
                     }
@@ -485,13 +494,16 @@ function getValidMoves(r, c) {
                             moves.push({ r: nr, c: nc, type: 'normal' });
                         } else if (getPieceColor(target) !== pColor) {
                             moves.push({ r: nr, c: nc, type: 'capture' });
-                        } else if (canMerge && pieceArr.length + target.length <= 2) {
-                            const combined = [...pieceArr, ...target].map(p => p.toLowerCase());
-                            const hasSameType = new Set(combined).size !== combined.length;
-                            const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                        } else if (canMerge && !isPieceFused && pieceArr.length + target.length <= 2) {
+                            const targetFused = target.some(p => p.includes('_fused'));
+                            if (!targetFused) {
+                                const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
+                                const hasSameType = new Set(combined).size !== combined.length;
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
 
-                            if (!hasSameType && !isRedundantQueen) {
-                                moves.push({ r: nr, c: nc, type: 'merge' });
+                                if (!hasSameType && !isRedundantQueen) {
+                                    moves.push({ r: nr, c: nc, type: 'merge' });
+                                }
                             }
                         }
                     }
@@ -581,7 +593,7 @@ function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, move
     const start = toAlgebraic(fromR, fromC);
     let str = "";
 
-    const formatPieces = (arr) => arr.map(p => p.toUpperCase()).join('+');
+    const formatPieces = (arr) => arr.map(p => p.replace('_fused', '').toUpperCase()).join('+');
 
     if (moveType === 'castle') {
         str = toC === 6 ? "O-O" : "O-O-O";
@@ -591,7 +603,7 @@ function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, move
         str = `${movingStr}+${targetStr}@${dest}`;
     } else {
         const isMutant = movingPiece.length > 1;
-        const pStr = isMutant ? `(${formatPieces(movingPiece)})` : movingPiece[0].toUpperCase();
+        const pStr = isMutant ? `(${formatPieces(movingPiece)})` : movingPiece[0].replace('_fused', '').toUpperCase();
         
         if (moveType === 'capture' || moveType === 'en_passant') {
             str = `${pStr}x${dest}`;
@@ -620,7 +632,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, newBoard, nextTurn) {
     if (movingPiece.includes('r') && fromR === 0 && fromC === 0) hasMoved.bR_left = true;
     if (movingPiece.includes('r') && fromR === 0 && fromC === 7) hasMoved.bR_right = true;
 
-    if (movingPiece.some(p => p.toLowerCase() === 'p') && Math.abs(toR - fromR) === 2) {
+    if (movingPiece.some(p => p.toLowerCase().replace('_fused', '') === 'p') && Math.abs(toR - fromR) === 2) {
         enPassantTarget = { r: (fromR + toR) / 2, c: fromC, color: getPieceColor(movingPiece) };
     } else {
         enPassantTarget = null;
@@ -653,20 +665,27 @@ function renderBoard() {
             let container = square.querySelector('.piece-container');
             let mainImg = square.querySelector('.piece-img.main');
             let overlayImg = square.querySelector('.piece-img.overlay');
+            let fusedBadge = square.querySelector('.fused-queen-badge');
 
             if (pieceArr && pieceArr.length > 0) {
                 container.classList.remove('hidden');
 
+                const isFusedQueen = pieceArr.some(p => p.includes('_fused'));
+                if (fusedBadge) {
+                    fusedBadge.classList.toggle('hidden', !isFusedQueen);
+                }
+
                 if (pieceArr.length === 1) {
-                    // SINGLE PIECE
-                    mainImg.src = PIECES[pieceArr[0]].img;
+                    // SINGLE PIECE (Standard OR Fused Queen)
+                    const pieceChar = pieceArr[0].replace('_fused', '');
+                    mainImg.src = PIECES[pieceChar].img;
                     overlayImg.classList.add('hidden');
                 } else if (pieceArr.length > 1) {
                     // MUTANT PIECE
                     const hasKing = pieceArr.some(p => p.toLowerCase() === 'k');
 
                     if (hasKing) {
-                        // KING MUTANT: King is main (BIG), other piece is overlay (CORNER)
+                        // KING MUTANT
                         const kingChar = pieceArr.find(p => p.toLowerCase() === 'k');
                         const otherChar = pieceArr.find(p => p.toLowerCase() !== 'k');
 
@@ -674,13 +693,22 @@ function renderBoard() {
                         overlayImg.src = PIECES[otherChar].img;
                         overlayImg.classList.remove('hidden');
                     } else {
-                        // NON-KING MUTANT: Use Wikimedia custom merged SVG!
+                        // REGULAR MUTANT: Try GreenChess custom fairy SVG
                         const key = pieceArr.join('+');
-                        if (MUTANT_PIECES[key]) {
-                            mainImg.src = MUTANT_PIECES[key];
+                        const customSrc = MUTANT_PIECES[key];
+
+                        if (customSrc) {
+                            mainImg.src = customSrc;
                             overlayImg.classList.add('hidden');
+
+                            // Fallback if missing
+                            mainImg.onerror = () => {
+                                mainImg.onerror = null;
+                                mainImg.src = PIECES[pieceArr[0]].img;
+                                overlayImg.src = PIECES[pieceArr[1]].img;
+                                overlayImg.classList.remove('hidden');
+                            };
                         } else {
-                            // Fallback if key missing
                             mainImg.src = PIECES[pieceArr[0]].img;
                             overlayImg.src = PIECES[pieceArr[1]].img;
                             overlayImg.classList.remove('hidden');
