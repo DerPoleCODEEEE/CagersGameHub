@@ -153,18 +153,39 @@ function getPieceColor(pieceArr) {
 }
 
 mutantIo.on('connection', (socket) => {
-    socket.on('create_mutant_room', ({ playerName, pfp }) => {
+    socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment }) => {
         const roomCode = generateRoomCode();
-        mutantRooms.set(roomCode, {
+        
+        let hostColor = colorChoice;
+        if (colorChoice === 'random') {
+            hostColor = Math.random() < 0.5 ? 'w' : 'b';
+        }
+
+        const roomData = {
             players: {
-                w: { id: socket.id, name: playerName, pfp: pfp, ready: false },
-                b: null
+                w: hostColor === 'w' ? { id: socket.id, name: playerName, pfp, ready: false } : null,
+                b: hostColor === 'b' ? { id: socket.id, name: playerName, pfp, ready: false } : null
             },
             board: createInitialMutantBoard(),
-            turn: 'w'
-        });
+            turn: 'w',
+            timeControl: {
+                minutes: totalTime || 3,
+                increment: increment || 2
+            },
+            clocks: {
+                w: (totalTime || 3) * 60,
+                b: (totalTime || 3) * 60
+            },
+            lastTurnTimestamp: null,
+            hostColor
+        };
+
+        mutantRooms.set(roomCode, roomData);
         socket.join(roomCode);
-        socket.emit('mutant_room_created', { roomCode, playerId: socket.id, color: 'w', playerName, pfp });
+        socket.emit('mutant_room_created', { 
+            roomCode, playerId: socket.id, color: hostColor, playerName, pfp,
+            timeControl: roomData.timeControl
+        });
     });
 
     socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
@@ -172,17 +193,23 @@ mutantIo.on('connection', (socket) => {
         const room = mutantRooms.get(code);
 
         if (!room) return socket.emit('error_msg', 'Raum nicht gefunden!');
-        if (room.players.b) return socket.emit('error_msg', 'Raum ist voll!');
+        
+        let joinerColor = room.players.w ? 'b' : 'w';
+        if (room.players[joinerColor]) return socket.emit('error_msg', 'Raum ist voll!');
 
-        room.players.b = { id: socket.id, name: playerName, pfp: pfp, ready: false };
+        room.players[joinerColor] = { id: socket.id, name: playerName, pfp, ready: false };
         socket.join(code);
+
+        const oppColor = joinerColor === 'w' ? 'b' : 'w';
+        const opponent = room.players[oppColor];
 
         socket.emit('mutant_room_joined', {
             roomCode: code,
             playerId: socket.id,
-            color: 'b',
-            opponentName: room.players.w.name,
-            opponentPfp: room.players.w.pfp
+            color: joinerColor,
+            opponentName: opponent.name,
+            opponentPfp: opponent.pfp,
+            timeControl: room.timeControl
         });
 
         socket.to(code).emit('mutant_opponent_joined', {
@@ -204,7 +231,8 @@ mutantIo.on('connection', (socket) => {
         mutantIo.to(roomCode).emit('ready_update', { playersReady });
 
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
-            mutantIo.to(roomCode).emit('start_match_countdown');
+            room.lastTurnTimestamp = Date.now();
+            mutantIo.to(roomCode).emit('start_match_countdown', { clocks: room.clocks });
         }
     });
 
@@ -218,9 +246,16 @@ mutantIo.on('connection', (socket) => {
         const pieceColor = getPieceColor(movingPiece);
         if (room.turn !== pieceColor) return;
 
+        // Uhrenberechnung mit Inkrement
+        const now = Date.now();
+        if (room.lastTurnTimestamp) {
+            const elapsedSeconds = (now - room.lastTurnTimestamp) / 1000;
+            room.clocks[pieceColor] = Math.max(0, room.clocks[pieceColor] - elapsedSeconds + room.timeControl.increment);
+        }
+        room.lastTurnTimestamp = now;
+
         const targetPiece = room.board[toR][toC];
 
-        // MERGE FUSION LOGIK WITH CANONICAL SORTING
         if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
             if (movingPiece.length + targetPiece.length <= 2) {
                 room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
@@ -228,9 +263,7 @@ mutantIo.on('connection', (socket) => {
             } else {
                 return socket.emit('error_msg', 'Maximal 2 Figuren pro Feld!');
             }
-        } 
-        // SCHLAGEN ODER ZIEHEN
-        else {
+        } else {
             let isKingCaptured = false;
             if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) {
                 isKingCaptured = true;
@@ -239,20 +272,51 @@ mutantIo.on('connection', (socket) => {
             room.board[fromR][fromC] = null;
 
             if (isKingCaptured) {
-                mutantIo.to(roomCode).emit('game_over', { winnerColor: pieceColor });
+                mutantIo.to(roomCode).emit('game_over', { winnerColor: pieceColor, reason: 'king' });
             }
         }
 
         room.turn = room.turn === 'w' ? 'b' : 'w';
 
         mutantIo.to(roomCode).emit('apply_mutant_move', {
-            playerId, fromR, fromC, toR, toC, moveInfo, duration, board: room.board, nextTurn: room.turn
+            playerId, fromR, fromC, toR, toC, moveInfo, duration, board: room.board, nextTurn: room.turn,
+            clocks: room.clocks
         });
     });
 
-    socket.on('leave_room', ({ roomCode }) => {
-        socket.to(roomCode).emit('opponent_left');
-        socket.leave(roomCode);
+    // TIME OUT EVENT
+    socket.on('time_out', ({ roomCode, loserColor }) => {
+        const room = mutantRooms.get(roomCode);
+        if (!room) return;
+        const winnerColor = loserColor === 'w' ? 'b' : 'w';
+        mutantIo.to(roomCode).emit('game_over', { winnerColor, reason: 'time' });
+    });
+
+    // RESIGN & DRAW
+    socket.on('resign_game', ({ roomCode, playerId }) => {
+        const room = mutantRooms.get(roomCode);
+        if (!room) return;
+        const resigningColor = room.players.w && room.players.w.id === playerId ? 'w' : 'b';
+        const winnerColor = resigningColor === 'w' ? 'b' : 'w';
+        mutantIo.to(roomCode).emit('game_over', { winnerColor, reason: 'resign' });
+    });
+
+    socket.on('offer_draw', ({ roomCode, playerId }) => {
+        socket.to(roomCode).emit('draw_offered');
+    });
+
+    socket.on('respond_draw', ({ roomCode, accepted }) => {
+        if (accepted) {
+            mutantIo.to(roomCode).emit('game_over', { winnerColor: null, reason: 'draw' });
+        } else {
+            socket.to(roomCode).emit('draw_declined');
+        }
+    });
+
+    socket.on('disconnecting', () => {
+        socket.rooms.forEach(roomCode => {
+            socket.to(roomCode).emit('mutant_opponent_left');
+        });
     });
 });
 
