@@ -27,7 +27,7 @@ timeRange.oninput = () => timeVal.innerText = timeRange.value;
 incRange.oninput = () => incVal.innerText = incRange.value;
 fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
 
-// STANDARD CHESS PIECES (ONLINE WIKIMEDIA - GUARANTEED WORKING)
+// STANDARD CHESS PIECES (ONLINE WIKIMEDIA SVGs)
 const PIECES = {
     'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
     'N': { img: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg' },
@@ -41,23 +41,6 @@ const PIECES = {
     'r': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg' },
     'q': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg' },
     'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
-};
-
-// FAIRY / MUTANT CHESS PIECES
-const MUTANT_PIECES = {
-    // WHITE
-    'P+N': 'https://upload.wikimedia.org/wikipedia/commons/2/28/WHITE_CHESS_PAWN-KNIGHT.svg',
-    'P+B': 'https://upload.wikimedia.org/wikipedia/commons/a/a2/WHITE_CHESS_PAWN-BISHOP.svg',
-    'N+B': 'https://upload.wikimedia.org/wikipedia/commons/e/eb/WHITE_CHESS_KNIGHT-BISHOP.svg',
-    'N+R': 'https://upload.wikimedia.org/wikipedia/commons/d/d1/WHITE_CHESS_KNIGHT-ROOK.svg',
-    'N+Q': 'https://upload.wikimedia.org/wikipedia/commons/f/f3/WHITE_CHESS_KNIGHT-QUEEN.svg',
-
-    // BLACK
-    'p+n': 'https://upload.wikimedia.org/wikipedia/commons/1/1e/BLACK_CHESS_PAWN-KNIGHT.svg',
-    'p+b': 'https://upload.wikimedia.org/wikipedia/commons/b/b5/BLACK_CHESS_PAWN-BISHOP.svg',
-    'n+b': 'https://upload.wikimedia.org/wikipedia/commons/d/d2/BLACK_CHESS_KNIGHT-BISHOP.svg',
-    'n+r': 'https://upload.wikimedia.org/wikipedia/commons/7/7b/BLACK_CHESS_KNIGHT-ROOK.svg',
-    'n+q': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/BLACK_CHESS_KNIGHT-QUEEN.svg'
 };
 
 let roomCode = null, playerColor = null;
@@ -360,18 +343,13 @@ function createBoardDOMOnce() {
             
             const mainImg = document.createElement('img');
             mainImg.className = 'piece-img main';
-            mainImg.referrerPolicy = "no-referrer"; // Bypasses hotlinking restriction
+            mainImg.referrerPolicy = "no-referrer";
             container.appendChild(mainImg);
 
             const overlayImg = document.createElement('img');
             overlayImg.className = 'piece-img overlay hidden';
             overlayImg.referrerPolicy = "no-referrer";
             container.appendChild(overlayImg);
-
-            const fusedBadge = document.createElement('div');
-            fusedBadge.className = 'fused-queen-badge hidden';
-            fusedBadge.innerText = 'FUSED';
-            container.appendChild(fusedBadge);
 
             square.appendChild(container);
             square.onclick = () => handleSquareClick(r, c);
@@ -460,7 +438,7 @@ function getValidMoves(r, c) {
 
             case 'r': addSliding([[-1,0],[1,0],[0,-1],[0,1]]); break;
             case 'b': addSliding([[-1,-1],[-1,1],[1,-1],[1,1]]); break;
-            case 'q': addSliding([[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[-1,0],[1,0],[0,-1],[0,1]]); break;
+            case 'q': addSliding([[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]); break;
 
             case 'n':
                 for (let [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
@@ -668,58 +646,41 @@ function renderBoard() {
             let container = square.querySelector('.piece-container');
             let mainImg = square.querySelector('.piece-img.main');
             let overlayImg = square.querySelector('.piece-img.overlay');
-            let fusedBadge = square.querySelector('.fused-queen-badge');
 
             if (pieceArr && pieceArr.length > 0) {
                 container.classList.remove('hidden');
 
+                // LILANEN FUSIONS-HINTERGRUND FÜR GEFUSEDTE DAMEN AKTIVIEREN
                 const isFusedQueen = pieceArr.some(p => p.includes('_fused'));
-                if (fusedBadge) {
-                    fusedBadge.classList.toggle('hidden', !isFusedQueen);
-                }
+                container.classList.toggle('fused-piece-bg', isFusedQueen);
 
                 if (pieceArr.length === 1) {
-                    // SINGLE PIECE (Standard OR Fused Queen)
+                    // SINGLE PIECE (Standard oder Fused Queen)
                     const pieceChar = pieceArr[0].replace('_fused', '');
                     mainImg.src = PIECES[pieceChar].img;
                     overlayImg.classList.add('hidden');
                 } else if (pieceArr.length > 1) {
-                    // MUTANT PIECE
+                    // MUTANT PIECE: Dynamic Dual-Piece Layout
                     const hasKing = pieceArr.some(p => p.toLowerCase() === 'k');
+                    let mainChar, overlayChar;
 
                     if (hasKing) {
-                        // KING MUTANT
-                        const kingChar = pieceArr.find(p => p.toLowerCase() === 'k');
-                        const otherChar = pieceArr.find(p => p.toLowerCase() !== 'k');
-
-                        mainImg.src = PIECES[kingChar].img;
-                        overlayImg.src = PIECES[otherChar].img;
-                        overlayImg.classList.remove('hidden');
+                        // King is always the main piece on the square
+                        mainChar = pieceArr.find(p => p.toLowerCase() === 'k');
+                        overlayChar = pieceArr.find(p => p.toLowerCase() !== 'k');
                     } else {
-                        // REGULAR MUTANT: Try custom fairy SVG
-                        const key = pieceArr.join('+');
-                        const customSrc = MUTANT_PIECES[key];
-
-                        if (customSrc) {
-                            mainImg.src = customSrc;
-                            overlayImg.classList.add('hidden');
-
-                            // Fallback to overlay if image load fails
-                            mainImg.onerror = () => {
-                                mainImg.onerror = null;
-                                mainImg.src = PIECES[pieceArr[0]].img;
-                                overlayImg.src = PIECES[pieceArr[1]].img;
-                                overlayImg.classList.remove('hidden');
-                            };
-                        } else {
-                            mainImg.src = PIECES[pieceArr[0]].img;
-                            overlayImg.src = PIECES[pieceArr[1]].img;
-                            overlayImg.classList.remove('hidden');
-                        }
+                        // First piece is main, second piece is overlay in the corner
+                        mainChar = pieceArr[0];
+                        overlayChar = pieceArr[1];
                     }
+
+                    mainImg.src = PIECES[mainChar.replace('_fused', '')].img;
+                    overlayImg.src = PIECES[overlayChar.replace('_fused', '')].img;
+                    overlayImg.classList.remove('hidden');
                 }
             } else {
                 container.classList.add('hidden');
+                container.classList.remove('fused-piece-bg');
             }
         }
     }
