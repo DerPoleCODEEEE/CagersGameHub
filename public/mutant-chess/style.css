@@ -31,8 +31,8 @@ body {
 .card h1 { margin: 0 0 5px 0; font-size: 38px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 25px; font-size: 20px; }
 
-.input-group { margin-bottom: 15px; text-align: left; }
-.input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 5px; font-weight: bold; }
+.input-group { margin-bottom: 12px; text-align: left; }
+.input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 4px; font-weight: bold; }
 
 input[type="text"], .scribble-input { 
     width: 100%; padding: 10px; 
@@ -75,7 +75,7 @@ input[type="text"], .scribble-input {
     text-align: center;
 }
 
-.divider { margin: 15px 0; color: #666; font-size: 16px; text-align:center;}
+.divider { margin: 12px 0; color: #666; font-size: 16px; text-align:center;}
 .join-box { display: flex; gap: 8px; }
 .join-box input { text-transform: uppercase; text-align: center; }
 .code-display { font-size: 42px; font-weight: bold; color: #000; background: #eee; padding: 15px; margin: 20px 0; border: 3px solid #000; border-radius: 8px 16px; }
@@ -83,15 +83,38 @@ input[type="text"], .scribble-input {
 .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
 #game-container { position: relative; border-radius: 4px; overflow: hidden; }
 
-/* PLAYER BAR & CLOCKS */
+/* PLAYER BAR & CLOCKS & FUSION DOTS */
 .player-bar { 
     background: #fff; padding: 6px 12px; font-weight: bold; font-size: 20px;
     display: flex; justify-content: space-between; align-items: center; 
     margin-bottom: 10px; margin-top: 10px;
     border: 3px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px;
 }
-.player-info { display: flex; align-items: center; gap: 10px; }
+.player-info { display: flex; align-items: center; gap: 8px; }
 .chess-avatar { width: 35px; height: 35px; border: 2px solid #000; border-radius: 50%; object-fit: cover; }
+
+.fusion-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-left: 6px;
+}
+
+.fusion-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #9b59b6;
+    border: 1.5px solid #000;
+    box-shadow: 1px 1px 0px rgba(0,0,0,0.8);
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.fusion-dot.used {
+    background: #bdc3c7;
+    opacity: 0.35;
+    box-shadow: none;
+}
 
 .clock-box {
     font-size: 22px;
@@ -125,22 +148,33 @@ input[type="text"], .scribble-input {
 .valid-move::after { content: ''; width: 22px; height: 22px; background: rgba(0,0,0,0.2); border-radius: 50%; position: absolute; pointer-events: none; }
 .capture-move::after { content: ''; width: 65px; height: 65px; border-radius: 50%; border: 5px solid rgba(231, 76, 60, 0.6); position: absolute; pointer-events: none; }
 
+/* REVISED HIGH-VISIBILITY FUSION OVERLAY & BADGE */
 .merge-move::after { 
     content: 'FUSION'; 
-    width: 60px; 
-    height: 60px; 
-    border-radius: 50%; 
-    border: 3px solid rgba(155, 89, 182, 0.9); 
-    background: rgba(155, 89, 182, 0.35); 
-    position: absolute; 
-    pointer-events: none; 
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 12px;
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    background: #9b59b6;
+    color: #ffffff;
+    font-size: 11px;
     font-weight: bold;
-    color: #2c0e37;
+    padding: 2px 5px;
+    border: 1.5px solid #000;
+    border-radius: 4px;
+    z-index: 20;
+    box-shadow: 1px 1px 0px #000;
+    pointer-events: none;
     letter-spacing: 0.5px;
+}
+
+.merge-move::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(155, 89, 182, 0.35);
+    border: 3px dashed #8e44ad;
+    z-index: 15;
+    pointer-events: none;
 }
 
 .piece-container { width: 100%; height: 100%; position: relative; display: flex; justify-content: center; align-items: center; pointer-events: none; }
