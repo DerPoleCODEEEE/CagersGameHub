@@ -198,31 +198,47 @@ function isValidMutantMove(board, startR, startC, targetR, targetC, playerColor)
 }
 
 mutantIo.on('connection', (socket) => {
-    socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
-        const code = roomCode || 'CHAOS';
-        let room = mutantRooms.get(code);
-        
-        if (!room) {
-            room = {
-                players: { w: { id: socket.id, name: playerName, pfp: pfp }, b: null },
-                board: createInitialMutantBoard(),
-                turn: 'w'
-            };
-            mutantRooms.set(code, room);
-            socket.join(code);
-            socket.emit('game_started', { color: 'w', board: room.board, turn: room.turn });
-        } else if (!room.players.b && room.players.w.id !== socket.id) {
-            room.players.b = { id: socket.id, name: playerName, pfp: pfp };
-            socket.join(code);
-            socket.emit('game_started', { color: 'b', board: room.board, turn: room.turn, opp: room.players.w });
-            socket.to(code).emit('opponent_joined', { name: playerName, pfp: pfp });
-        } else {
-            const isWhite = room.players.w && room.players.w.id === socket.id;
-            socket.join(code);
-            socket.emit('game_started', { color: isWhite ? 'w' : 'b', board: room.board, turn: room.turn });
-        }
+    
+    // RAUM ERSTELLEN
+    socket.on('create_mutant_room', ({ playerName, pfp }) => {
+        const roomCode = generateRoomCode();
+        mutantRooms.set(roomCode, {
+            players: {
+                w: { id: socket.id, name: playerName, pfp: pfp, ready: false },
+                b: null
+            },
+            board: createInitialMutantBoard(),
+            turn: 'w'
+        });
+        socket.join(roomCode);
+        socket.emit('mutant_room_created', { roomCode, color: 'w', playerName, pfp });
     });
 
+    // RAUM BEITRETEN
+    socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = mutantRooms.get(code);
+
+        if (!room) return socket.emit('error_msg', 'Raum nicht gefunden!');
+        if (room.players.b) return socket.emit('error_msg', 'Raum ist voll!');
+
+        room.players.b = { id: socket.id, name: playerName, pfp: pfp, ready: false };
+        socket.join(code);
+
+        socket.emit('mutant_room_joined', {
+            roomCode: code,
+            color: 'b',
+            opponentName: room.players.w.name,
+            opponentPfp: room.players.w.pfp
+        });
+
+        socket.to(code).emit('mutant_opponent_joined', {
+            opponentName: playerName,
+            opponentPfp: pfp
+        });
+    });
+
+    // ZUG AUSFÜHREN
     socket.on('make_move', ({ roomCode, start, target }) => {
         const room = mutantRooms.get(roomCode);
         if (!room) return;
