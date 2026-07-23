@@ -38,7 +38,7 @@
                 <button id="btn-join" class="btn btn-secondary scribble-btn">Join Room</button>
             </div>
             <div class="divider"></div>
-            <a href="/" class="btn scribble-btn" style="background:#ddd; color:#000; text-decoration:none; display:block;">Back to Hub</a>
+            <a href="/" class="btn scribble-btn btn-back-center">Back to Hub</a>
         </div>
         <div id="error-msg" class="error-msg"></div>
     </div>
@@ -74,13 +74,6 @@
                 <div id="board-wrapper">
                     <div id="board"></div>
                     <div id="animation-layer"></div>
-                    <div id="opponent-cursor" class="opponent-cursor hidden">
-                        <svg viewBox="0 0 40 40" class="cursor-svg">
-                            <circle cx="20" cy="20" r="14" fill="none" stroke="#ff3d00" stroke-width="4"/>
-                            <circle cx="20" cy="20" r="5" fill="#ff3d00"/>
-                        </svg>
-                        <span id="opponent-cursor-name" class="cursor-name scribble-box">Opponent</span>
-                    </div>
                 </div>
 
                 <!-- Player Bar -->
@@ -115,6 +108,12 @@
 
                 <button id="btn-ready" class="btn btn-ready scribble-btn">I AM READY!</button>
 
+                <!-- Move History -->
+                <div class="history-section scribble-box">
+                    <div class="sidebar-title" style="margin-bottom: 5px;">Move History</div>
+                    <div id="history-list" class="history-list"></div>
+                </div>
+
                 <div class="rules-section">
                     <div class="sidebar-title" style="margin-bottom: 8px;">Mutant Rules</div>
                     <ul class="rules-list">
@@ -124,7 +123,7 @@
                     </ul>
                 </div>
 
-                <button id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn" style="margin-top: 15px;">Leave Game</button>
+                <button id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn" style="margin-top: 10px;">Leave Game</button>
             </div>
         </div>
     </div>
