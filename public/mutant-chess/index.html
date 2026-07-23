@@ -13,14 +13,14 @@
     <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
     <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
 
-    <!-- LOBBY SCREEN (Match Image 1) -->
+    <!-- LOBBY SCREEN -->
     <div id="lobby-screen" class="scribble-box lobby-card">
         <h1>Mutant Merge Chess</h1>
         <p class="subtitle">Piece Fusion Multiplayer Chess</p>
 
         <div class="form-group">
             <label for="player-name-input">Your Name</label>
-            <input type="text" id="player-name-input" class="scribble-input" placeholder="Loading from Twitch..." readonly>
+            <input type="text" id="player-name-input" class="scribble-input" placeholder="Name eingeben...">
         </div>
 
         <button id="btn-create-room" class="scribble-btn btn-primary">Create Room</button>
@@ -35,13 +35,12 @@
         <a href="/" class="scribble-btn btn-gray mt-15">Back to Hub</a>
     </div>
 
-    <!-- INGAME SCREEN (Match Image 2) -->
+    <!-- INGAME SCREEN -->
     <div id="game-screen" class="game-layout" style="display: none;">
         
-        <!-- Linke Spalte: Player Top -> Board -> Player Bottom -->
+        <!-- Linke Spalte -->
         <div class="left-column">
             
-            <!-- Opponent Bar -->
             <div class="player-bar scribble-box">
                 <div class="player-bar-info">
                     <img id="opp-avatar" src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="mini-pfp" alt="PFP">
@@ -50,12 +49,10 @@
                 <span id="opp-status-badge" class="badge badge-gray">Wartet...</span>
             </div>
 
-            <!-- Schachbrett -->
             <div id="board-container" class="scribble-box">
                 <div id="chessboard"></div>
             </div>
 
-            <!-- Self Player Bar -->
             <div class="player-bar scribble-box">
                 <div class="player-bar-info">
                     <img id="self-avatar" src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="mini-pfp" alt="PFP">
@@ -66,7 +63,7 @@
 
         </div>
 
-        <!-- Rechte Spalte: Side Panel -->
+        <!-- Rechte Spalte (Side Panel) -->
         <div class="right-column scribble-box side-panel">
             
             <div class="panel-header">
@@ -74,14 +71,17 @@
                 <span id="player-color-badge" class="badge badge-black">WHITE</span>
             </div>
 
+            <div class="room-code-box">
+                ROOM CODE: <span id="display-room-code">------</span>
+            </div>
+
             <button id="btn-ready" class="scribble-btn btn-ready">I AM READY!</button>
 
-            <!-- Rules Box -->
             <div class="info-box scribble-box">
                 <h3>RULES</h3>
                 <ul class="rules-list">
-                    <li>🧬 <strong>Mutation:</strong> Ziehe eine eigene Figur auf eine andere eigene Figur, um sie zu fusionsieren! (Max 2 Figuren).</li>
-                    <li>💥 <strong>Super-Powers:</strong> Fusionierte Mutanten erben die Bewegungsmuster beider Ursprungsfiguren.</li>
+                    <li>🧬 <strong>Mutation:</strong> Ziehe eine eigene Figur auf eine andere eigene Figur zum Verschmelzen! (Max 2).</li>
+                    <li>💥 <strong>Super-Powers:</strong> Fusionierte Mutanten kombinieren die Bewegungsmuster beider Figuren.</li>
                     <li>👑 <strong>King Survival:</strong> Schlage den gegnerischen König zum Sieg!</li>
                 </ul>
             </div>
