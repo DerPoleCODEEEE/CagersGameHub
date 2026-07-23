@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,37 +17,37 @@
     <div id="splash-screen">
         <div class="scribble-box splash-box">
             <div class="loader"></div>
-            <h2>Server wird verbunden...</h2>
-            <p>Dies kann beim ersten Aufruf einen Moment dauern.</p>
+            <h2>Connecting to server...</h2>
+            <p>This may take a moment on cold start.</p>
         </div>
     </div>
 
-    <!-- Menü Screen -->
+    <!-- Menu Screen -->
     <div id="menu-screen" class="card scribble-box">
         <h1>Mutant Merge Chess</h1>
         <p class="subtitle">Piece Fusion Multiplayer Chess</p>
         
         <div class="input-group">
             <label>Your Name</label>
-            <input type="text" id="player-name" placeholder="Name eingeben..." maxlength="15">
+            <input type="text" id="player-name" placeholder="Enter name..." maxlength="15">
         </div>
 
         <div class="input-group">
-            <label>Farbe wählen</label>
+            <label>Select Color</label>
             <select id="color-choice" class="select-input scribble-input">
-                <option value="w">Weiß (White)</option>
-                <option value="b">Schwarz (Black)</option>
-                <option value="random">Zufall (Random)</option>
+                <option value="w">White</option>
+                <option value="b">Black</option>
+                <option value="random">Random</option>
             </select>
         </div>
 
         <div class="input-group">
-            <label>Gesamtzeit: <span id="time-val">3</span> Min.</label>
+            <label>Total Time: <span id="time-val">3</span> Min.</label>
             <input type="range" id="time-range" min="1" max="10" value="3" class="slider">
         </div>
 
         <div class="input-group">
-            <label>Inkrement: <span id="inc-val">2</span> Sek.</label>
+            <label>Increment: <span id="inc-val">2</span> Sec.</label>
             <input type="range" id="inc-range" min="0" max="10" value="2" class="slider">
         </div>
 
@@ -76,13 +76,11 @@
     <div id="game-screen" class="hidden">
         <div class="layout">
             <div id="game-container">
-                <div id="status-indicator" class="status-offline scribble-box" style="position: absolute; top: 10px; right: 10px; z-index: 200;">Verbinde...</div>
-
                 <div id="status-banner" class="status-banner hidden">
                     <span id="status-banner-text">Prepare for Battle!</span>
                 </div>
 
-                <!-- Opponent Bar mit Chess Clock -->
+                <!-- Opponent Bar with Clock -->
                 <div class="player-bar top">
                     <div class="player-info">
                         <img id="top-pfp" class="chess-avatar hidden" src="">
@@ -97,7 +95,7 @@
                     <div id="animation-layer"></div>
                 </div>
 
-                <!-- Player Bar mit Chess Clock -->
+                <!-- Player Bar with Clock -->
                 <div class="player-bar bottom">
                     <div class="player-info">
                         <img id="bottom-pfp" class="chess-avatar hidden" src="">
@@ -107,7 +105,7 @@
                 </div>
 
                 <!-- Game Over Modal -->
-                <div id="game-over">
+                <div id="game-over" style="display: none;">
                     <div class="scribble-box" style="padding: 30px; text-align: center; background: white;">
                         <span id="winner-text" style="font-size: 32px; display: block; margin-bottom: 20px;">White Wins!</span>
                         <button class="btn btn-primary scribble-btn" onclick="leaveGame()">Back to Menu</button>
@@ -115,12 +113,12 @@
                 </div>
 
                 <!-- Draw Offer Modal -->
-                <div id="draw-modal" class="hidden">
+                <div id="draw-modal" style="display: none;">
                     <div class="scribble-box" style="padding: 25px; text-align: center; background: white;">
-                        <span style="font-size: 24px; display: block; margin-bottom: 15px;">Gegner bietet Remis an!</span>
+                        <span style="font-size: 24px; display: block; margin-bottom: 15px;">Opponent offers a draw!</span>
                         <div style="display: flex; gap: 10px;">
-                            <button id="btn-accept-draw" class="btn btn-primary scribble-btn">Annehmen</button>
-                            <button id="btn-decline-draw" class="btn btn-danger scribble-btn">Ablehnen</button>
+                            <button id="btn-accept-draw" class="btn btn-primary scribble-btn">Accept</button>
+                            <button id="btn-decline-draw" class="btn btn-danger scribble-btn">Decline</button>
                         </div>
                     </div>
                 </div>
@@ -146,7 +144,7 @@
                     <div id="history-list" class="history-list"></div>
                 </div>
 
-                <!-- Ingame Actions (Draw & Resign) -->
+                <!-- Ingame Actions -->
                 <div id="game-actions" class="actions-row">
                     <button id="btn-offer-draw" class="btn btn-secondary scribble-btn">Draw</button>
                     <button id="btn-resign" class="btn btn-danger scribble-btn">Resign</button>
@@ -155,9 +153,9 @@
                 <div class="rules-section">
                     <div class="sidebar-title" style="margin-bottom: 8px;">Mutant Rules</div>
                     <ul class="rules-list">
-                        <li>🧬 <b>Fusion:</b> Ziehe eigene Figuren aufeinander zum Verschmelzen (Max 2).</li>
-                        <li>⚡ <b>Powers:</b> Mutanten kombinieren alle Bewegungsmuster!</li>
-                        <li>👑 <b>King Survival:</b> Schlage den gegnerischen König zum Sieg!</li>
+                        <li>🧬 <b>Fusion:</b> Drag friendly pieces onto each other to merge! (Max 2).</li>
+                        <li>⚡ <b>Powers:</b> Mutants combine all movement patterns!</li>
+                        <li>👑 <b>King Survival:</b> Capture the enemy King to win!</li>
                     </ul>
                 </div>
 
