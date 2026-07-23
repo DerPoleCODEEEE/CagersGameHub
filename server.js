@@ -5,48 +5,25 @@ const { Server } = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const TwitchStrategy = require('passport-twitch-new').Strategy;
-const cron = require('node-cron');
 const User = require('./models/User');
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-// Keep-Alive Ping/Pong direkt in Socket.IO konfiguriert (verhindert Fehler 1006)
-const io = new Server(server, { 
-    cors: { origin: "*" },
-    pingInterval: 30000, 
-    pingTimeout: 10000 
-});
-
-// 1. MONGODB (mit maxPoolSize Limitierung)
+// 1. MONGODB
 if (process.env.MONGODB_URI) {
-    mongoose.connect(process.env.MONGODB_URI, {
-        maxPoolSize: 50 // Verhindert das Überschreiten des 500er Limits
-    })
+    mongoose.connect(process.env.MONGODB_URI)
         .then(() => console.log('✅ MongoDB verbunden!'))
         .catch(err => console.log('❌ MongoDB Fehler:', err));
 }
 
-// 2. SESSION & TWITCH LOGIN (Sicheres Session Management)
-app.set('trust proxy', 1); // WICHTIG: Erlaubt sichere Cookies hinter dem Render-Proxy!
-
+// 2. SESSION & TWITCH LOGIN
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thecager_geheim_123',
-    resave: false, 
-    saveUninitialized: false,
-    store: process.env.MONGODB_URI ? MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI,
-        autoRemove: 'native' // Automatische TTL-Bereinigung durch MongoDB
-    }) : new session.MemoryStore(),
-    cookie: {
-        httpOnly: true, // Verhindert XSS
-        // Wir schalten die harte Secure-Pflicht hier etwas entspannter für Render
-        secure: process.env.NODE_ENV === 'production' || process.env.RENDER === 'true',
-        maxAge: 1000 * 60 * 60 * 24 // 1 Tag
-    }
+    resave: false, saveUninitialized: false
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -77,15 +54,17 @@ passport.deserializeUser(async (id, done) => {
 
 // 3. ROUTES
 app.get('/auth/twitch', passport.authenticate('twitch'));
-// Wieder dein originaler, direkt funktionierender Callback:
 app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
+// Statische Ordner für die Frontends
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
+// NEU: Route für Mutant Merge Chess
+app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 
-// 4. SCHACH MULTIPLAYER
+// 4. SCHACH MULTIPLAYER (Quick Chess)
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
@@ -143,25 +122,67 @@ io.on('connection', (socket) => {
     socket.on('request_move', (moveData) => io.to(moveData.roomCode).emit('apply_move', moveData));
     socket.on('mouse_move', ({ roomCode, xPct, yPct }) => socket.to(roomCode).emit('opponent_mouse_move', { xPct, yPct }));
     socket.on('mouse_leave', ({ roomCode }) => socket.to(roomCode).emit('opponent_mouse_leave'));
-    
-    // Split-Brain-Prävention: Sendet State nach Reconnect zurück
-    socket.on('request_sync', ({ roomCode }) => {
-        // Hier würde normalerweise der State aus der DB gelesen werden
-        socket.emit('sync_state', { message: 'sync_ok' }); 
-    });
-
     socket.on('leave_room', ({ roomCode }) => { socket.to(roomCode).emit('opponent_left'); socket.leave(roomCode); });
 });
 
-// 5. CRON-JOB ZUR DATENBANKBEREINIGUNG
-cron.schedule('0 0 * * *', async () => {
-    // Da Spieldaten aktuell im Memory-Map "rooms" liegen, bereinigen wir verwaiste Räume
-    for (const [code, room] of rooms.entries()) {
-        if (!room.players.w && !room.players.b) {
-            rooms.delete(code);
+// 5. MUTANT MERGE CHESS (Isolierter Namespace)
+const mutantIo = io.of('/mutant-chess');
+const mutantRooms = new Map();
+
+mutantIo.on('connection', (socket) => {
+    
+    socket.on('create_mutant_room', ({ playerName, pfp }) => {
+        const roomCode = generateRoomCode();
+        mutantRooms.set(roomCode, {
+            players: { w: { id: socket.id, name: playerName, pfp: pfp || '' }, b: null },
+            board: {} // Hier kommt später dein Startbrett-Setup rein
+        });
+        socket.join(roomCode);
+        socket.emit('mutant_room_created', { roomCode, playerId: socket.id, color: 'w' });
+    });
+
+    socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = mutantRooms.get(code);
+        
+        if (!room) return socket.emit('error_msg', 'Raum nicht gefunden!');
+        if (room.players.b) return socket.emit('error_msg', 'Raum ist voll!');
+        
+        room.players.b = { id: socket.id, name: playerName, pfp: pfp || '' };
+        socket.join(code);
+        
+        socket.emit('mutant_room_joined', { 
+            roomCode: code, playerId: socket.id, color: 'b',
+            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp 
+        });
+        socket.to(code).emit('mutant_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
+    });
+
+    // Die Fusions-Logik für Mutant Merge
+    socket.on('request_mutant_move', (data) => {
+        const { roomCode, from, to, piece, target } = data;
+        const room = mutantRooms.get(roomCode);
+        if (!room) return;
+
+        // Fusions-Check: Eigene Figur auf dem Zielfeld?
+        if (target && target.color === piece.color) {
+            if (piece.types.length + target.types.length <= 2) {
+                mutantIo.to(roomCode).emit('apply_mutation', { from, to, newTypes: [...target.types, ...piece.types] });
+                return;
+            } else {
+                socket.emit('error_msg', 'Eine Mutante darf aus maximal 2 Figuren bestehen!');
+                return;
+            }
         }
-    }
-    console.log('Tägliche Bereinigung alter Spieldaten ausgeführt.');
+
+        // Normaler Zug (wird an alle im Raum weitergeleitet)
+        mutantIo.to(roomCode).emit('apply_mutant_move', data);
+    });
+
+    socket.on('leave_mutant_room', ({ roomCode }) => { 
+        socket.to(roomCode).emit('mutant_opponent_left'); 
+        socket.leave(roomCode); 
+    });
 });
 
 const PORT = process.env.PORT || 3000;
