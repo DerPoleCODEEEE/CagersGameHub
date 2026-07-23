@@ -8,25 +8,31 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+    <!-- Die neuen Florks im Hintergrund! -->
+    <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
+    <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
+
     <header class="scribble-box header-box">
         <div class="logo">
             <h1>CAGER GAMES</h1>
         </div>
         <div class="auth-section" id="auth-section">
-            <span id="loading-auth">Lädt...</span>
+            <span id="loading-auth">Loading...</span>
         </div>
     </header>
 
     <main>
-        <h2 class="title-scribble">Wähle dein Spiel</h2>
+        <h2 class="title-scribble">Choose your game</h2>
         <div class="game-grid">
+            
             <div class="game-card scribble-box">
                 <div class="game-img" style="background-color: #739552; display:flex; align-items:center; justify-content:center;">
                     <span style="font-size: 50px;">♞</span>
                 </div>
                 <h3>Cagers Quick Chess</h3>
-                <p>Real-Time Action! Keine Runden, nur Cooldowns.</p>
-                <a href="/chess" class="play-btn scribble-btn">Spielen</a>
+                <p>Real-Time Action! No turns, just cooldowns.</p>
+                <a href="/chess" class="play-btn scribble-btn">Play</a>
             </div>
 
             <div class="game-card scribble-box locked">
@@ -35,7 +41,7 @@
                 </div>
                 <h3>Flappy Cager</h3>
                 <p>Coming Soon...</p>
-                <button class="play-btn scribble-btn disabled" disabled>Bald verfügbar</button>
+                <button class="play-btn scribble-btn disabled" disabled>Locked</button>
             </div>
 
             <div class="game-card scribble-box locked">
@@ -44,8 +50,9 @@
                 </div>
                 <h3>Cager Tower Defense</h3>
                 <p>Coming Soon...</p>
-                <button class="play-btn scribble-btn disabled" disabled>Bald verfügbar</button>
+                <button class="play-btn scribble-btn disabled" disabled>Locked</button>
             </div>
+
         </div>
     </main>
 
@@ -59,17 +66,20 @@
                         <div class="profile-info">
                             <img src="${user.profileImageUrl}" alt="Avatar" class="avatar scribble-avatar">
                             <span class="user-name">${user.displayName}</span>
-                            <a href="/auth/logout" class="logout-link">Abmelden</a>
+                            <a href="/auth/logout" class="logout-link">Logout</a>
                         </div>
                     `;
                     localStorage.setItem('cager_twitch_name', user.displayName);
+                    localStorage.setItem('cager_twitch_pfp', user.profileImageUrl); // Bild für Schach speichern!
                 } else {
                     authSection.innerHTML = `
                         <a href="/auth/twitch" class="twitch-btn scribble-btn">
-                            Mit Twitch einloggen
+                            <svg width="20px" height="20px" fill="white" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+                            Login with Twitch
                         </a>
                     `;
                     localStorage.removeItem('cager_twitch_name');
+                    localStorage.removeItem('cager_twitch_pfp');
                 }
             });
     </script>
