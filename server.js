@@ -127,6 +127,13 @@ io.on('connection', (socket) => {
 const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
 
+const PIECE_RANK = { 'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6 };
+
+function sortCanonically(pieceArr) {
+    if (!pieceArr) return pieceArr;
+    return pieceArr.slice().sort((a, b) => PIECE_RANK[a.toLowerCase()] - PIECE_RANK[b.toLowerCase()]);
+}
+
 function createInitialMutantBoard() {
     return [
         [['r'], ['n'], ['b'], ['q'], ['k'], ['b'], ['n'], ['r']],
@@ -197,13 +204,9 @@ mutantIo.on('connection', (socket) => {
         mutantIo.to(roomCode).emit('ready_update', { playersReady });
 
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
-            mutantIo.to(roomCode).emit('start_match', { board: room.board, turn: room.turn });
+            mutantIo.to(roomCode).emit('start_match_countdown');
         }
     });
-
-    socket.on('select_square', ({ roomCode, r, c }) => socket.to(roomCode).emit('opponent_select_square', { r, c }));
-    socket.on('mouse_move', ({ roomCode, xPct, yPct }) => socket.to(roomCode).emit('opponent_mouse_move', { xPct, yPct }));
-    socket.on('mouse_leave', ({ roomCode }) => socket.to(roomCode).emit('opponent_mouse_leave'));
 
     socket.on('request_mutant_move', ({ roomCode, playerId, fromR, fromC, toR, toC, moveInfo, duration }) => {
         const room = mutantRooms.get(roomCode);
@@ -217,10 +220,10 @@ mutantIo.on('connection', (socket) => {
 
         const targetPiece = room.board[toR][toC];
 
-        // MERGE FUSION LOGIK
+        // MERGE FUSION LOGIK WITH CANONICAL SORTING
         if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
             if (movingPiece.length + targetPiece.length <= 2) {
-                room.board[toR][toC] = [...targetPiece, ...movingPiece];
+                room.board[toR][toC] = sortCanonically([...targetPiece, ...movingPiece]);
                 room.board[fromR][fromC] = null;
             } else {
                 return socket.emit('error_msg', 'Maximal 2 Figuren pro Feld!');
@@ -232,7 +235,7 @@ mutantIo.on('connection', (socket) => {
             if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) {
                 isKingCaptured = true;
             }
-            room.board[toR][toC] = movingPiece;
+            room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
 
             if (isKingCaptured) {
