@@ -4,18 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cagers Quick Chess</title>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+    <!-- Die Florks im Hintergrund! -->
+    <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
+    <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
+
     <!-- Splash Screen für Server Kaltstarts -->
     <div id="splash-screen">
-        <div class="loader"></div>
-        <h2 style="color: white; margin-top: 20px;">Server wird verbunden...</h2>
-        <p style="color: #ccc;">Dies kann beim ersten Aufruf einen Moment dauern.</p>
+        <div class="scribble-box splash-box">
+            <div class="loader"></div>
+            <h2>Server wird verbunden...</h2>
+            <p>Dies kann beim ersten Aufruf einen Moment dauern.</p>
+        </div>
     </div>
 
-    <div id="menu-screen" class="card">
+    <div id="menu-screen" class="card scribble-box">
         <h1>Cagers Quick Chess</h1>
         <p class="subtitle">Real-Time Multiplayer Chess</p>
         <div class="input-group">
@@ -31,30 +38,30 @@
             </select>
         </div>
         <div class="button-group">
-            <button id="btn-create" class="btn btn-primary">Create Room</button>
+            <button id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
             <div class="divider">or</div>
             <div class="join-box">
                 <input type="text" id="room-code-input" placeholder="CODE" maxlength="6">
-                <button id="btn-join" class="btn btn-secondary">Join Room</button>
+                <button id="btn-join" class="btn btn-secondary scribble-btn">Join Room</button>
             </div>
             <div class="divider"></div>
-            <a href="/" class="btn" style="background:#444; color:white; text-decoration:none; display:block;">Back to Hub</a>
+            <a href="/" class="btn scribble-btn" style="background:#ddd; color:#000; text-decoration:none; display:block;">Back to Hub</a>
         </div>
         <div id="error-msg" class="error-msg"></div>
     </div>
 
-    <div id="lobby-screen" class="card hidden">
+    <div id="lobby-screen" class="card scribble-box hidden">
         <h2>Waiting for Opponent</h2>
         <p>Share this room code with a friend:</p>
         <div class="code-display" id="display-room-code">------</div>
-        <button id="btn-leave-lobby" class="btn btn-danger">Leave Lobby</button>
+        <button id="btn-leave-lobby" class="btn btn-danger scribble-btn">Leave Lobby</button>
     </div>
 
     <div id="game-screen" class="hidden">
         <div class="layout">
             <div id="game-container">
                 <!-- Status Indikator für Verbindungsabbrüche -->
-                <div id="status-indicator" class="status-offline" style="position: absolute; top: 10px; right: 10px; z-index: 200;">Verbinde...</div>
+                <div id="status-indicator" class="status-offline scribble-box" style="position: absolute; top: 10px; right: 10px; z-index: 200;">Verbinde...</div>
 
                 <div id="status-banner" class="status-banner hidden">
                     <span id="status-banner-text">Prepare for Battle!</span>
@@ -74,7 +81,7 @@
                             <circle cx="20" cy="20" r="14" fill="none" stroke="#ff3d00" stroke-width="4"/>
                             <circle cx="20" cy="20" r="5" fill="#ff3d00"/>
                         </svg>
-                        <span id="opponent-cursor-name" class="cursor-name">Opponent</span>
+                        <span id="opponent-cursor-name" class="cursor-name scribble-box">Opponent</span>
                     </div>
                 </div>
                 <div class="player-bar bottom">
@@ -85,26 +92,28 @@
                     <span id="bottom-ready-badge" class="badge">Not Ready</span>
                 </div>
                 <div id="promotion-modal">
-                    <div class="promotion-box" id="promo-options"></div>
+                    <div class="promotion-box scribble-box" id="promo-options"></div>
                 </div>
                 <div id="game-over">
-                    <span id="winner-text">White Wins!</span>
-                    <button onclick="leaveGame()">Back to Menu</button>
+                    <div class="scribble-box" style="padding: 30px; text-align: center; background: white;">
+                        <span id="winner-text" style="font-size: 32px; display: block; margin-bottom: 20px;">White Wins!</span>
+                        <button class="btn btn-primary scribble-btn" onclick="leaveGame()">Back to Menu</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="sidebar">
+            <div class="sidebar scribble-box">
                 <div class="logo-area">
-                    <h2>Cagers Quick Chess</h2>
+                    <h2 style="margin:0; font-size: 26px;">Quick Chess</h2>
                     <span class="tag" id="my-role-tag">WHITE</span>
                 </div>
                 <div class="mode-badge-box">
                     <span class="sidebar-title">MODE:</span>
                     <span id="mode-display-tag" class="mode-tag">CLASS LOCK</span>
                 </div>
-                <button id="btn-ready" class="btn btn-ready">I AM READY!</button>
+                <button id="btn-ready" class="btn btn-ready scribble-btn">I AM READY!</button>
                 <div class="rules-section">
-                    <div class="sidebar-title">Rules</div>
+                    <div class="sidebar-title" style="margin-bottom: 5px;">Rules</div>
                     <ul class="rules-list">
                         <li>⚡ <b>Real-Time:</b> Move when cooldowns expire!</li>
                         <li>🎯 <b>Selection Glow:</b> See opponent moves live!</li>
@@ -112,14 +121,14 @@
                     </ul>
                 </div>
                 <div class="legend" id="legend-box">
-                    <div class="sidebar-title">Cooldowns</div>
+                    <div class="sidebar-title" style="margin-bottom: 10px;">Cooldowns</div>
                     <div class="legend-item" id="lg-k"><span>♚ King</span><span class="time fast" id="lg-k-val">1.0s</span></div>
                     <div class="legend-item" id="lg-p"><span>♟ Pawns</span><span class="time" id="lg-p-val">3.5s</span></div>
-                    <div class="legend-item" id="lg-n"><span>♞/♝ Knights/Bishops</span><span class="time" id="lg-n-val">6.5s</span></div>
+                    <div class="legend-item" id="lg-n"><span>♞/♝ Knights</span><span class="time" id="lg-n-val">6.5s</span></div>
                     <div class="legend-item" id="lg-r"><span>♜ Rooks</span><span class="time" id="lg-r-val">10.0s</span></div>
                     <div class="legend-item" id="lg-q"><span>♛ Queen</span><span class="time" id="lg-q-val">14.0s</span></div>
                 </div>
-                <button id="btn-leave-game" class="btn btn-danger btn-leave" style="margin-top: 15px;">Leave Game</button>
+                <button id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn" style="margin-top: 15px;">Leave Game</button>
             </div>
         </div>
     </div>
