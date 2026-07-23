@@ -390,9 +390,10 @@ function getValidMoves(r, c) {
                             if (!targetFused) {
                                 const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
                                 const hasSameType = new Set(combined).size !== combined.length;
-                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
+                                const isKingPawn = combined.includes('k') && combined.includes('p');
                                 
-                                if (!hasSameType && !isRedundantQueen) {
+                                if (!hasSameType && !isRedundantQueen && !isKingPawn) {
                                     moves.push({ r: nr, c: nc, type: 'merge' });
                                 }
                             }
@@ -422,9 +423,10 @@ function getValidMoves(r, c) {
                                 if (!targetFused) {
                                     const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
                                     const hasSameType = new Set(combined).size !== combined.length;
-                                    const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                                    const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
+                                    const isKingPawn = combined.includes('k') && combined.includes('p');
 
-                                    if (!hasSameType && !isRedundantQueen) {
+                                    if (!hasSameType && !isRedundantQueen && !isKingPawn) {
                                         moves.push({ r: targetR, c: targetC, type: 'merge' });
                                     }
                                 }
@@ -454,9 +456,10 @@ function getValidMoves(r, c) {
                             if (!targetFused) {
                                 const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
                                 const hasSameType = new Set(combined).size !== combined.length;
-                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
+                                const isKingPawn = combined.includes('k') && combined.includes('p');
 
-                                if (!hasSameType && !isRedundantQueen) {
+                                if (!hasSameType && !isRedundantQueen && !isKingPawn) {
                                     moves.push({ r: nr, c: nc, type: 'merge' });
                                 }
                             }
@@ -479,9 +482,10 @@ function getValidMoves(r, c) {
                             if (!targetFused) {
                                 const combined = [...pieceArr, ...target].map(p => p.toLowerCase().replace('_fused', ''));
                                 const hasSameType = new Set(combined).size !== combined.length;
-                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r'));
+                                const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
+                                const isKingPawn = combined.includes('k') && combined.includes('p');
 
-                                if (!hasSameType && !isRedundantQueen) {
+                                if (!hasSameType && !isRedundantQueen && !isKingPawn) {
                                     moves.push({ r: nr, c: nc, type: 'merge' });
                                 }
                             }
@@ -650,26 +654,21 @@ function renderBoard() {
             if (pieceArr && pieceArr.length > 0) {
                 container.classList.remove('hidden');
 
-                // LILANEN FUSIONS-HINTERGRUND FÜR GEFUSEDTE DAMEN AKTIVIEREN
                 const isFusedQueen = pieceArr.some(p => p.includes('_fused'));
                 container.classList.toggle('fused-piece-bg', isFusedQueen);
 
                 if (pieceArr.length === 1) {
-                    // SINGLE PIECE (Standard oder Fused Queen)
                     const pieceChar = pieceArr[0].replace('_fused', '');
                     mainImg.src = PIECES[pieceChar].img;
                     overlayImg.classList.add('hidden');
                 } else if (pieceArr.length > 1) {
-                    // MUTANT PIECE: Dynamic Dual-Piece Layout
                     const hasKing = pieceArr.some(p => p.toLowerCase() === 'k');
                     let mainChar, overlayChar;
 
                     if (hasKing) {
-                        // King is always the main piece on the square
                         mainChar = pieceArr.find(p => p.toLowerCase() === 'k');
                         overlayChar = pieceArr.find(p => p.toLowerCase() !== 'k');
                     } else {
-                        // First piece is main, second piece is overlay in the corner
                         mainChar = pieceArr[0];
                         overlayChar = pieceArr[1];
                     }
