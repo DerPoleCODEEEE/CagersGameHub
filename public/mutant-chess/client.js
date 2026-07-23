@@ -48,6 +48,9 @@ let moveCount = 1;
 
 let clocks = { w: 180, b: 180 };
 let clockTimer = null;
+let enPassantTarget = null;
+let pendingPromotion = null;
+let hasMoved = { wK: false, wR_left: false, wR_right: false, bK: false, bR_left: false, bR_right: false };
 
 let board = [
     [['r'], ['n'], ['b'], ['q'], ['k'], ['b'], ['n'], ['r']],
@@ -62,7 +65,7 @@ let board = [
 
 const menuScreen = document.getElementById('menu-screen'), lobbyScreen = document.getElementById('lobby-screen');
 const gameScreen = document.getElementById('game-screen'), errorMsg = document.getElementById('error-msg');
-const boardEl = document.getElementById('board'), animationLayer = document.getElementById('animation-layer');
+const boardEl = document.getElementById('board');
 const btnReady = document.getElementById('btn-ready'), statusBanner = document.getElementById('status-banner');
 const statusBannerText = document.getElementById('status-banner-text');
 const historyList = document.getElementById('history-list');
@@ -73,12 +76,6 @@ const topClockEl = document.getElementById('top-clock');
 function getPieceColor(pieceArr) {
     if (!pieceArr || !pieceArr.length) return null;
     return pieceArr[0] === pieceArr[0].toUpperCase() ? 'w' : 'b';
-}
-
-function getVisualCoords(r, c) {
-    const rect = boardEl.getBoundingClientRect();
-    const squareSize = rect.width / 8;
-    return playerColor === 'b' ? { x: (7 - c) * squareSize, y: (7 - r) * squareSize } : { x: c * squareSize, y: r * squareSize };
 }
 
 function toAlgebraic(r, c) {
@@ -197,7 +194,7 @@ socket.on('start_match_countdown', (data) => {
 
 socket.on('apply_mutant_move', (moveData) => {
     if (moveData.clocks) clocks = moveData.clocks;
-    executeMove(moveData.fromR, moveData.fromC, moveData.toR, moveData.toC, moveData.moveInfo, moveData.duration, moveData.board, moveData.nextTurn);
+    executeMove(moveData.fromR, moveData.fromC, moveData.toR, moveData.toC, moveData.moveInfo, moveData.board, moveData.nextTurn);
 });
 
 socket.on('draw_offered', () => {
@@ -315,10 +312,6 @@ function createBoardDOMOnce() {
     isBoardDomCreated = true;
 }
 
-function calculateMoveDuration(fR, fC, tR, tC) {
-    return Math.round(200 + Math.sqrt((tR-fR)**2 + (tC-fC)**2) * 180);
-}
-
 function getValidMoves(r, c) {
     const pieceArr = board[r][c];
     if (!pieceArr) return [];
@@ -366,6 +359,8 @@ function getValidMoves(r, c) {
                         if (target) {
                             if (getPieceColor(target) !== pColor) moves.push({ r: targetR, c: targetC, type: 'capture' });
                             else if (pieceArr.length + target.length <= 2) moves.push({ r: targetR, c: targetC, type: 'merge' });
+                        } else if (enPassantTarget && enPassantTarget.color !== pColor && enPassantTarget.r === targetR && enPassantTarget.c === targetC) {
+                            moves.push({ r: targetR, c: targetC, type: 'en_passant' });
                         }
                     }
                 }
@@ -397,6 +392,21 @@ function getValidMoves(r, c) {
                         else if (pieceArr.length + target.length <= 2) moves.push({ r: nr, c: nc, type: 'merge' });
                     }
                 }
+                // ROCHADE CHECK
+                const kRow = pColor === 'w' ? 7 : 0;
+                const kKey = pColor === 'w' ? 'wK' : 'bK';
+                const rookChar = pColor === 'w' ? 'R' : 'r';
+
+                if (r === kRow && c === 4 && !hasMoved[kKey]) {
+                    const rRight = pColor === 'w' ? 'wR_right' : 'bR_right';
+                    if (!hasMoved[rRight] && board[kRow][7] && board[kRow][7].includes(rookChar) && !board[kRow][5] && !board[kRow][6]) {
+                        moves.push({ r: kRow, c: 6, type: 'castle' });
+                    }
+                    const rLeft = pColor === 'w' ? 'wR_left' : 'bR_left';
+                    if (!hasMoved[rLeft] && board[kRow][0] && board[kRow][0].includes(rookChar) && !board[kRow][1] && !board[kRow][2] && !board[kRow][3]) {
+                        moves.push({ r: kRow, c: 2, type: 'castle' });
+                    }
+                }
                 break;
         }
     });
@@ -407,16 +417,21 @@ function getValidMoves(r, c) {
 }
 
 function handleSquareClick(r, c) {
-    if (!isGameStarted || isGameOver || currentTurn !== playerColor) return;
+    if (!isGameStarted || isGameOver || currentTurn !== playerColor || pendingPromotion) return;
     const clickedPiece = board[r][c];
 
     if (selectedSquare) {
         let moveInfo = validMoves.find(m => m.r === r && m.c === c);
         if (moveInfo) {
-            const duration = calculateMoveDuration(selectedSquare.r, selectedSquare.c, r, c);
-            socket.emit('request_mutant_move', {
-                roomCode, playerId, fromR: selectedSquare.r, fromC: selectedSquare.c, toR: r, toC: c, moveInfo, duration
-            });
+            const movingPiece = board[selectedSquare.r][selectedSquare.c];
+
+            // PROMOTION CHECK (ONLY PURE PAWNS)
+            if (movingPiece && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p' && (r === 0 || r === 7)) {
+                triggerPromotion(selectedSquare.r, selectedSquare.c, r, c, moveInfo);
+                return;
+            }
+
+            sendMoveToServer(selectedSquare.r, selectedSquare.c, r, c, moveInfo, null);
             selectedSquare = null; validMoves = []; renderBoard(); return;
         }
     }
@@ -431,6 +446,34 @@ function handleSquareClick(r, c) {
     selectedSquare = null; validMoves = []; renderBoard();
 }
 
+function triggerPromotion(fromR, fromC, toR, toC, moveInfo) {
+    pendingPromotion = { fromR, fromC, toR, toC, moveInfo };
+    const modal = document.getElementById('promotion-modal');
+    const box = document.getElementById('promo-options');
+    box.innerHTML = '';
+
+    const promoPieces = playerColor === 'w' ? ['Q', 'R', 'N', 'B'] : ['q', 'r', 'n', 'b'];
+    promoPieces.forEach(p => {
+        const img = document.createElement('img');
+        img.className = 'promo-piece';
+        img.src = PIECES[p].img;
+        img.onclick = () => {
+            modal.style.display = 'none';
+            pendingPromotion = null;
+            sendMoveToServer(fromR, fromC, toR, toC, moveInfo, p);
+            selectedSquare = null; validMoves = []; renderBoard();
+        };
+        box.appendChild(img);
+    });
+    modal.style.display = 'flex';
+}
+
+function sendMoveToServer(fromR, fromC, toR, toC, moveInfo, promotedTo) {
+    socket.emit('request_mutant_move', {
+        roomCode, playerId, fromR, fromC, toR, toC, moveInfo, promotedTo
+    });
+}
+
 function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, moveType) {
     const dest = toAlgebraic(toR, toC);
     const start = toAlgebraic(fromR, fromC);
@@ -438,7 +481,9 @@ function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, move
 
     const formatPieces = (arr) => arr.map(p => p.toUpperCase()).join('+');
 
-    if (moveType === 'merge') {
+    if (moveType === 'castle') {
+        str = toC === 6 ? "O-O" : "O-O-O";
+    } else if (moveType === 'merge') {
         const movingStr = formatPieces(movingPiece);
         const targetStr = formatPieces(targetPiece);
         str = `${movingStr}+${targetStr}@${dest}`;
@@ -446,7 +491,7 @@ function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, move
         const isMutant = movingPiece.length > 1;
         const pStr = isMutant ? `(${formatPieces(movingPiece)})` : movingPiece[0].toUpperCase();
         
-        if (moveType === 'capture') {
+        if (moveType === 'capture' || moveType === 'en_passant') {
             str = `${pStr}x${dest}`;
         } else {
             str = `${pStr}${start}-${dest}`;
@@ -461,36 +506,34 @@ function addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, move
     moveCount++;
 }
 
-function executeMove(fromR, fromC, toR, toC, moveInfo, duration, newBoard, nextTurn) {
+function executeMove(fromR, fromC, toR, toC, moveInfo, newBoard, nextTurn) {
     const movingPiece = board[fromR][fromC];
     const targetPiece = board[toR][toC];
     if (!movingPiece) return;
 
+    // UPDATE HAS MOVED
+    if (movingPiece.includes('K')) hasMoved.wK = true;
+    if (movingPiece.includes('k')) hasMoved.bK = true;
+    if (movingPiece.includes('R') && fromR === 7 && fromC === 0) hasMoved.wR_left = true;
+    if (movingPiece.includes('R') && fromR === 7 && fromC === 7) hasMoved.wR_right = true;
+    if (movingPiece.includes('r') && fromR === 0 && fromC === 0) hasMoved.bR_left = true;
+    if (movingPiece.includes('r') && fromR === 0 && fromC === 7) hasMoved.bR_right = true;
+
+    // UPDATE EN PASSANT TARGET
+    if (movingPiece.some(p => p.toLowerCase() === 'p') && Math.abs(toR - fromR) === 2) {
+        enPassantTarget = { r: (fromR + toR) / 2, c: fromC, color: getPieceColor(movingPiece) };
+    } else {
+        enPassantTarget = null;
+    }
+
     addMoveToHistory(fromR, fromC, toR, toC, movingPiece, targetPiece, moveInfo ? moveInfo.type : 'normal');
 
-    const startCoords = getVisualCoords(fromR, fromC), targetCoords = getVisualCoords(toR, toC);
-    
-    board[fromR][fromC] = null;
+    // INSTANT EXECUTION
+    board = newBoard;
+    currentTurn = nextTurn;
+    updateTurnDisplay();
+    updateClockDisplay();
     renderBoard();
-
-    const wrapper = document.createElement('div'); wrapper.className = 'animating-wrapper';
-    wrapper.style.left = `${startCoords.x}px`; wrapper.style.top = `${startCoords.y}px`; wrapper.style.transitionDuration = `${duration}ms`;
-    wrapper.style.width = `${boardEl.getBoundingClientRect().width / 8}px`;
-    wrapper.style.height = `${boardEl.getBoundingClientRect().width / 8}px`;
-
-    const animImg = document.createElement('img'); animImg.className = 'piece-img'; animImg.src = PIECES[movingPiece[0]].img; wrapper.appendChild(animImg);
-    animationLayer.appendChild(wrapper);
-
-    requestAnimationFrame(() => wrapper.style.transform = `translate(${targetCoords.x - startCoords.x}px, ${targetCoords.y - startCoords.y}px)`);
-
-    setTimeout(() => {
-        if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-        board = newBoard;
-        currentTurn = nextTurn;
-        updateTurnDisplay();
-        updateClockDisplay();
-        renderBoard();
-    }, duration);
 }
 
 function renderBoard() {
@@ -502,8 +545,8 @@ function renderBoard() {
             square.classList.toggle('selected', !!(selectedSquare && selectedSquare.r === r && selectedSquare.c === c));
             
             let moveInfo = validMoves.find(m => m.r === r && m.c === c);
-            square.classList.toggle('valid-move', !!(moveInfo && moveInfo.type === 'normal'));
-            square.classList.toggle('capture-move', !!(moveInfo && moveInfo.type === 'capture'));
+            square.classList.toggle('valid-move', !!(moveInfo && (moveInfo.type === 'normal' || moveInfo.type === 'castle')));
+            square.classList.toggle('capture-move', !!(moveInfo && (moveInfo.type === 'capture' || moveInfo.type === 'en_passant')));
             square.classList.toggle('merge-move', !!(moveInfo && moveInfo.type === 'merge'));
 
             let pieceArr = board[r][c];
