@@ -19,7 +19,7 @@ body {
 
 .hidden { display: none !important; }
 
-/* SCRIBBLE BOXEN */
+/* SCRIBBLE BOXES */
 .scribble-box {
     border: 3px solid #000;
     border-radius: 12px 6px 14px 8px / 8px 14px 8px 12px;
@@ -83,7 +83,7 @@ input[type="text"], .scribble-input {
 .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
 #game-container { position: relative; border-radius: 4px; overflow: hidden; }
 
-/* PLAYER BAR & CHESS CLOCKS */
+/* PLAYER BAR & CLOCKS */
 .player-bar { 
     background: #fff; padding: 6px 12px; font-weight: bold; font-size: 20px;
     display: flex; justify-content: space-between; align-items: center; 
@@ -102,14 +102,11 @@ input[type="text"], .scribble-input {
     border-radius: 6px;
     border: 2px solid #000;
 }
+
 .clock-box.active {
     background: #f1c40f;
     color: #000;
-    animation: pulse-clock 1s infinite alternate;
-}
-@keyframes pulse-clock {
-    0% { transform: scale(1); }
-    100% { transform: scale(1.05); }
+    border-color: #000;
 }
 
 .status-banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(243, 156, 18, 0.95); color: white; text-align: center; padding: 16px; border-radius: 8px; font-weight: bold; z-index: 130; border: 4px solid #000; font-size: 26px; }
@@ -154,7 +151,12 @@ input[type="text"], .scribble-input {
 .rules-section { background: #fff; border: 2px solid #000; border-radius: 8px 12px 10px 8px / 10px 8px 12px 8px; padding: 10px; margin-bottom: 12px; }
 .rules-list { margin: 0; padding-left: 0; list-style: none; font-size: 15px; color: #222; line-height: 1.4; }
 
-#game-over, #draw-modal { display: none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.85); z-index: 140; justify-content: center; align-items: center; flex-direction: column; }
+/* MODALS OVERLAY FIX */
+#game-over, #draw-modal { 
+    position: absolute; top:0; left:0; width:100%; height:100%; 
+    background: rgba(255,255,255,0.85); z-index: 140; 
+    justify-content: center; align-items: center; flex-direction: column; 
+}
 
 #splash-screen {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -174,12 +176,6 @@ input[type="text"], .scribble-input {
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 .disabled-ui { pointer-events: none; opacity: 0.4; filter: grayscale(100%); }
-
-#status-indicator { padding: 6px 12px; font-size: 16px; font-weight: bold; }
-.status-online { background-color: #2ecc71; color: #fff; }
-.status-offline { background-color: #e74c3c; color: #fff; animation: pulse 1.5s infinite; }
-
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
 .flork-bg { position: fixed; bottom: -15px; width: 200px; z-index: 0; pointer-events: none; opacity: 0.9; }
 .flork-left { left: 2%; }
