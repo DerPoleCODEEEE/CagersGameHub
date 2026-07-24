@@ -17,8 +17,19 @@
         <div class="logo">
             <h1>CAGER GAMES</h1>
         </div>
-        <div class="auth-section" id="auth-section">
-            <span id="loading-auth">Loading...</span>
+        
+        <!-- NEU: Rechter Bereich im Header mit Suche (Immer da) + Auth -->
+        <div style="display:flex; align-items:center; gap:25px; flex-wrap: wrap; justify-content: flex-end;">
+            <!-- Suchleiste ist jetzt permanent im HTML -->
+            <div class="search-wrapper">
+                <input type="text" id="user-search" class="scribble-input" placeholder="🔍 Search Player...">
+                <div id="search-results" class="search-results hidden"></div>
+            </div>
+
+            <!-- Login / Profil Container -->
+            <div class="auth-section" id="auth-section">
+                <span id="loading-auth">Loading...</span>
+            </div>
         </div>
     </header>
 
@@ -78,7 +89,7 @@
                 <button id="close-modal-btn" class="close-btn scribble-btn">✖</button>
             </div>
 
-            <!-- STATS BY MODE (INCL DRAWS) -->
+            <!-- STATS BY MODE -->
             <div class="stats-grid">
                 <div class="stat-box scribble-box">
                     <h4>⚡ Quickchess</h4>
@@ -143,13 +154,14 @@
             modal.style.display = 'none';
         }
 
-        function openProfileModal() {
-            if (!currentUserData) return;
+        // Akzeptiert userData. Wenn leer, wird der eigene Nutzer genommen!
+        function openProfileModal(userData = currentUserData) {
+            if (!userData) return;
 
-            document.getElementById('modal-avatar').src = currentUserData.profileImageUrl || '';
-            document.getElementById('modal-username').innerText = currentUserData.displayName || 'User Profile';
+            document.getElementById('modal-avatar').src = userData.profileImageUrl || '';
+            document.getElementById('modal-username').innerText = userData.displayName || 'User Profile';
 
-            const stats = currentUserData.stats || {
+            const stats = userData.stats || {
                 chess: { wins: 0, losses: 0, draws: 0 },
                 mutant: { wins: 0, losses: 0, draws: 0 },
                 bot: { wins: 0, losses: 0, draws: 0 }
@@ -163,6 +175,57 @@
             modal.style.display = 'flex';
         }
 
+        // ==========================================
+        // SUCHFUNKTION LÄUFT JETZT UNABHÄNGIG VOM LOGIN
+        // ==========================================
+        const searchInput = document.getElementById('user-search');
+        const searchResults = document.getElementById('search-results');
+
+        searchInput.addEventListener('input', async (e) => {
+            const query = e.target.value.trim();
+            if (query.length < 2) {
+                searchResults.innerHTML = '';
+                searchResults.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/users/search?q=${query}`);
+                const users = await res.json();
+
+                searchResults.innerHTML = '';
+                if (users.length === 0) {
+                    searchResults.innerHTML = '<div class="search-item" style="color:#777;">No player found</div>';
+                } else {
+                    users.forEach(u => {
+                        const item = document.createElement('div');
+                        item.className = 'search-item';
+                        item.innerHTML = `<img src="${u.profileImageUrl}" class="search-avatar" alt="Avatar"> ${u.displayName}`;
+                        
+                        // Beim Klick: Suchleiste schließen & Modal öffnen!
+                        item.onclick = () => {
+                            searchResults.classList.add('hidden');
+                            searchInput.value = '';
+                            openProfileModal(u); 
+                        };
+                        searchResults.appendChild(item);
+                    });
+                }
+                searchResults.classList.remove('hidden');
+            } catch(err) {
+                console.error('Search failed:', err);
+            }
+        });
+
+        // Suchergebnisse schließen, wenn man woanders hin klickt
+        document.addEventListener('click', (e) => {
+            if(!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
+        // ==========================================
+
+        // AUTH FETCHER
         fetch('/api/user')
             .then(res => res.json())
             .then(user => {
@@ -178,7 +241,7 @@
                         </div>
                     `;
 
-                    document.getElementById('user-profile-trigger').addEventListener('click', openProfileModal);
+                    document.getElementById('user-profile-trigger').addEventListener('click', () => openProfileModal(currentUserData));
                     document.getElementById('logout-btn').addEventListener('click', (e) => e.stopPropagation());
 
                     localStorage.setItem('cager_twitch_name', user.displayName);
