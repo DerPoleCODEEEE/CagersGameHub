@@ -73,3 +73,95 @@ header, main {
     position: relative;
     z-index: 10;
 }
+/* PROFILE CLICKABLE & MODAL STYLES */
+.profile-info { 
+    cursor: pointer; 
+    padding: 5px 10px; 
+    border-radius: 10px; 
+    transition: background 0.15s; 
+}
+.profile-info:hover { 
+    background: rgba(0,0,0,0.05); 
+}
+
+/* MODAL OVERLAY */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    width: 90%; max-width: 680px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 25px;
+    position: relative;
+}
+
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 12px; margin-bottom: 20px;
+}
+
+.modal-header h2 { margin: 0; font-size: 32px; }
+
+.close-btn {
+    background: #e74c3c; color: white;
+    border: 3px solid #000; border-radius: 50%;
+    width: 38px; height: 38px;
+    font-size: 20px; font-weight: bold;
+    cursor: pointer;
+}
+
+/* STATS GRID */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px; margin-bottom: 25px;
+}
+
+.stat-box {
+    padding: 12px; text-align: center;
+    background: #f8f9fa; border: 3px solid #000;
+}
+
+.stat-box h4 { margin: 0 0 6px 0; font-size: 20px; }
+.stat-box p { margin: 2px 0; font-size: 16px; color: #444; }
+.stat-box .winrate { font-size: 20px; font-weight: bold; color: #2ecc71; }
+
+/* ACHIEVEMENTS GRID */
+.achievements-section h3 { font-size: 26px; margin-bottom: 15px; text-decoration: underline; }
+
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+}
+
+.achievement-card {
+    padding: 12px; text-align: center;
+    border: 3px solid #000; border-radius: 12px;
+    transition: transform 0.2s, filter 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+}
+
+.achievement-card.locked {
+    filter: grayscale(100%);
+    opacity: 0.45;
+    background-color: #e0e0e0 !important;
+    border-style: dashed;
+}
+
+.achievement-card.unlocked {
+    box-shadow: 4px 4px 0px #000;
+}
+
+.achievement-card .icon { font-size: 36px; margin-bottom: 4px; }
+.achievement-card .title { font-size: 18px; font-weight: bold; margin-bottom: 4px; line-height: 1.1; }
+.achievement-card .desc { font-size: 13px; color: #222; }
+.achievement-card .tier-tag { font-size: 11px; font-weight: bold; background: #000; color: #fff; padding: 2px 6px; border-radius: 4px; margin-top: 6px; }
