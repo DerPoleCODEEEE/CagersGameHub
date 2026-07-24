@@ -6,6 +6,14 @@ let cagerConfig = null;
 let tiltScore = 0;
 let lastEval = 0;
 
+// CLOCK & TIME CONTROL STATE
+let isZenMode = false;
+let timeControlSeconds = 180;
+let incrementSeconds = 2;
+let clocks = { w: 180, b: 180 };
+let clockTimer = null;
+let gameStarted = false;
+
 // Stockfish Web Worker
 const stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
 
@@ -23,31 +31,24 @@ if (twitchPfp) {
     pfp.classList.remove('hidden');
 }
 
-const PIECES = {
-    'p': 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
-    'n': 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
-    'b': 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
-    'r': 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
-    'q': 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
-    'k': 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
-    'P': 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
-    'N': 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
-    'B': 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
-    'R': 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
-    'Q': 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
-    'K': 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'
-};
+// RELIABLE CHESSBOARD PNG SET (CHESSPRECISION / CHESSBOARDJS CDN)
+function getPieceImgUrl(piece) {
+    if (!piece) return '';
+    const color = piece.color; // 'w' or 'b'
+    const type = piece.type.toUpperCase(); // 'P', 'N', 'B', 'R', 'Q', 'K'
+    return `https://chessboardjs.com/img/chesspieces/wikipedia/${color}${type}.png`;
+}
 
 const CAGER_QUOTES = {
-    start: ["Moin Moin! Viel Erfolg!", "Auf geht's! Zeig was du kannst!"],
-    cager_capture: ["Aand tschüss! Die Figur gehört jetzt mir!", "Danke für das Geschenk!"],
-    player_capture: ["Oha, den hab ich gar nicht gesehen...", "Aua! Starker Zug."],
-    cager_check: ["Schach! Wo willst du hin?", "König in Gefahr!"],
-    cager_win: ["GG! Das war 'ne wilde Partie!", "Sieg für Cager!"],
-    player_win: ["GG WP! Das hast du stark gespielt!", "Respekt, gut gemacht!"]
+    start: ["Let's go! Good luck!", "Show me what you got!"],
+    cager_capture: ["And bye-bye! That piece is mine!", "Thanks for the gift!"],
+    player_capture: ["Ouch! Didn't see that coming...", "Nice capture, fair enough."],
+    cager_check: ["Check! Where are you going?", "King in trouble!"],
+    cager_win: ["GG! That was a wild game!", "Victory for Cager!"],
+    player_win: ["GG WP! Well played!", "Respect, great game!"]
 };
 
-// CONFIG & BOOK LADEN
+// CONFIG & BOOK LOADING
 Promise.all([
     fetch('cager-config.json').then(r => r.json()).catch(() => null),
     fetch('cager-book.json').then(r => r.json()).catch(() => null)
@@ -56,7 +57,6 @@ Promise.all([
         cagerConfig = configData;
         document.getElementById('bot-elo').innerText = `${configData.targetElo || 2132} ELO`;
         stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
-        updateSidebarStats();
     }
     if (bookData) {
         cagerBook = bookData.book;
@@ -98,18 +98,83 @@ function parseStockfishPvLine(line) {
     }
 }
 
-// SOFTMAX & VECTOR DECISION ENGINE
+// TIME CONTROL LOGIC
+function updateTimeSettings() {
+    const val = document.getElementById('time-select').value;
+    const incLabel = document.getElementById('inc-label');
+
+    if (val === 'zen') {
+        isZenMode = true;
+        incLabel.style.display = 'none';
+        document.getElementById('bot-clock').innerText = '∞';
+        document.getElementById('player-clock').innerText = '∞';
+    } else {
+        isZenMode = false;
+        incLabel.style.display = 'flex';
+        timeControlSeconds = parseInt(val, 10);
+        incrementSeconds = parseInt(document.getElementById('inc-select').value, 10);
+        clocks = { w: timeControlSeconds, b: timeControlSeconds };
+        renderClocks();
+    }
+}
+
+function startClock() {
+    if (isZenMode || clockTimer) return;
+    clockTimer = setInterval(() => {
+        if (chess.game_over()) {
+            clearInterval(clockTimer);
+            clockTimer = null;
+            return;
+        }
+
+        const turn = chess.turn();
+        clocks[turn]--;
+
+        renderClocks();
+
+        if (clocks[turn] <= 0) {
+            clearInterval(clockTimer);
+            clockTimer = null;
+            const winner = turn === 'w' ? 'TheCager (BOT)' : 'You';
+            alert(`Time's up! ${winner} won on time!`);
+        }
+    }, 1000);
+}
+
+function renderClocks() {
+    if (isZenMode) return;
+
+    const botColor = 'b';
+    const playerColor = 'w';
+
+    const botBox = document.getElementById('bot-clock');
+    const playerBox = document.getElementById('player-clock');
+
+    botBox.innerText = formatTime(clocks[botColor]);
+    playerBox.innerText = formatTime(clocks[playerColor]);
+
+    botBox.className = 'clock-box' + (chess.turn() === botColor ? ' active' : '') + (clocks[botColor] <= 15 ? ' danger' : '');
+    playerBox.className = 'clock-box' + (chess.turn() === playerColor ? ' active' : '') + (clocks[playerColor] <= 15 ? ' danger' : '');
+}
+
+function formatTime(sec) {
+    if (sec <= 0) return '00:00';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+// SOFTMAX & PSYCHOLOGY ENGINE
 function processSoftmaxDecisionMatrix() {
     if (multiPvCandidates.length === 0) return;
 
     const candidates = [...multiPvCandidates];
     multiPvCandidates = [];
 
-    const currentTurn = chess.turn(); // 'w' oder 'b'
+    const currentTurn = chess.turn();
     const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
-    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.82, tiltFactorAlpha: 0.78 };
+    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.82, tiltFactorAlpha: 0.78, timePressureLambda: 0.045 };
 
-    // Update Tilt Status
     const bestMoveEval = candidates[0].stockfishEval;
     const evalDelta = lastEval - bestMoveEval;
     if (evalDelta > 100) {
@@ -119,18 +184,19 @@ function processSoftmaxDecisionMatrix() {
     }
     lastEval = bestMoveEval;
 
-    // Evaluierung aller Kandidaten mit Vektor-Boni
+    const botRemainingTime = clocks[currentTurn];
+    const lambda = psycho.timePressureLambda || 0.045;
+    const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
+
     const scoredMoves = candidates.map(cand => {
         let cagerScore = cand.stockfishEval;
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
 
         if (moveDetails) {
-            // 1. Königs-Angriffslust
             if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
                 cagerScore += ((profile.kingAttackBias || 35) / 100) * 110;
             }
-            // 2. Damentausch & Tausch-Vermeidung
             if (moveDetails.captured) {
                 if (moveDetails.captured === 'q') {
                     cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 220;
@@ -138,11 +204,9 @@ function processSoftmaxDecisionMatrix() {
                     cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 70;
                 }
             }
-            // 3. Randbauern Push
             if (['a4','a5','h4','h5'].includes(cand.to) && moveDetails.piece === 'p') {
                 cagerScore += ((profile.flankPawnAggression || 24) / 100) * 80;
             }
-            // 4. Blind-Spot Malus (Rückwärtszüge)
             const fromRank = parseInt(cand.from[1]);
             const toRank = parseInt(cand.to[1]);
             if ((currentTurn === 'w' && toRank < fromRank) || (currentTurn === 'b' && toRank > fromRank)) {
@@ -152,15 +216,13 @@ function processSoftmaxDecisionMatrix() {
         return { ...cand, cagerScore };
     });
 
-    // SOFTMAX WAHRSCHEINLICHKEITS-DISTRIBUTION
-    const effectiveTemp = psycho.softmaxTemperature * (1 + tiltScore / 300);
+    const effectiveTemp = psycho.softmaxTemperature * (1 + (tiltScore / 300) + (timePanicTerm * 1.8));
     const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
     
     const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 50)));
     const sumExp = expScores.reduce((a, b) => a + b, 0);
     const probabilities = expScores.map(e => e / sumExp);
 
-    // Zufallsauswahl nach Softmax-Gewichtung
     let rand = Math.random();
     let cumulative = 0;
     let chosenMove = scoredMoves[0];
@@ -173,15 +235,12 @@ function processSoftmaxDecisionMatrix() {
         }
     }
 
-    // Simulierte menschliche Bedenkzeit
-    const thinkTime = Math.floor(Math.random() * 400) + 400;
+    const thinkTime = isZenMode ? 600 : Math.max(150, Math.min(1000, botRemainingTime * 30));
     setTimeout(() => makeBotMove(chosenMove), thinkTime);
 }
 
 function triggerBotTurn() {
     if (chess.game_over()) return;
-
-    updateSidebarStats();
 
     const history = chess.history();
     let stateKey = 'start';
@@ -215,7 +274,12 @@ function makeBotMove(moveObj) {
         move = chess.move(moveObj);
     }
 
+    if (!isZenMode && gameStarted) {
+        clocks['b'] += incrementSeconds;
+    }
+
     renderBoard();
+    renderClocks();
 
     if (move) {
         if (move.captured) addChatMessage('TheCager', getRandomQuote('cager_capture'));
@@ -223,26 +287,6 @@ function makeBotMove(moveObj) {
     }
 
     checkGameOver();
-}
-
-function updateSidebarStats() {
-    if (!cagerConfig) return;
-    const isWhite = chess.turn() === 'w';
-    const profile = isWhite ? cagerConfig.white : cagerConfig.black;
-
-    document.getElementById('active-color-tag').innerText = isWhite ? 'WEISS' : 'SCHWARZ';
-    
-    document.getElementById('val-book').innerText = `${profile.openingBookLoyalty}%`;
-    document.getElementById('bar-book').style.width = `${profile.openingBookLoyalty}%`;
-
-    document.getElementById('val-attack').innerText = `${profile.kingAttackBias}%`;
-    document.getElementById('bar-attack').style.width = `${profile.kingAttackBias}%`;
-
-    document.getElementById('val-sac').innerText = `${profile.sacrificeWillingness}%`;
-    document.getElementById('bar-sac').style.width = `${profile.sacrificeWillingness}%`;
-
-    document.getElementById('val-trade').innerText = `${profile.tradeAvoidanceIndex}%`;
-    document.getElementById('bar-trade').style.width = `${profile.tradeAvoidanceIndex}%`;
 }
 
 function createBoardDOM() {
@@ -282,8 +326,7 @@ function renderBoard() {
             if (piece) {
                 const img = document.createElement('img');
                 img.className = 'piece';
-                const key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type;
-                img.src = PIECES[key];
+                img.src = getPieceImgUrl(piece);
                 square.appendChild(img);
             }
         }
@@ -299,14 +342,22 @@ function handleSquareClick(r, c) {
     if (selectedSquare) {
         const move = chess.move({ from: selectedSquare, to: square, promotion: 'q' });
         if (move) {
+            if (!gameStarted) {
+                gameStarted = true;
+                startClock();
+            }
+
+            if (!isZenMode) clocks['w'] += incrementSeconds;
+
             selectedSquare = null;
             validMoves = [];
             renderBoard();
+            renderClocks();
 
             if (move.captured) addChatMessage('TheCager', getRandomQuote('player_capture'));
             if (checkGameOver()) return;
 
-            setTimeout(triggerBotTurn, 500);
+            setTimeout(triggerBotTurn, 400);
             return;
         }
     }
@@ -337,19 +388,24 @@ function addChatMessage(sender, text) {
 
 function checkGameOver() {
     if (chess.in_checkmate()) {
-        const winner = chess.turn() === 'w' ? 'TheCager' : 'Du';
+        if (clockTimer) clearInterval(clockTimer);
+        const winner = chess.turn() === 'w' ? 'TheCager' : 'You';
         addChatMessage('TheCager', winner === 'TheCager' ? getRandomQuote('cager_win') : getRandomQuote('player_win'));
-        alert(`Schachmatt! ${winner} gewinnt!`);
+        alert(`Checkmate! ${winner} wins!`);
         return true;
     }
     return false;
 }
 
 document.getElementById('btn-restart').onclick = () => {
+    if (clockTimer) clearInterval(clockTimer);
+    clockTimer = null;
+    gameStarted = false;
     chess.reset();
     selectedSquare = null;
     validMoves = [];
     tiltScore = 0;
+    updateTimeSettings();
     renderBoard();
     addChatMessage('TheCager', getRandomQuote('start'));
 };
@@ -358,7 +414,9 @@ document.getElementById('btn-undo').onclick = () => {
     chess.undo();
     chess.undo();
     renderBoard();
+    renderClocks();
 };
 
 createBoardDOM();
+updateTimeSettings();
 renderBoard();
