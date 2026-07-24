@@ -13,25 +13,25 @@
     "positionComplexityGamma": 1.35
   },
   "white": {
-    "openingBookLoyalty": 70,
-    "kingAttackBias": 35,
-    "tradeAvoidanceIndex": 34,
-    "sacrificeWillingness": 85,
-    "flankPawnAggression": 24,
-    "geometricBlindSpotSensitivity": 10,
-    "blunderRatePercent": 8,
-    "queenTradeReluctance": 80,
-    "preferKnightsOverBishops": true
-  },
-  "black": {
-    "openingBookLoyalty": 73,
+    "openingBookLoyalty": 74,
     "kingAttackBias": 35,
     "tradeAvoidanceIndex": 35,
-    "sacrificeWillingness": 85,
-    "flankPawnAggression": 24,
+    "sacrificeWillingness": 80,
+    "flankPawnAggression": 19,
     "geometricBlindSpotSensitivity": 10,
-    "blunderRatePercent": 9,
-    "queenTradeReluctance": 79,
-    "preferKnightsOverBishops": true
+    "blunderRatePercent": 4,
+    "queenTradeReluctance": 82,
+    "preferKnightsOverBishops": false
+  },
+  "black": {
+    "openingBookLoyalty": 74,
+    "kingAttackBias": 35,
+    "tradeAvoidanceIndex": 35,
+    "sacrificeWillingness": 80,
+    "flankPawnAggression": 19,
+    "geometricBlindSpotSensitivity": 10,
+    "blunderRatePercent": 4,
+    "queenTradeReluctance": 78,
+    "preferKnightsOverBishops": false
   }
 }
