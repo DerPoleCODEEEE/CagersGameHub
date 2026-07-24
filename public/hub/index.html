@@ -1,182 +1,98 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TheCager Game Hub</title>
+    <title>The Cager Game Hub</title>
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            background-color: #ffffff;
-            color: #111;
-            font-family: 'Patrick Hand', cursive, sans-serif;
-            background-image: radial-gradient(#ddd 1px, transparent 1px);
-            background-size: 20px 20px;
-            margin: 0;
-            padding: 30px 20px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .hub-header {
-            text-align: center;
-            margin-bottom: 40px;
-            position: relative;
-            z-index: 10;
-        }
-
-        h1.title {
-            font-size: 48px;
-            margin: 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            text-shadow: 2px 2px 0px #f1c40f;
-        }
-
-        p.subtitle {
-            font-size: 22px;
-            color: #555;
-            margin-top: 5px;
-        }
-
-        .scribble-box {
-            border: 4px solid #000;
-            border-bottom-left-radius: 15px 255px;
-            border-bottom-right-radius: 225px 15px;
-            border-top-left-radius: 255px 15px;
-            border-top-right-radius: 15px 225px;
-            background: #fff;
-            box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 25px;
-            width: 100%;
-            max-width: 1000px;
-            position: relative;
-            z-index: 10;
-        }
-
-        .game-card {
-            padding: 25px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            position: relative;
-            transition: transform 0.2s ease;
-        }
-
-        .game-card:hover {
-            transform: translateY(-5px) scale(1.02);
-        }
-
-        .card-badge {
-            position: absolute;
-            top: -12px;
-            right: 15px;
-            background: #9b59b6;
-            color: #fff;
-            border: 2px solid #000;
-            padding: 2px 10px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        .badge-yellow { background: #f1c40f; color: #000; }
-        .badge-green { background: #2ecc71; color: #000; }
-
-        .game-card h2 {
-            margin-top: 0;
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-
-        .game-card p {
-            font-size: 18px;
-            color: #444;
-            line-height: 1.3;
-            margin-bottom: 20px;
-            flex-grow: 1;
-        }
-
-        .btn {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            border: 3px solid #000;
-            border-bottom-left-radius: 15px 255px;
-            border-bottom-right-radius: 225px 15px;
-            border-top-left-radius: 255px 15px;
-            border-top-right-radius: 15px 225px;
-            font-size: 22px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.1s;
-            font-family: 'Patrick Hand', cursive, sans-serif;
-            box-shadow: 3px 3px 0px rgba(0,0,0,0.9);
-            text-align: center;
-            text-decoration: none;
-            box-sizing: border-box;
-        }
-
-        .btn:hover { transform: scale(1.03); }
-        .btn-primary { background: #f1c40f; color: #000; }
-        .btn-green { background: #2ecc71; color: #000; }
-        .btn-purple { background: #9b59b6; color: #fff; }
-
-        .flork-bg {
-            position: fixed;
-            bottom: -15px;
-            width: 160px;
-            z-index: 0;
-            pointer-events: none;
-            opacity: 0.85;
-        }
-        .flork-left { left: 2%; }
-        .flork-right { right: 2%; transform: scaleX(-1); }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+    <!-- Die Florks im Hintergrund -->
     <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
     <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
 
-    <div class="hub-header">
-        <h1 class="title">🎮 TheCager Game Hub</h1>
-        <p class="subtitle">Wähle deinen Modus und spiel eine Runde Schach!</p>
-    </div>
-
-    <div class="grid">
-        <!-- MODUS 1: QUICKCHESS -->
-        <div class="game-card scribble-box">
-            <div class="card-badge badge-yellow">SCHNELL & WILD</div>
-            <h2>⚡ Quickchess</h2>
-            <p>Das klassische, schnelle Schachspiel für schnelle Runden zwischendurch.</p>
-            <a href="/quickchess/" class="btn btn-primary">Jetzt Spielen</a>
+    <header class="scribble-box header-box">
+        <div class="logo">
+            <h1>CAGER GAMES</h1>
         </div>
-
-        <!-- MODUS 2: MUTANT CHESS -->
-        <div class="game-card scribble-box">
-            <div class="card-badge badge-green">CHAOS</div>
-            <h2>🧬 Mutant Chess</h2>
-            <p>Schach mit verrückten Mutationen, Spezialregeln und unvorhersehbaren Wendungen.</p>
-            <a href="/mutant-chess/" class="btn btn-green">Jetzt Spielen</a>
+        <div class="auth-section" id="auth-section">
+            <span id="loading-auth">Loading...</span>
         </div>
+    </header>
 
-        <!-- MODUS 3: VS CAGER BOT -->
-        <div class="game-card scribble-box">
-            <div class="card-badge">KI-BOT (2132 ELO)</div>
-            <h2>♟️ VS Cager Bot</h2>
-            <p>Tritt gegen den Bot an, der mit PGN-Datenbanken & Live-Stats auf Cagers Spielstil trainiert wurde!</p>
-            <a href="/play-cager/" class="btn btn-purple">Jetzt Spielen</a>
+    <main>
+        <h2 class="title-scribble">Choose your game</h2>
+        <div class="game-grid">
+            
+            <div class="game-card scribble-box">
+                <div class="game-img" style="background-color: #739552; display:flex; align-items:center; justify-content:center;">
+                    <span style="font-size: 50px;">♞</span>
+                </div>
+                <h3>Cagers Quick Chess</h3>
+                <p>Real-Time Action! No turns, just cooldowns.</p>
+                <a href="/chess" class="play-btn scribble-btn">Play</a>
+            </div>
+
+            <!-- MUTANT MERGE CHESS -->
+            <div class="game-card scribble-box">
+                <div class="game-img" style="background-color: #e74c3c; display:flex; align-items:center; justify-content:center;">
+                    <span style="font-size: 50px;">🧬</span>
+                </div>
+                <h3>Mutant Merge</h3>
+                <p>Combine your pieces. Build super mutants. Total chaos!</p>
+                <a href="/mutant-chess" class="play-btn scribble-btn" style="background: #f1c40f;">Play</a>
+            </div>
+
+            <!-- VS CAGER BOT (NEU HINZUGEFÜGT) -->
+            <div class="game-card scribble-box">
+                <div class="game-img" style="background-color: #9b59b6; display:flex; align-items:center; justify-content:center;">
+                    <span style="font-size: 50px;">🤖</span>
+                </div>
+                <h3>VS Cager Bot</h3>
+                <p>Play against the AI trained on TheCager's playstyle and live stats!</p>
+                <a href="/play-cager" class="play-btn scribble-btn" style="background: #a855f7; color: white;">Play</a>
+            </div>
+
+            <div class="game-card scribble-box locked">
+                <div class="game-img" style="background-color: #ddd; display:flex; align-items:center; justify-content:center;">
+                    <span style="font-size: 50px; color:#888;">?</span>
+                </div>
+                <h3>Cager Tower Defense</h3>
+                <p>Coming Soon...</p>
+                <button class="play-btn scribble-btn disabled" disabled>Locked</button>
+            </div>
+
         </div>
-    </div>
+    </main>
 
+    <script>
+        fetch('/api/user')
+            .then(res => res.json())
+            .then(user => {
+                const authSection = document.getElementById('auth-section');
+                if (user) {
+                    authSection.innerHTML = `
+                        <div class="profile-info">
+                            <img src="${user.profileImageUrl}" alt="Avatar" class="avatar scribble-avatar">
+                            <span class="user-name">${user.displayName}</span>
+                            <a href="/auth/logout" class="logout-link">Logout</a>
+                        </div>
+                    `;
+                    localStorage.setItem('cager_twitch_name', user.displayName);
+                    localStorage.setItem('cager_twitch_pfp', user.profileImageUrl);
+                } else {
+                    authSection.innerHTML = `
+                        <a href="/auth/twitch" class="twitch-btn scribble-btn">
+                            <svg width="20px" height="20px" fill="white" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+                            Login with Twitch
+                        </a>
+                    `;
+                    localStorage.removeItem('cager_twitch_name');
+                    localStorage.removeItem('cager_twitch_pfp');
+                }
+            });
+    </script>
 </body>
 </html>
