@@ -24,6 +24,7 @@ const isAdmin = (twitchName && twitchName.trim().toLowerCase() === 'schachspiele
 let autoPlayActive = false;
 let testerStockfish = null;
 let testerElo = 2000;
+let testerDepth = 8;
 
 if (twitchName) document.getElementById('my-name').innerText = twitchName;
 if (twitchPfp) {
@@ -164,7 +165,6 @@ Promise.all([
         cagerConfig = configData;
         document.getElementById('bot-elo').innerText = `${configData.targetElo || 2132} ELO`;
         if (stockfish) {
-            stockfish.postMessage('setoption name UCI_LimitStrength value true');
             stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
         }
     }
@@ -373,12 +373,9 @@ function processSoftmaxDecisionMatrix() {
     const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
     const isComplexPosition = evalSpread > 180 || chess.in_check();
 
-    // ---------------------------------------------------------------------
-    // EXTREM GEDÄMPFTE TILT-BERECHNUNG (Einfluss nahezu unwirksam gemacht)
-    // ---------------------------------------------------------------------
+    // GEDÄMPFTE TILT-BERECHNUNG
     const evalDelta = lastEval - bestMoveEval;
     if (evalDelta > 150) {
-        // Deltas stark abfedern (nur 5% Auswirkung)
         tiltScore = (psycho.tiltFactorAlpha || 0.20) * tiltScore + (1 - (psycho.tiltFactorAlpha || 0.20)) * (evalDelta * 0.05);
     } else {
         tiltScore *= (psycho.tiltFactorAlpha || 0.20);
@@ -395,7 +392,6 @@ function processSoftmaxDecisionMatrix() {
 
         if (evalLoss > 80) {
             const isAggressiveIntent = cand.moveStr.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to);
-            // Tilt-Trigger schwelle massiv angehoben (tiltScore > 400), damit es fast nie greift
             const isHighTiltOrTimePanic = tiltScore > 400 || (clocks[currentTurn] < 12 && !isZenMode);
 
             if (!isComplexPosition && !isHighTiltOrTimePanic) return false;
@@ -424,6 +420,7 @@ function processSoftmaxDecisionMatrix() {
                         cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
                     }
                 }
+                // FLANK PAWN AGGRESSION WURDE HIER KOMPLETT ENTFERNT
             } else {
                 if (moveDetails.captured) cagerScore += 60;
                 if (moveDetails.san.includes('+')) cagerScore += 40;
@@ -441,7 +438,6 @@ function processSoftmaxDecisionMatrix() {
         const lambda = psycho.timePressureLambda || 0.045;
         const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
 
-        // TILT IMPACT AUF MAX 3% (0.03) GEDECKLELT!
         const minTiltImpact = Math.min(0.03, tiltScore / 5000);
         const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + minTiltImpact + (timePanicTerm * 1.2));
         
@@ -818,8 +814,17 @@ function initAdminPanel() {
             btn.style.background = '#e74c3c';
             status.innerText = 'Status: 🟢 Läuft...';
             testerElo = parseInt(eloSelect.value, 10);
+            
+            // Skill Level Map & Depth Limitations für Stockfish 10
+            let testerSkill = 10;
+            if (testerElo <= 1200) { testerSkill = 0; testerDepth = 2; }
+            else if (testerElo <= 1600) { testerSkill = 4; testerDepth = 4; }
+            else if (testerElo <= 2000) { testerSkill = 9; testerDepth = 8; }
+            else if (testerElo <= 2300) { testerSkill = 14; testerDepth = 12; }
+            else { testerSkill = 20; testerDepth = null; } // Unlimitiert
 
             if (testerStockfish) {
+                testerStockfish.postMessage(`setoption name Skill Level value ${testerSkill}`);
                 testerStockfish.postMessage('setoption name UCI_LimitStrength value true');
                 testerStockfish.postMessage(`setoption name UCI_Elo value ${testerElo}`);
             }
@@ -841,7 +846,12 @@ function triggerTesterTurn() {
     if (!autoPlayActive || chess.turn() !== 'w' || isGameOver || chess.game_over()) return;
     if (testerStockfish) {
         testerStockfish.postMessage(`position fen ${chess.fen()}`);
-        testerStockfish.postMessage('go movetime 400');
+        // Kombinierter Limit-Einsatz aus Suchtiefe und Skill Level für realistische Schwäche
+        if (testerDepth) {
+            testerStockfish.postMessage(`go depth ${testerDepth}`);
+        } else {
+            testerStockfish.postMessage('go movetime 400');
+        }
     }
 }
 
