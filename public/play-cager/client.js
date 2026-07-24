@@ -361,7 +361,7 @@ function processSoftmaxDecisionMatrix() {
 
     const currentTurn = chess.turn();
     const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
-    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.65, tiltFactorAlpha: 0.78, timePressureLambda: 0.045 };
+    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.65, tiltFactorAlpha: 0.20, timePressureLambda: 0.045 };
 
     const bestMoveEval = candidates[0].stockfishEval;
     
@@ -373,11 +373,15 @@ function processSoftmaxDecisionMatrix() {
     const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
     const isComplexPosition = evalSpread > 180 || chess.in_check();
 
+    // ---------------------------------------------------------------------
+    // EXTREM GEDÄMPFTE TILT-BERECHNUNG (Einfluss nahezu unwirksam gemacht)
+    // ---------------------------------------------------------------------
     const evalDelta = lastEval - bestMoveEval;
-    if (evalDelta > 100) {
-        tiltScore = psycho.tiltFactorAlpha * tiltScore + (1 - psycho.tiltFactorAlpha) * evalDelta;
+    if (evalDelta > 150) {
+        // Deltas stark abfedern (nur 5% Auswirkung)
+        tiltScore = (psycho.tiltFactorAlpha || 0.20) * tiltScore + (1 - (psycho.tiltFactorAlpha || 0.20)) * (evalDelta * 0.05);
     } else {
-        tiltScore *= psycho.tiltFactorAlpha;
+        tiltScore *= (psycho.tiltFactorAlpha || 0.20);
     }
     lastEval = bestMoveEval;
 
@@ -391,7 +395,8 @@ function processSoftmaxDecisionMatrix() {
 
         if (evalLoss > 80) {
             const isAggressiveIntent = cand.moveStr.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to);
-            const isHighTiltOrTimePanic = tiltScore > 160 || (clocks[currentTurn] < 15 && !isZenMode);
+            // Tilt-Trigger schwelle massiv angehoben (tiltScore > 400), damit es fast nie greift
+            const isHighTiltOrTimePanic = tiltScore > 400 || (clocks[currentTurn] < 12 && !isZenMode);
 
             if (!isComplexPosition && !isHighTiltOrTimePanic) return false;
             if (!isAggressiveIntent && !isHighTiltOrTimePanic) return false;
@@ -436,9 +441,11 @@ function processSoftmaxDecisionMatrix() {
         const lambda = psycho.timePressureLambda || 0.045;
         const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
 
-        const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + (tiltScore / 400) + (timePanicTerm * 1.2));
-        const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
+        // TILT IMPACT AUF MAX 3% (0.03) GEDECKLELT!
+        const minTiltImpact = Math.min(0.03, tiltScore / 5000);
+        const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + minTiltImpact + (timePanicTerm * 1.2));
         
+        const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
         const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
         const sumExp = expScores.reduce((a, b) => a + b, 0);
         const probabilities = expScores.map(e => e / sumExp);
@@ -812,7 +819,6 @@ function initAdminPanel() {
             status.innerText = 'Status: 🟢 Läuft...';
             testerElo = parseInt(eloSelect.value, 10);
 
-            // WICHTIG: SOWOHL LIMIT-STRENGTH ALS AUCH ELO SETZEN!
             if (testerStockfish) {
                 testerStockfish.postMessage('setoption name UCI_LimitStrength value true');
                 testerStockfish.postMessage(`setoption name UCI_Elo value ${testerElo}`);
