@@ -2,18 +2,6 @@ const chess = new Chess();
 let cagerBook = null;
 let cagerConfig = null;
 
-// STATS SPEICHERN HELPER
-function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
-    fetch('/api/stats/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, result })
-    })
-    .then(res => res.json())
-    .then(data => console.log('✅ Stats in DB aktualisiert:', data))
-    .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
-}
-
 // PSYCHOLOGY & GAME STATE
 let tiltScore = 0;
 let lastEval = 0;
@@ -26,6 +14,18 @@ let incrementSeconds = 2;
 let clocks = { w: 180, b: 180 };
 let clockTimer = null;
 let gameStarted = false;
+
+// STATS SPEICHERN HELPER
+function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
+    fetch('/api/stats/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, result })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Stats in DB aktualisiert:', data))
+    .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
+}
 
 // STOCKFISH WEB WORKER (CORS-SAFE BLOB PROXY)
 let stockfish;
@@ -208,7 +208,11 @@ function startClock() {
             clearInterval(clockTimer);
             clockTimer = null;
             isGameOver = true;
-            const winner = turn === 'w' ? 'TheCager (BOT)' : 'You';
+            
+            const isPlayerLoss = (turn === 'w');
+            saveGameResult('bot', isPlayerLoss ? 'loss' : 'win');
+            
+            const winner = isPlayerLoss ? 'TheCager (BOT)' : 'You';
             alert(`Time's up! ${winner} won on time!`);
         }
     }, 1000);
@@ -469,11 +473,26 @@ function checkGameOver() {
     if (chess.in_checkmate()) {
         isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
-        const winner = chess.turn() === 'w' ? 'TheCager' : 'You';
-        addChatMessage('TheCager', winner === 'TheCager' ? getRandomQuote('cager_win') : getRandomQuote('player_win'));
+        
+        const isPlayerWin = chess.turn() === 'b'; // Spieler spielt w, wenn b am Zug und Matt -> Spieler hat gewonnen.
+        saveGameResult('bot', isPlayerWin ? 'win' : 'loss');
+        
+        const winner = isPlayerWin ? 'You' : 'TheCager';
+        addChatMessage('TheCager', isPlayerWin ? getRandomQuote('player_win') : getRandomQuote('cager_win'));
         alert(`Checkmate! ${winner} wins!`);
         return true;
     }
+    
+    // Unentschieden (Patt / Zugwiederholung etc)
+    if (chess.in_draw() || chess.in_stalemate() || chess.in_threefold_repetition()) {
+        isGameOver = true;
+        if (clockTimer) clearInterval(clockTimer);
+        saveGameResult('bot', 'draw');
+        addChatMessage('TheCager', "GG! A draw. Fair enough.");
+        alert("Draw! Game Over.");
+        return true;
+    }
+    
     return false;
 }
 
@@ -511,6 +530,9 @@ document.getElementById('btn-resign').onclick = () => {
             clearInterval(clockTimer);
             clockTimer = null;
         }
+        
+        saveGameResult('bot', 'loss');
+        
         addChatMessage('TheCager', getRandomQuote('cager_resign'));
         alert('You resigned. TheCager (BOT) wins!');
     }
