@@ -49,13 +49,61 @@ function getPieceImgUrl(piece) {
 }
 
 const CAGER_QUOTES = {
-    start: ["Let's go! Good luck!", "Show me what you got!"],
-    cager_capture: ["And bye-bye! That piece is mine!", "Thanks for the gift!"],
-    player_capture: ["Ouch! Didn't see that coming...", "Nice capture, fair enough."],
-    cager_check: ["Check! Where are you going?", "King in trouble!"],
-    cager_win: ["GG! That was a wild game!", "Victory for Cager!"],
-    player_win: ["GG WP! Well played!", "Respect, great game!"],
-    cager_resign: ["GG! Thanks for the match!"]
+    start: [
+        "Let's go! Good luck & have fun!",
+        "Show me what you got!",
+        "Alright, let's see if you can handle the Cager style!",
+        "Time for some speed chess! Game on!",
+        "Welcome! May the best player win.",
+        "Don't blink! Let me see your best moves!"
+    ],
+    cager_capture: [
+        "And bye-bye! That piece is mine!",
+        "Thanks for the gift!",
+        "Nom nom, free material!",
+        "I'll take that, thank you very much!",
+        "You dropped something!",
+        "Sniped! Clean tactical blow.",
+        "That piece was standing in my way anyway!"
+    ],
+    player_capture: [
+        "Ouch! Didn't see that coming...",
+        "Nice capture, fair enough.",
+        "Hey, that was my favorite piece!",
+        "Oof, brutal vision from you!",
+        "A temporary setback, no worries!",
+        "Ouch! You're playing really sharp today."
+    ],
+    cager_check: [
+        "Check! Where are you going?",
+        "King in trouble!",
+        "Check! Watch your king safety!",
+        "Your king is feeling the heat!",
+        "Knock knock! King safety inspection!",
+        "Check! Things are getting dangerous..."
+    ],
+    cager_win: [
+        "GG! That was a wild game!",
+        "Victory for Cager!",
+        "GG! That tactical frenzy went my way!",
+        "Good game! Loved the aggression in that match.",
+        "GG! Rematch anytime!",
+        "What a battle! GG WP!"
+    ],
+    player_win: [
+        "GG WP! Well played!",
+        "Respect, great game!",
+        "Ouch, clean mate! Outplayed completely.",
+        "GG! Masterclass performance from you!",
+        "I got outplayed! Great win!",
+        "Well played! You caught me off guard."
+    ],
+    cager_resign: [
+        "GG! Thanks for the match!",
+        "No way out of this position for me, GG!",
+        "Respect! I yield.",
+        "GG! You had me completely outplayed there."
+    ]
 };
 
 // CONFIG & BOOK LOADING
