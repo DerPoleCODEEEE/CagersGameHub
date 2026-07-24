@@ -45,7 +45,7 @@
                 <a href="/mutant-chess" class="play-btn scribble-btn" style="background: #f1c40f;">Play</a>
             </div>
 
-            <!-- VS CAGER BOT (NEU HINZUGEFÜGT) -->
+            <!-- VS CAGER BOT -->
             <div class="game-card scribble-box">
                 <div class="game-img" style="background-color: #9b59b6; display:flex; align-items:center; justify-content:center;">
                     <span style="font-size: 50px;">🤖</span>
@@ -67,19 +67,122 @@
         </div>
     </main>
 
+    <!-- PROFILE MODAL OVERLAY -->
+    <div id="profile-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content scribble-box">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <img id="modal-avatar" class="scribble-avatar" src="" alt="Avatar">
+                    <h2 id="modal-username">User Profile</h2>
+                </div>
+                <button id="close-modal-btn" class="close-btn scribble-btn">✖</button>
+            </div>
+
+            <!-- STATS BY MODE -->
+            <div class="stats-grid">
+                <div class="stat-box scribble-box">
+                    <h4>⚡ Quickchess</h4>
+                    <p id="st-chess-record">0 W / 0 L</p>
+                    <p class="winrate" id="st-chess-wr">0% WR</p>
+                </div>
+                <div class="stat-box scribble-box">
+                    <h4>🧬 Mutant Merge</h4>
+                    <p id="st-mutant-record">0 W / 0 L</p>
+                    <p class="winrate" id="st-mutant-wr">0% WR</p>
+                </div>
+                <div class="stat-box scribble-box">
+                    <h4>🤖 VS Cager Bot</h4>
+                    <p id="st-bot-record">0 W / 0 L</p>
+                    <p class="winrate" id="st-bot-wr">0% WR</p>
+                </div>
+            </div>
+
+            <!-- MULTI-TIER ACHIEVEMENTS -->
+            <div class="achievements-section">
+                <h3>🏆 Achievements</h3>
+                <div class="achievements-grid" id="achievements-container"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let currentUserData = null;
+
+        // ACHIEVEMENT TIER DEFINITIONS
+        const ACHIEVEMENT_TIERS = [
+            // Quickchess Tiers
+            { id: 'q1', targetKey: 'chess', targetWins: 5, icon: '⚡', title: 'Speed Cadet', desc: 'Win 5 Quickchess games', color: '#f1c40f', tier: 'TIER I' },
+            { id: 'q2', targetKey: 'chess', targetWins: 15, icon: '⚡', title: 'Speed Demon', desc: 'Win 15 Quickchess games', color: '#f39c12', tier: 'TIER II' },
+            { id: 'q3', targetKey: 'chess', targetWins: 50, icon: '⚡', title: 'Light Speed', desc: 'Win 50 Quickchess games', color: '#e67e22', tier: 'TIER III' },
+            
+            // Mutant Merge Tiers
+            { id: 'm1', targetKey: 'mutant', targetWins: 5, icon: '🧬', title: 'Gene Splicer', desc: 'Win 5 Mutant games', color: '#2ecc71', tier: 'TIER I' },
+            { id: 'm2', targetKey: 'mutant', targetWins: 15, icon: '🧬', title: 'Mad Scientist', desc: 'Win 15 Mutant games', color: '#27ae60', tier: 'TIER II' },
+            { id: 'm3', targetKey: 'mutant', targetWins: 50, icon: '🧬', title: 'Super Mutant', desc: 'Win 50 Mutant games', color: '#16a085', tier: 'TIER III' },
+
+            // Bot Slayer Tiers
+            { id: 'b1', targetKey: 'bot', targetWins: 1, icon: '🤖', title: 'Bot Buster', desc: 'Defeat Cager Bot once', color: '#9b59b6', tier: 'TIER I' },
+            { id: 'b2', targetKey: 'bot', targetWins: 10, icon: '🤖', title: 'AI Nemesis', desc: 'Defeat Cager Bot 10 times', color: '#8e44ad', tier: 'TIER II' },
+            { id: 'b3', targetKey: 'bot', targetWins: 30, icon: '🤖', title: 'Cager Slayer', desc: 'Defeat Cager Bot 30 times', color: '#2c3e50', tier: 'TIER III' },
+
+            // Total Wins Tiers
+            { id: 't1', targetKey: 'total', targetWins: 10, icon: '🏆', title: 'Rising Star', desc: 'Win 10 games in total', color: '#3498db', tier: 'TIER I' },
+            { id: 't2', targetKey: 'total', targetWins: 50, icon: '👑', title: 'Chess Master', desc: 'Win 50 games in total', color: '#e74c3c', tier: 'TIER II' },
+            { id: 't3', targetKey: 'total', targetWins: 100, icon: '🌟', title: 'Cager Legend', desc: 'Win 100 games in total', color: '#d35400', tier: 'TIER III' }
+        ];
+
+        const modal = document.getElementById('profile-modal');
+        const closeBtn = document.getElementById('close-modal-btn');
+
+        // Close modal handlers
+        closeBtn.addEventListener('click', closeProfileModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeProfileModal();
+        });
+
+        function closeProfileModal() {
+            modal.style.display = 'none';
+        }
+
+        function openProfileModal() {
+            if (!currentUserData) return;
+
+            document.getElementById('modal-avatar').src = currentUserData.profileImageUrl || '';
+            document.getElementById('modal-username').innerText = currentUserData.displayName || 'User Profile';
+
+            const stats = currentUserData.stats || {
+                chess: { wins: 0, losses: 0 },
+                mutant: { wins: 0, losses: 0 },
+                bot: { wins: 0, losses: 0 }
+            };
+
+            renderStatBox('chess', stats.chess);
+            renderStatBox('mutant', stats.mutant);
+            renderStatBox('bot', stats.bot);
+            renderAchievements(stats);
+
+            modal.style.display = 'flex';
+        }
+
         fetch('/api/user')
             .then(res => res.json())
             .then(user => {
                 const authSection = document.getElementById('auth-section');
                 if (user) {
+                    currentUserData = user;
+                    
                     authSection.innerHTML = `
-                        <div class="profile-info">
+                        <div class="profile-info" id="user-profile-trigger">
                             <img src="${user.profileImageUrl}" alt="Avatar" class="avatar scribble-avatar">
                             <span class="user-name">${user.displayName}</span>
-                            <a href="/auth/logout" class="logout-link">Logout</a>
+                            <a href="/auth/logout" class="logout-link" id="logout-btn">Logout</a>
                         </div>
                     `;
+
+                    // Attach clean JS Event Listener directly
+                    document.getElementById('user-profile-trigger').addEventListener('click', openProfileModal);
+                    document.getElementById('logout-btn').addEventListener('click', (e) => e.stopPropagation());
+
                     localStorage.setItem('cager_twitch_name', user.displayName);
                     localStorage.setItem('cager_twitch_pfp', user.profileImageUrl);
                 } else {
@@ -92,7 +195,50 @@
                     localStorage.removeItem('cager_twitch_name');
                     localStorage.removeItem('cager_twitch_pfp');
                 }
+            })
+            .catch(err => console.error("User Auth Fetch Error:", err));
+
+        function renderStatBox(key, data) {
+            const wins = (data && data.wins) || 0;
+            const losses = (data && data.losses) || 0;
+            const total = wins + losses;
+            const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
+
+            document.getElementById(`st-${key}-record`).innerText = `${wins} W / ${losses} L`;
+            document.getElementById(`st-${key}-wr`).innerText = `${wr}% WR`;
+        }
+
+        function renderAchievements(stats) {
+            const container = document.getElementById('achievements-container');
+            container.innerHTML = '';
+
+            const cWins = (stats.chess && stats.chess.wins) || 0;
+            const mWins = (stats.mutant && stats.mutant.wins) || 0;
+            const bWins = (stats.bot && stats.bot.wins) || 0;
+            const totalWins = cWins + mWins + bWins;
+
+            ACHIEVEMENT_TIERS.forEach(ach => {
+                let currentWins = 0;
+                if (ach.targetKey === 'chess') currentWins = cWins;
+                else if (ach.targetKey === 'mutant') currentWins = mWins;
+                else if (ach.targetKey === 'bot') currentWins = bWins;
+                else if (ach.targetKey === 'total') currentWins = totalWins;
+
+                const isUnlocked = currentWins >= ach.targetWins;
+
+                const card = document.createElement('div');
+                card.className = `achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`;
+                if (isUnlocked) card.style.backgroundColor = ach.color;
+
+                card.innerHTML = `
+                    <div class="icon">${ach.icon}</div>
+                    <div class="title">${ach.title}</div>
+                    <div class="desc">${ach.desc} (${Math.min(currentWins, ach.targetWins)}/${ach.targetWins})</div>
+                    <div class="tier-tag">${ach.tier}</div>
+                `;
+                container.appendChild(card);
             });
+        }
     </script>
 </body>
 </html>
