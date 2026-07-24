@@ -8,6 +8,11 @@ body {
     background-size: 20px 20px;
 }
 
+/* HELPER CLASS FOR MODALS */
+.hidden {
+    display: none !important;
+}
+
 /* Der "Schlecht gezeichnet" Krakelei-Stil */
 .scribble-box {
     border: 4px solid #000;
@@ -34,10 +39,21 @@ body {
     cursor: pointer; font-family: 'Patrick Hand', cursive, sans-serif;
 }
 
-.profile-info { display: flex; align-items: center; gap: 15px; }
-.scribble-avatar { width: 50px; height: 50px; border: 3px solid #000; border-radius: 50% 40% 50% 40% / 40% 50% 40% 50%; }
+.profile-info { 
+    display: flex; align-items: center; gap: 12px; 
+    cursor: pointer; 
+    padding: 6px 12px; 
+    border-radius: 12px; 
+    transition: background 0.15s, transform 0.1s; 
+}
+.profile-info:hover { 
+    background: rgba(0,0,0,0.06); 
+    transform: scale(1.02);
+}
+
+.scribble-avatar { width: 48px; height: 48px; border: 3px solid #000; border-radius: 50% 40% 50% 40% / 40% 50% 40% 50%; object-fit: cover; }
 .user-name { font-size: 24px; font-weight: bold; }
-.logout-link { color: #e74c3c; font-size: 16px; text-decoration: underline; }
+.logout-link { color: #e74c3c; font-size: 16px; text-decoration: underline; margin-left: 5px; }
 
 main { width: 100%; max-width: 900px; }
 .title-scribble { font-size: 36px; margin-bottom: 30px; text-align: center; text-decoration: underline; text-decoration-thickness: 3px; text-decoration-skip-ink: none; }
@@ -51,40 +67,25 @@ main { width: 100%; max-width: 900px; }
 .play-btn:hover:not(.disabled) { background-color: #f39c12; transform: scale(1.1); }
 .disabled { background-color: #ccc; cursor: not-allowed; color: #666; }
 .locked { opacity: 0.7; }
+
 /* FLORK BACKGROUND STYLE */
 .flork-bg {
     position: fixed;
     bottom: -15px;
-    width: 200px; /* Größe der Florks */
+    width: 200px;
     z-index: 0;
-    pointer-events: none; /* Damit man nicht aus Versehen draufklickt */
+    pointer-events: none;
     opacity: 0.9;
 }
-.flork-left {
-    left: 2%;
-}
-.flork-right {
-    right: 2%;
-    transform: scaleX(-1); /* Dreht den Flork um, damit er in die Mitte schaut */
-}
+.flork-left { left: 2%; }
+.flork-right { right: 2%; transform: scaleX(-1); }
 
-/* Wichtig: Hebt den Hub-Inhalt über die Florks */
 header, main {
     position: relative;
     z-index: 10;
 }
-/* PROFILE CLICKABLE & MODAL STYLES */
-.profile-info { 
-    cursor: pointer; 
-    padding: 5px 10px; 
-    border-radius: 10px; 
-    transition: background 0.15s; 
-}
-.profile-info:hover { 
-    background: rgba(0,0,0,0.05); 
-}
 
-/* MODAL OVERLAY */
+/* MODAL OVERLAY & PROFILE STYLES */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0;
@@ -116,6 +117,7 @@ header, main {
     width: 38px; height: 38px;
     font-size: 20px; font-weight: bold;
     cursor: pointer;
+    display: flex; justify-content: center; align-items: center;
 }
 
 /* STATS GRID */
