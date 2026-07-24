@@ -78,21 +78,21 @@
                 <button id="close-modal-btn" class="close-btn scribble-btn">✖</button>
             </div>
 
-            <!-- STATS BY MODE -->
+            <!-- STATS BY MODE (INCL DRAWS) -->
             <div class="stats-grid">
                 <div class="stat-box scribble-box">
                     <h4>⚡ Quickchess</h4>
-                    <p id="st-chess-record">0 W / 0 L</p>
+                    <p id="st-chess-record">0 W / 0 L / 0 D</p>
                     <p class="winrate" id="st-chess-wr">0% WR</p>
                 </div>
                 <div class="stat-box scribble-box">
                     <h4>🧬 Mutant Merge</h4>
-                    <p id="st-mutant-record">0 W / 0 L</p>
+                    <p id="st-mutant-record">0 W / 0 L / 0 D</p>
                     <p class="winrate" id="st-mutant-wr">0% WR</p>
                 </div>
                 <div class="stat-box scribble-box">
                     <h4>🤖 VS Cager Bot</h4>
-                    <p id="st-bot-record">0 W / 0 L</p>
+                    <p id="st-bot-record">0 W / 0 L / 0 D</p>
                     <p class="winrate" id="st-bot-wr">0% WR</p>
                 </div>
             </div>
@@ -108,33 +108,32 @@
     <script>
         let currentUserData = null;
 
-        // ACHIEVEMENT TIER DEFINITIONS
+        // LOGICALLY ORDERED ACHIEVEMENTS (3 PER ROW)
         const ACHIEVEMENT_TIERS = [
-            // Quickchess Tiers
-            { id: 'q1', targetKey: 'chess', targetWins: 5, icon: '⚡', title: 'Speed Cadet', desc: 'Win 5 Quickchess games', color: '#f1c40f', tier: 'TIER I' },
-            { id: 'q2', targetKey: 'chess', targetWins: 15, icon: '⚡', title: 'Speed Demon', desc: 'Win 15 Quickchess games', color: '#f39c12', tier: 'TIER II' },
-            { id: 'q3', targetKey: 'chess', targetWins: 50, icon: '⚡', title: 'Light Speed', desc: 'Win 50 Quickchess games', color: '#e67e22', tier: 'TIER III' },
+            // ROW 1: Quickchess
+            { id: 'q1', targetKey: 'chess', targetWins: 5, icon: '⚡', title: 'Speed Cadet', desc: 'Win 5 Quickchess games', color: '#f1c40f', tier: 'TIER I', level: 1 },
+            { id: 'q2', targetKey: 'chess', targetWins: 15, icon: '⚡', title: 'Speed Demon', desc: 'Win 15 Quickchess games', color: '#f39c12', tier: 'TIER II', level: 2 },
+            { id: 'q3', targetKey: 'chess', targetWins: 50, icon: '⚡', title: 'Light Speed', desc: 'Win 50 Quickchess games', color: '#e67e22', tier: 'TIER III', level: 3 },
             
-            // Mutant Merge Tiers
-            { id: 'm1', targetKey: 'mutant', targetWins: 5, icon: '🧬', title: 'Gene Splicer', desc: 'Win 5 Mutant games', color: '#2ecc71', tier: 'TIER I' },
-            { id: 'm2', targetKey: 'mutant', targetWins: 15, icon: '🧬', title: 'Mad Scientist', desc: 'Win 15 Mutant games', color: '#27ae60', tier: 'TIER II' },
-            { id: 'm3', targetKey: 'mutant', targetWins: 50, icon: '🧬', title: 'Super Mutant', desc: 'Win 50 Mutant games', color: '#16a085', tier: 'TIER III' },
+            // ROW 2: Mutant Merge
+            { id: 'm1', targetKey: 'mutant', targetWins: 5, icon: '🧬', title: 'Gene Splicer', desc: 'Win 5 Mutant games', color: '#2ecc71', tier: 'TIER I', level: 1 },
+            { id: 'm2', targetKey: 'mutant', targetWins: 15, icon: '🧬', title: 'Mad Scientist', desc: 'Win 15 Mutant games', color: '#27ae60', tier: 'TIER II', level: 2 },
+            { id: 'm3', targetKey: 'mutant', targetWins: 50, icon: '🧬', title: 'Super Mutant', desc: 'Win 50 Mutant games', color: '#16a085', tier: 'TIER III', level: 3 },
 
-            // Bot Slayer Tiers
-            { id: 'b1', targetKey: 'bot', targetWins: 1, icon: '🤖', title: 'Bot Buster', desc: 'Defeat Cager Bot once', color: '#9b59b6', tier: 'TIER I' },
-            { id: 'b2', targetKey: 'bot', targetWins: 10, icon: '🤖', title: 'AI Nemesis', desc: 'Defeat Cager Bot 10 times', color: '#8e44ad', tier: 'TIER II' },
-            { id: 'b3', targetKey: 'bot', targetWins: 30, icon: '🤖', title: 'Cager Slayer', desc: 'Defeat Cager Bot 30 times', color: '#2c3e50', tier: 'TIER III' },
+            // ROW 3: Bot Slayer
+            { id: 'b1', targetKey: 'bot', targetWins: 1, icon: '🤖', title: 'Bot Buster', desc: 'Defeat Cager Bot once', color: '#9b59b6', tier: 'TIER I', level: 1 },
+            { id: 'b2', targetKey: 'bot', targetWins: 10, icon: '🤖', title: 'AI Nemesis', desc: 'Defeat Cager Bot 10 times', color: '#8e44ad', tier: 'TIER II', level: 2 },
+            { id: 'b3', targetKey: 'bot', targetWins: 30, icon: '🤖', title: 'Cager Slayer', desc: 'Defeat Cager Bot 30 times', color: '#2c3e50', tier: 'TIER III', level: 3 },
 
-            // Total Wins Tiers
-            { id: 't1', targetKey: 'total', targetWins: 10, icon: '🏆', title: 'Rising Star', desc: 'Win 10 games in total', color: '#3498db', tier: 'TIER I' },
-            { id: 't2', targetKey: 'total', targetWins: 50, icon: '👑', title: 'Chess Master', desc: 'Win 50 games in total', color: '#e74c3c', tier: 'TIER II' },
-            { id: 't3', targetKey: 'total', targetWins: 100, icon: '🌟', title: 'Cager Legend', desc: 'Win 100 games in total', color: '#d35400', tier: 'TIER III' }
+            // ROW 4: Total Wins
+            { id: 't1', targetKey: 'total', targetWins: 10, icon: '🏆', title: 'Rising Star', desc: 'Win 10 games in total', color: '#3498db', tier: 'TIER I', level: 1 },
+            { id: 't2', targetKey: 'total', targetWins: 50, icon: '👑', title: 'Chess Master', desc: 'Win 50 games in total', color: '#e74c3c', tier: 'TIER II', level: 2 },
+            { id: 't3', targetKey: 'total', targetWins: 100, icon: '🌟', title: 'Cager Legend', desc: 'Win 100 games in total', color: '#d35400', tier: 'TIER III', level: 3 }
         ];
 
         const modal = document.getElementById('profile-modal');
         const closeBtn = document.getElementById('close-modal-btn');
 
-        // Close modal handlers
         closeBtn.addEventListener('click', closeProfileModal);
         modal.addEventListener('click', (e) => {
             if (e.target === modal) closeProfileModal();
@@ -151,9 +150,9 @@
             document.getElementById('modal-username').innerText = currentUserData.displayName || 'User Profile';
 
             const stats = currentUserData.stats || {
-                chess: { wins: 0, losses: 0 },
-                mutant: { wins: 0, losses: 0 },
-                bot: { wins: 0, losses: 0 }
+                chess: { wins: 0, losses: 0, draws: 0 },
+                mutant: { wins: 0, losses: 0, draws: 0 },
+                bot: { wins: 0, losses: 0, draws: 0 }
             };
 
             renderStatBox('chess', stats.chess);
@@ -179,7 +178,6 @@
                         </div>
                     `;
 
-                    // Attach clean JS Event Listener directly
                     document.getElementById('user-profile-trigger').addEventListener('click', openProfileModal);
                     document.getElementById('logout-btn').addEventListener('click', (e) => e.stopPropagation());
 
@@ -201,10 +199,11 @@
         function renderStatBox(key, data) {
             const wins = (data && data.wins) || 0;
             const losses = (data && data.losses) || 0;
-            const total = wins + losses;
+            const draws = (data && data.draws) || 0;
+            const total = wins + losses + draws;
             const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
 
-            document.getElementById(`st-${key}-record`).innerText = `${wins} W / ${losses} L`;
+            document.getElementById(`st-${key}-record`).innerText = `${wins} W / ${losses} L / ${draws} D`;
             document.getElementById(`st-${key}-wr`).innerText = `${wr}% WR`;
         }
 
@@ -227,7 +226,7 @@
                 const isUnlocked = currentWins >= ach.targetWins;
 
                 const card = document.createElement('div');
-                card.className = `achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`;
+                card.className = `achievement-card ${isUnlocked ? 'unlocked' : 'locked'} tier-${ach.level}`;
                 if (isUnlocked) card.style.backgroundColor = ach.color;
 
                 card.innerHTML = `
