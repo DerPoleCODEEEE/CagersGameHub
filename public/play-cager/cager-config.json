@@ -7,30 +7,30 @@
     "peak": 2142
   },
   "psychologyEngine": {
-    "softmaxTemperature": 0.82,
+    "softmaxTemperature": 0.65,
     "tiltFactorAlpha": 0.78,
     "timePressureLambda": 0.045,
     "positionComplexityGamma": 1.35
   },
   "white": {
-    "openingBookLoyalty": 74,
+    "openingBookLoyalty": 95,
     "kingAttackBias": 35,
     "tradeAvoidanceIndex": 35,
     "sacrificeWillingness": 80,
     "flankPawnAggression": 19,
     "geometricBlindSpotSensitivity": 10,
-    "blunderRatePercent": 4,
+    "blunderRatePercent": 2,
     "queenTradeReluctance": 82,
     "preferKnightsOverBishops": false
   },
   "black": {
-    "openingBookLoyalty": 74,
+    "openingBookLoyalty": 95,
     "kingAttackBias": 35,
     "tradeAvoidanceIndex": 35,
     "sacrificeWillingness": 80,
     "flankPawnAggression": 19,
     "geometricBlindSpotSensitivity": 10,
-    "blunderRatePercent": 4,
+    "blunderRatePercent": 2,
     "queenTradeReluctance": 78,
     "preferKnightsOverBishops": false
   }
