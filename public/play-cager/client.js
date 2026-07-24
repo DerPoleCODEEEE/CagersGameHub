@@ -2,9 +2,10 @@ const chess = new Chess();
 let cagerBook = null;
 let cagerConfig = null;
 
-// PSYCHOLOGY ENGINE STATE
+// PSYCHOLOGY & GAME STATE
 let tiltScore = 0;
 let lastEval = 0;
+let isGameOver = false;
 
 // CLOCK & TIME CONTROL STATE
 let isZenMode = false;
@@ -130,9 +131,9 @@ function updateTimeSettings() {
 }
 
 function startClock() {
-    if (isZenMode || clockTimer) return;
+    if (isZenMode || clockTimer || isGameOver) return;
     clockTimer = setInterval(() => {
-        if (chess.game_over()) {
+        if (chess.game_over() || isGameOver) {
             clearInterval(clockTimer);
             clockTimer = null;
             return;
@@ -146,6 +147,7 @@ function startClock() {
         if (clocks[turn] <= 0) {
             clearInterval(clockTimer);
             clockTimer = null;
+            isGameOver = true;
             const winner = turn === 'w' ? 'TheCager (BOT)' : 'You';
             alert(`Time's up! ${winner} won on time!`);
         }
@@ -177,7 +179,7 @@ function formatTime(sec) {
 
 // SOFTMAX & PSYCHOLOGY ENGINE
 function processSoftmaxDecisionMatrix() {
-    if (multiPvCandidates.length === 0) return;
+    if (multiPvCandidates.length === 0 || isGameOver) return;
 
     const candidates = [...multiPvCandidates];
     multiPvCandidates = [];
@@ -251,7 +253,7 @@ function processSoftmaxDecisionMatrix() {
 }
 
 function triggerBotTurn() {
-    if (chess.game_over()) return;
+    if (chess.game_over() || isGameOver) return;
 
     const history = chess.history();
     let stateKey = 'start';
@@ -282,6 +284,8 @@ function triggerBotTurn() {
 }
 
 function makeBotMove(moveObj) {
+    if (isGameOver) return;
+
     let move = moveObj;
     if (typeof moveObj === 'object' && !moveObj.color) {
         move = chess.move(moveObj);
@@ -349,7 +353,7 @@ function renderBoard() {
 }
 
 function handleSquareClick(r, c) {
-    if (chess.turn() !== 'w' || chess.game_over()) return;
+    if (chess.turn() !== 'w' || chess.game_over() || isGameOver) return;
 
     const square = String.fromCharCode('a'.charCodeAt(0) + c) + (8 - r);
     const piece = chess.get(square);
@@ -403,6 +407,7 @@ function addChatMessage(sender, text) {
 
 function checkGameOver() {
     if (chess.in_checkmate()) {
+        isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
         const winner = chess.turn() === 'w' ? 'TheCager' : 'You';
         addChatMessage('TheCager', winner === 'TheCager' ? getRandomQuote('cager_win') : getRandomQuote('player_win'));
@@ -417,6 +422,7 @@ document.getElementById('btn-restart').onclick = () => {
     if (clockTimer) clearInterval(clockTimer);
     clockTimer = null;
     gameStarted = false;
+    isGameOver = false;
     chess.reset();
     selectedSquare = null;
     validMoves = [];
@@ -428,6 +434,7 @@ document.getElementById('btn-restart').onclick = () => {
 
 // UNDO
 document.getElementById('btn-undo').onclick = () => {
+    if (isGameOver) return;
     chess.undo();
     chess.undo();
     renderBoard();
@@ -436,10 +443,14 @@ document.getElementById('btn-undo').onclick = () => {
 
 // RESIGN (AUFGEBEN)
 document.getElementById('btn-resign').onclick = () => {
-    if (chess.game_over()) return;
+    if (isGameOver || chess.game_over()) return;
 
     if (confirm('Are you sure you want to resign?')) {
-        if (clockTimer) clearInterval(clockTimer);
+        isGameOver = true;
+        if (clockTimer) {
+            clearInterval(clockTimer);
+            clockTimer = null;
+        }
         addChatMessage('TheCager', getRandomQuote('cager_resign'));
         alert('You resigned. TheCager (BOT) wins!');
     }
@@ -447,23 +458,37 @@ document.getElementById('btn-resign').onclick = () => {
 
 // DOWNLOAD PGN
 document.getElementById('btn-pgn').onclick = () => {
+    const moves = chess.history();
+    if (moves.length === 0) {
+        alert('No moves played yet!');
+        return;
+    }
+
     chess.header('Event', 'TheCager Bot Match');
     chess.header('Site', 'TheCager Game Hub');
     chess.header('Date', new Date().toISOString().split('T')[0].replace(/-/g, '.'));
     chess.header('White', twitchName || 'You');
     chess.header('Black', 'TheCager (BOT)');
 
-    const pgnContent = chess.pgn();
-    if (!pgnContent || chess.history().length === 0) {
-        alert('No moves played yet!');
-        return;
+    let pgnContent = chess.pgn();
+    if (!pgnContent) {
+        let moveStr = '';
+        moves.forEach((m, idx) => {
+            if (idx % 2 === 0) moveStr += `${(idx / 2) + 1}. `;
+            moveStr += `${m} `;
+        });
+        pgnContent = `[Event "TheCager Bot Match"]\n[White "${twitchName || 'You'}"]\n[Black "TheCager (BOT)"]\n\n${moveStr.trim()}`;
     }
 
     const blob = new Blob([pgnContent], { type: 'text/plain;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `cager_match_${Date.now()}.pgn`;
+    
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
 };
 
 createBoardDOM();
