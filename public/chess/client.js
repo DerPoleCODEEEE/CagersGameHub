@@ -1,5 +1,17 @@
 const socket = io();
 
+// STATS SPEICHERN HELPER
+function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
+    fetch('/api/stats/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, result })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Stats in DB aktualisiert:', data))
+    .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
+}
+
 // UI STATUS UND RECONNECT LOGIK
 function updateUIConnectionStatus(status) {
     const indicator = document.getElementById('status-indicator');
@@ -160,7 +172,6 @@ socket.on('ready_update', ({ playersReady }) => {
     });
 });
 
-// OTTIMISIERTER COUNTDOWN (SOFORTIGER START OHNE BLOCKIERENDES GO-BANNER)
 socket.on('start_match_countdown', (data) => {
     if (gameMode === 'class') typeCooldowns = data.typeCooldowns;
     else singleCooldowns = data.singleCooldowns;
@@ -175,7 +186,7 @@ socket.on('start_match_countdown', (data) => {
         } else { 
             clearInterval(interval); 
             isGameStarted = true;
-            statusBanner.classList.add('hidden'); // Instant freigeschaltet!
+            statusBanner.classList.add('hidden');
         }
     }, 1000);
 });
@@ -191,7 +202,6 @@ function startGame() {
     isGameStarted = false;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.add('hidden'); gameScreen.classList.remove('hidden');
     
-    // UI Texte anpassen
     document.getElementById('my-role-tag').innerText = playerColor === 'w' ? 'WHITE' : 'BLACK';
     let modeText = 'CLASS LOCK';
     if (gameMode === 'single') modeText = 'SINGLE PIECE';
@@ -204,7 +214,6 @@ function startGame() {
         });
     }
     
-    // NAMEN UND BILDER SETZEN
     document.getElementById('bottom-player-name').innerText = myName + ' (You)';
     document.getElementById('top-player-name').innerText = opponentName || 'Opponent';
     
@@ -377,7 +386,13 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, promotedTo = null, durati
         if (gameMode !== 'class') { singleCooldowns[toR][toC] = cdEndTime; singleCooldownMax[toR][toC] = cdDuration; }
         
         if (board[toR][toC] && board[toR][toC].toLowerCase() === 'k') {
-            isGameOver = true; document.getElementById('winner-text').innerHTML = (color === playerColor ? myName : opponentName) + ' Wins!';
+            isGameOver = true; 
+            
+            // STATS SPEICHERN (QUICKCHESS)
+            const isWin = (color === playerColor);
+            saveGameResult('chess', isWin ? 'win' : 'loss');
+
+            document.getElementById('winner-text').innerHTML = (color === playerColor ? myName : opponentName) + ' Wins!';
             document.getElementById('game-over').style.display = 'flex';
         }
         board[toR][toC] = pieceChar; renderBoard();
