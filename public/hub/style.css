@@ -1,244 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Cager Game Hub</title>
-    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+body {
+    background-color: #ffffff;
+    color: #111;
+    font-family: 'Patrick Hand', cursive, sans-serif;
+    margin: 0; padding: 20px;
+    display: flex; flex-direction: column; align-items: center;
+    background-image: radial-gradient(#ddd 1px, transparent 1px);
+    background-size: 20px 20px;
+}
 
-    <!-- Die Florks im Hintergrund -->
-    <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
-    <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
+/* HELPER CLASS FOR MODALS */
+.hidden {
+    display: none !important;
+}
 
-    <header class="scribble-box header-box">
-        <div class="logo">
-            <h1>CAGER GAMES</h1>
-        </div>
-        <div class="auth-section" id="auth-section">
-            <span id="loading-auth">Loading...</span>
-        </div>
-    </header>
+/* Der "Schlecht gezeichnet" Krakelei-Stil */
+.scribble-box {
+    border: 4px solid #000;
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
+    background: #fff;
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
+}
 
-    <main>
-        <h2 class="title-scribble">Choose your game</h2>
-        <div class="game-grid">
-            
-            <div class="game-card scribble-box">
-                <div class="game-img" style="background-color: #739552; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px;">♞</span>
-                </div>
-                <h3>Cagers Quick Chess</h3>
-                <p>Real-Time Action! No turns, just cooldowns.</p>
-                <a href="/chess" class="play-btn scribble-btn">Play</a>
-            </div>
+.header-box { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; padding: 10px 30px; margin-bottom: 50px; box-sizing: border-box; }
+.header-box h1 { font-size: 38px; margin: 0; letter-spacing: 2px; }
 
-            <!-- MUTANT MERGE CHESS -->
-            <div class="game-card scribble-box">
-                <div class="game-img" style="background-color: #e74c3c; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px;">🧬</span>
-                </div>
-                <h3>Mutant Merge</h3>
-                <p>Combine your pieces. Build super mutants. Total chaos!</p>
-                <a href="/mutant-chess" class="play-btn scribble-btn" style="background: #f1c40f;">Play</a>
-            </div>
+.twitch-btn { background-color: #9146FF; color: white; text-decoration: none; display: flex; align-items: center; padding: 8px 16px; font-size: 20px; transition: transform 0.1s; }
+.twitch-btn:hover { transform: scale(1.05); }
 
-            <!-- VS CAGER BOT -->
-            <div class="game-card scribble-box">
-                <div class="game-img" style="background-color: #9b59b6; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px;">🤖</span>
-                </div>
-                <h3>VS Cager Bot</h3>
-                <p>Play against the AI trained on TheCager's playstyle and live stats!</p>
-                <a href="/play-cager" class="play-btn scribble-btn" style="background: #a855f7; color: white;">Play</a>
-            </div>
+.scribble-btn {
+    border: 3px solid #000;
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
+    cursor: pointer; font-family: 'Patrick Hand', cursive, sans-serif;
+}
 
-            <div class="game-card scribble-box locked">
-                <div class="game-img" style="background-color: #ddd; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px; color:#888;">?</span>
-                </div>
-                <h3>Cager Tower Defense</h3>
-                <p>Coming Soon...</p>
-                <button class="play-btn scribble-btn disabled" disabled>Locked</button>
-            </div>
+.profile-info { 
+    display: flex; align-items: center; gap: 12px; 
+    cursor: pointer; 
+    padding: 6px 12px; 
+    border-radius: 12px; 
+    transition: background 0.15s, transform 0.1s; 
+}
+.profile-info:hover { 
+    background: rgba(0,0,0,0.06); 
+    transform: scale(1.02);
+}
 
-        </div>
-    </main>
+.scribble-avatar { width: 48px; height: 48px; border: 3px solid #000; border-radius: 50% 40% 50% 40% / 40% 50% 40% 50%; object-fit: cover; }
+.user-name { font-size: 24px; font-weight: bold; }
+.logout-link { color: #e74c3c; font-size: 16px; text-decoration: underline; margin-left: 5px; }
 
-    <!-- PROFILE MODAL OVERLAY -->
-    <div id="profile-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content scribble-box">
-            <div class="modal-header">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <img id="modal-avatar" class="scribble-avatar" src="" alt="Avatar">
-                    <h2 id="modal-username">User Profile</h2>
-                </div>
-                <button id="close-modal-btn" class="close-btn scribble-btn">✖</button>
-            </div>
+main { width: 100%; max-width: 900px; }
+.title-scribble { font-size: 36px; margin-bottom: 30px; text-align: center; text-decoration: underline; text-decoration-thickness: 3px; text-decoration-skip-ink: none; }
+.game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; }
+.game-card { padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.2s; }
+.game-card:hover:not(.locked) { transform: translateY(-5px) rotate(-1deg); }
+.game-img { width: 100%; height: 150px; border: 3px solid #000; border-radius: 10px 200px 10px 200px / 200px 10px 200px 10px; margin-bottom: 15px; }
+.game-card h3 { font-size: 26px; margin: 5px 0; }
+.game-card p { font-size: 18px; color: #555; flex-grow: 1; }
+.play-btn { background-color: #f1c40f; color: #000; font-size: 24px; font-weight: bold; padding: 10px 30px; text-decoration: none; margin-top: 15px; display: inline-block; transition: transform 0.1s; }
+.play-btn:hover:not(.disabled) { background-color: #f39c12; transform: scale(1.1); }
+.disabled { background-color: #ccc; cursor: not-allowed; color: #666; }
+.locked { opacity: 0.7; }
 
-            <!-- STATS BY MODE -->
-            <div class="stats-grid">
-                <div class="stat-box scribble-box">
-                    <h4>⚡ Quickchess</h4>
-                    <p id="st-chess-record">0 W / 0 L</p>
-                    <p class="winrate" id="st-chess-wr">0% WR</p>
-                </div>
-                <div class="stat-box scribble-box">
-                    <h4>🧬 Mutant Merge</h4>
-                    <p id="st-mutant-record">0 W / 0 L</p>
-                    <p class="winrate" id="st-mutant-wr">0% WR</p>
-                </div>
-                <div class="stat-box scribble-box">
-                    <h4>🤖 VS Cager Bot</h4>
-                    <p id="st-bot-record">0 W / 0 L</p>
-                    <p class="winrate" id="st-bot-wr">0% WR</p>
-                </div>
-            </div>
+/* FLORK BACKGROUND STYLE */
+.flork-bg {
+    position: fixed;
+    bottom: -15px;
+    width: 200px;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.9;
+}
+.flork-left { left: 2%; }
+.flork-right { right: 2%; transform: scaleX(-1); }
 
-            <!-- MULTI-TIER ACHIEVEMENTS -->
-            <div class="achievements-section">
-                <h3>🏆 Achievements</h3>
-                <div class="achievements-grid" id="achievements-container"></div>
-            </div>
-        </div>
-    </div>
+header, main {
+    position: relative;
+    z-index: 10;
+}
 
-    <script>
-        let currentUserData = null;
+/* MODAL OVERLAY & PROFILE STYLES */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000;
+}
 
-        // ACHIEVEMENT TIER DEFINITIONS
-        const ACHIEVEMENT_TIERS = [
-            // Quickchess Tiers
-            { id: 'q1', targetKey: 'chess', targetWins: 5, icon: '⚡', title: 'Speed Cadet', desc: 'Win 5 Quickchess games', color: '#f1c40f', tier: 'TIER I' },
-            { id: 'q2', targetKey: 'chess', targetWins: 15, icon: '⚡', title: 'Speed Demon', desc: 'Win 15 Quickchess games', color: '#f39c12', tier: 'TIER II' },
-            { id: 'q3', targetKey: 'chess', targetWins: 50, icon: '⚡', title: 'Light Speed', desc: 'Win 50 Quickchess games', color: '#e67e22', tier: 'TIER III' },
-            
-            // Mutant Merge Tiers
-            { id: 'm1', targetKey: 'mutant', targetWins: 5, icon: '🧬', title: 'Gene Splicer', desc: 'Win 5 Mutant games', color: '#2ecc71', tier: 'TIER I' },
-            { id: 'm2', targetKey: 'mutant', targetWins: 15, icon: '🧬', title: 'Mad Scientist', desc: 'Win 15 Mutant games', color: '#27ae60', tier: 'TIER II' },
-            { id: 'm3', targetKey: 'mutant', targetWins: 50, icon: '🧬', title: 'Super Mutant', desc: 'Win 50 Mutant games', color: '#16a085', tier: 'TIER III' },
+.modal-content {
+    width: 90%; max-width: 680px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 25px;
+    position: relative;
+}
 
-            // Bot Slayer Tiers
-            { id: 'b1', targetKey: 'bot', targetWins: 1, icon: '🤖', title: 'Bot Buster', desc: 'Defeat Cager Bot once', color: '#9b59b6', tier: 'TIER I' },
-            { id: 'b2', targetKey: 'bot', targetWins: 10, icon: '🤖', title: 'AI Nemesis', desc: 'Defeat Cager Bot 10 times', color: '#8e44ad', tier: 'TIER II' },
-            { id: 'b3', targetKey: 'bot', targetWins: 30, icon: '🤖', title: 'Cager Slayer', desc: 'Defeat Cager Bot 30 times', color: '#2c3e50', tier: 'TIER III' },
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 12px; margin-bottom: 20px;
+}
 
-            // Total Wins Tiers
-            { id: 't1', targetKey: 'total', targetWins: 10, icon: '🏆', title: 'Rising Star', desc: 'Win 10 games in total', color: '#3498db', tier: 'TIER I' },
-            { id: 't2', targetKey: 'total', targetWins: 50, icon: '👑', title: 'Chess Master', desc: 'Win 50 games in total', color: '#e74c3c', tier: 'TIER II' },
-            { id: 't3', targetKey: 'total', targetWins: 100, icon: '🌟', title: 'Cager Legend', desc: 'Win 100 games in total', color: '#d35400', tier: 'TIER III' }
-        ];
+.modal-header h2 { margin: 0; font-size: 32px; }
 
-        const modal = document.getElementById('profile-modal');
-        const closeBtn = document.getElementById('close-modal-btn');
+.close-btn {
+    background: #e74c3c; color: white;
+    border: 3px solid #000; border-radius: 50%;
+    width: 38px; height: 38px;
+    font-size: 20px; font-weight: bold;
+    cursor: pointer;
+    display: flex; justify-content: center; align-items: center;
+}
 
-        // Close modal handlers
-        closeBtn.addEventListener('click', closeProfileModal);
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeProfileModal();
-        });
+/* STATS GRID */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px; margin-bottom: 25px;
+}
 
-        function closeProfileModal() {
-            modal.style.display = 'none';
-        }
+.stat-box {
+    padding: 12px; text-align: center;
+    background: #f8f9fa; border: 3px solid #000;
+}
 
-        function openProfileModal() {
-            if (!currentUserData) return;
+.stat-box h4 { margin: 0 0 6px 0; font-size: 20px; }
+.stat-box p { margin: 2px 0; font-size: 16px; color: #444; }
+.stat-box .winrate { font-size: 20px; font-weight: bold; color: #2ecc71; }
 
-            document.getElementById('modal-avatar').src = currentUserData.profileImageUrl || '';
-            document.getElementById('modal-username').innerText = currentUserData.displayName || 'User Profile';
+/* ACHIEVEMENTS GRID */
+.achievements-section h3 { font-size: 26px; margin-bottom: 15px; text-decoration: underline; }
 
-            const stats = currentUserData.stats || {
-                chess: { wins: 0, losses: 0 },
-                mutant: { wins: 0, losses: 0 },
-                bot: { wins: 0, losses: 0 }
-            };
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+}
 
-            renderStatBox('chess', stats.chess);
-            renderStatBox('mutant', stats.mutant);
-            renderStatBox('bot', stats.bot);
-            renderAchievements(stats);
+.achievement-card {
+    padding: 12px; text-align: center;
+    border: 3px solid #000; border-radius: 12px;
+    transition: transform 0.2s, filter 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+}
 
-            modal.style.display = 'flex';
-        }
+.achievement-card.locked {
+    filter: grayscale(100%);
+    opacity: 0.45;
+    background-color: #e0e0e0 !important;
+    border-style: dashed;
+}
 
-        fetch('/api/user')
-            .then(res => res.json())
-            .then(user => {
-                const authSection = document.getElementById('auth-section');
-                if (user) {
-                    currentUserData = user;
-                    
-                    authSection.innerHTML = `
-                        <div class="profile-info" id="user-profile-trigger">
-                            <img src="${user.profileImageUrl}" alt="Avatar" class="avatar scribble-avatar">
-                            <span class="user-name">${user.displayName}</span>
-                            <a href="/auth/logout" class="logout-link" id="logout-btn">Logout</a>
-                        </div>
-                    `;
+.achievement-card.unlocked {
+    box-shadow: 4px 4px 0px #000;
+}
 
-                    // Attach clean JS Event Listener directly
-                    document.getElementById('user-profile-trigger').addEventListener('click', openProfileModal);
-                    document.getElementById('logout-btn').addEventListener('click', (e) => e.stopPropagation());
-
-                    localStorage.setItem('cager_twitch_name', user.displayName);
-                    localStorage.setItem('cager_twitch_pfp', user.profileImageUrl);
-                } else {
-                    authSection.innerHTML = `
-                        <a href="/auth/twitch" class="twitch-btn scribble-btn">
-                            <svg width="20px" height="20px" fill="white" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
-                            Login with Twitch
-                        </a>
-                    `;
-                    localStorage.removeItem('cager_twitch_name');
-                    localStorage.removeItem('cager_twitch_pfp');
-                }
-            })
-            .catch(err => console.error("User Auth Fetch Error:", err));
-
-        function renderStatBox(key, data) {
-            const wins = (data && data.wins) || 0;
-            const losses = (data && data.losses) || 0;
-            const total = wins + losses;
-            const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
-
-            document.getElementById(`st-${key}-record`).innerText = `${wins} W / ${losses} L`;
-            document.getElementById(`st-${key}-wr`).innerText = `${wr}% WR`;
-        }
-
-        function renderAchievements(stats) {
-            const container = document.getElementById('achievements-container');
-            container.innerHTML = '';
-
-            const cWins = (stats.chess && stats.chess.wins) || 0;
-            const mWins = (stats.mutant && stats.mutant.wins) || 0;
-            const bWins = (stats.bot && stats.bot.wins) || 0;
-            const totalWins = cWins + mWins + bWins;
-
-            ACHIEVEMENT_TIERS.forEach(ach => {
-                let currentWins = 0;
-                if (ach.targetKey === 'chess') currentWins = cWins;
-                else if (ach.targetKey === 'mutant') currentWins = mWins;
-                else if (ach.targetKey === 'bot') currentWins = bWins;
-                else if (ach.targetKey === 'total') currentWins = totalWins;
-
-                const isUnlocked = currentWins >= ach.targetWins;
-
-                const card = document.createElement('div');
-                card.className = `achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`;
-                if (isUnlocked) card.style.backgroundColor = ach.color;
-
-                card.innerHTML = `
-                    <div class="icon">${ach.icon}</div>
-                    <div class="title">${ach.title}</div>
-                    <div class="desc">${ach.desc} (${Math.min(currentWins, ach.targetWins)}/${ach.targetWins})</div>
-                    <div class="tier-tag">${ach.tier}</div>
-                `;
-                container.appendChild(card);
-            });
-        }
-    </script>
-</body>
-</html>
+.achievement-card .icon { font-size: 36px; margin-bottom: 4px; }
+.achievement-card .title { font-size: 18px; font-weight: bold; margin-bottom: 4px; line-height: 1.1; }
+.achievement-card .desc { font-size: 13px; color: #222; }
+.achievement-card .tier-tag { font-size: 11px; font-weight: bold; background: #000; color: #fff; padding: 2px 6px; border-radius: 4px; margin-top: 6px; }
