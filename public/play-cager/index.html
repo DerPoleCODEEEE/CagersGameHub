@@ -18,7 +18,7 @@
         <div id="game-container">
             <div class="player-bar top">
                 <div class="player-info">
-                    <img class="chess-avatar" id="bot-avatar" src="https://static-cdn.jtvnw.net/jtv_user_pictures/thecager-profile_image-300x300.png" onerror="this.src='https://static-cdn.jtvnw.net/user-default-pictures-uv/cdd42a89-2178-4d50-9d01-e23a6331904a-profile_image-70x70.png'" alt="TheCager">
+                    <img class="chess-avatar" id="bot-avatar" src="https://ui-avatars.com/api/?name=The+Cager&background=9b59b6&color=fff&bold=true" alt="TheCager">
                     <span>TheCager (BOT)</span>
                     <span class="bot-elo-tag" id="bot-elo">2132 ELO</span>
                 </div>
@@ -63,7 +63,7 @@
                     </label>
                     <label id="inc-label">
                         <span>Increment:</span>
-                        <select id="inc-select" class="scribble-select">
+                        <select id="inc-select" class="scribble-select" onchange="updateTimeSettings()">
                             <option value="2">+2 Sec</option>
                             <option value="0">+0 Sec</option>
                             <option value="5">+5 Sec</option>
