@@ -241,7 +241,9 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// SOFTMAX & PSYCHOLOGY ENGINE
+// =========================================================================
+// SMART EVAL GUARD & 2100 ELO TACTICAL BLUNDER LOGIC
+// =========================================================================
 function processSoftmaxDecisionMatrix() {
     if (multiPvCandidates.length === 0 || isGameOver) return;
 
@@ -250,9 +252,16 @@ function processSoftmaxDecisionMatrix() {
 
     const currentTurn = chess.turn();
     const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
-    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.82, tiltFactorAlpha: 0.78, timePressureLambda: 0.045 };
+    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.65, tiltFactorAlpha: 0.78, timePressureLambda: 0.045 };
 
     const bestMoveEval = candidates[0].stockfishEval;
+    
+    // Position Complexity Index (Differenz zwischen besten und schlechtesten Kandidaten)
+    const worstEvalInPv = candidates[candidates.length - 1].stockfishEval;
+    const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
+    const isComplexPosition = evalSpread > 180 || chess.in_check();
+
+    // Tilt update
     const evalDelta = lastEval - bestMoveEval;
     if (evalDelta > 100) {
         tiltScore = psycho.tiltFactorAlpha * tiltScore + (1 - psycho.tiltFactorAlpha) * evalDelta;
@@ -261,42 +270,62 @@ function processSoftmaxDecisionMatrix() {
     }
     lastEval = bestMoveEval;
 
-    const botRemainingTime = clocks[currentTurn];
-    const lambda = psycho.timePressureLambda || 0.045;
-    const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
+    // 1. EVAL GUARD FILTER: Filtere dumme Patzer aus
+    const safeCandidates = candidates.filter(cand => {
+        const evalLoss = bestMoveEval - cand.stockfishEval;
 
-    const scoredMoves = candidates.map(cand => {
+        // HARTER BAN: Ein 2100er stellt NIEMALS mehr als 2.5 Bauern (250 cp) in 1 Zug ein
+        if (evalLoss > 250) return false;
+
+        // MITTLERER FEHLER (80 cp bis 250 cp Verlust): Nur erlaubt wenn...
+        if (evalLoss > 80) {
+            const isAggressiveIntent = cand.moveStr.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to);
+            const isHighTiltOrTimePanic = tiltScore > 160 || (clocks[currentTurn] < 15 && !isZenMode);
+
+            // Fehler passiert NUR bei komplexer Stellung + aggressivem Zug (Cager denkt Taktik klappt) ODER unter hohem Druck/Tilt
+            if (!isComplexPosition && !isHighTiltOrTimePanic) return false;
+            if (!isAggressiveIntent && !isHighTiltOrTimePanic) return false;
+        }
+
+        return true;
+    });
+
+    // Falls durch den Filter alle gestrichen wurden, nimm die Top 2
+    const finalCandidates = safeCandidates.length > 0 ? safeCandidates : candidates.slice(0, 2);
+
+    // 2. STIL-BEWERTUNG (Königsangriff, Damen-Tausch-Verweigerung etc.)
+    const scoredMoves = finalCandidates.map(cand => {
         let cagerScore = cand.stockfishEval;
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
 
         if (moveDetails) {
             if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
-                cagerScore += ((profile.kingAttackBias || 35) / 100) * 110;
+                cagerScore += ((profile.kingAttackBias || 35) / 100) * 80;
             }
             if (moveDetails.captured) {
                 if (moveDetails.captured === 'q') {
-                    cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 220;
+                    cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 180;
                 } else if (moveDetails.piece === moveDetails.captured) {
-                    cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 70;
+                    cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
                 }
             }
             if (['a4','a5','h4','h5'].includes(cand.to) && moveDetails.piece === 'p') {
-                cagerScore += ((profile.flankPawnAggression || 24) / 100) * 80;
-            }
-            const fromRank = parseInt(cand.from[1]);
-            const toRank = parseInt(cand.to[1]);
-            if ((currentTurn === 'w' && toRank < fromRank) || (currentTurn === 'b' && toRank > fromRank)) {
-                cagerScore -= ((profile.geometricBlindSpotSensitivity || 10) / 100) * 50;
+                cagerScore += ((profile.flankPawnAggression || 19) / 100) * 60;
             }
         }
         return { ...cand, cagerScore };
     });
 
-    const effectiveTemp = psycho.softmaxTemperature * (1 + (tiltScore / 300) + (timePanicTerm * 1.8));
+    // 3. SOFTMAX PROBABILITIES
+    const botRemainingTime = clocks[currentTurn];
+    const lambda = psycho.timePressureLambda || 0.045;
+    const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
+
+    const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + (tiltScore / 400) + (timePanicTerm * 1.2));
     const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
     
-    const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 50)));
+    const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
     const sumExp = expScores.reduce((a, b) => a + b, 0);
     const probabilities = expScores.map(e => e / sumExp);
 
@@ -312,7 +341,7 @@ function processSoftmaxDecisionMatrix() {
         }
     }
 
-    const thinkTime = isZenMode ? 600 : Math.max(150, Math.min(1000, botRemainingTime * 30));
+    const thinkTime = isZenMode ? 500 : Math.max(150, Math.min(900, botRemainingTime * 25));
     setTimeout(() => makeBotMove(chosenMove), thinkTime);
 }
 
@@ -325,9 +354,11 @@ function triggerBotTurn() {
 
     const currentTurn = chess.turn();
     const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
-    const bookLoyalty = profile.openingBookLoyalty || 70;
+    
+    // 95% BUCH-LOYALITÄT IN DER ERÖFFNUNG!
+    const bookLoyalty = profile.openingBookLoyalty || 95;
 
-    if ((Math.random() * 100) < bookLoyalty && cagerBook && cagerBook[stateKey]) {
+    if ((Math.random() * 100) <= bookLoyalty && cagerBook && cagerBook[stateKey]) {
         const moves = cagerBook[stateKey];
         const keys = Object.keys(moves);
         if (keys.length > 0) {
@@ -343,7 +374,7 @@ function triggerBotTurn() {
     multiPvCandidates = [];
     if (stockfish) {
         stockfish.postMessage(`position fen ${chess.fen()}`);
-        stockfish.postMessage('go movetime 600');
+        stockfish.postMessage('go movetime 550');
     }
 }
 
@@ -474,7 +505,7 @@ function checkGameOver() {
         isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
         
-        const isPlayerWin = chess.turn() === 'b'; // Spieler spielt w, wenn b am Zug und Matt -> Spieler hat gewonnen.
+        const isPlayerWin = chess.turn() === 'b';
         saveGameResult('bot', isPlayerWin ? 'win' : 'loss');
         
         const winner = isPlayerWin ? 'You' : 'TheCager';
@@ -483,7 +514,6 @@ function checkGameOver() {
         return true;
     }
     
-    // Unentschieden (Patt / Zugwiederholung etc)
     if (chess.in_draw() || chess.in_stalemate() || chess.in_threefold_repetition()) {
         isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
