@@ -5,9 +5,9 @@ const userSchema = new mongoose.Schema({
     displayName: { type: String, required: true },
     profileImageUrl: { type: String },
     stats: {
-        chess: { wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 } },
-        mutant: { wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 } },
-        bot: { wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 } }
+        chess: { wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 } },
+        mutant: { wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 } },
+        bot: { wins: { type: Number, default: 0 }, losses: { type: Number, default: 0 }, draws: { type: Number, default: 0 } }
     }
 });
 
