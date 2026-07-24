@@ -163,14 +163,17 @@ Promise.all([
     if (configData) {
         cagerConfig = configData;
         document.getElementById('bot-elo').innerText = `${configData.targetElo || 2132} ELO`;
-        if (stockfish) stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
+        if (stockfish) {
+            stockfish.postMessage('setoption name UCI_LimitStrength value true');
+            stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
+        }
     }
     if (bookData) {
         cagerBook = bookData.book;
     }
 });
 
-// STOCKFISH SETUP (CAGGER)
+// STOCKFISH SETUP (CAGER)
 if (stockfish) {
     stockfish.postMessage('uci');
     stockfish.postMessage('setoption name MultiPV value 5');
@@ -516,7 +519,6 @@ function makeBotMove(moveObj) {
 
     if (checkGameOver()) return;
 
-    // WENN AUTO-PLAY AKTIV UND WEISS DRAN IST -> ZU TESTER GEBEN
     if (autoPlayActive && chess.turn() === 'w' && isAdmin) {
         setTimeout(triggerTesterTurn, 300);
     }
@@ -666,7 +668,6 @@ document.getElementById('btn-restart').onclick = () => {
     renderBoard();
     addChatMessage('TheCager', getRandomQuote('start'));
 
-    // FALLS AUTO-PLAY AKTIV IST, WEISS-ZUG ANSTOSSEN
     if (autoPlayActive && isAdmin) {
         setTimeout(triggerTesterTurn, 500);
     }
@@ -811,7 +812,9 @@ function initAdminPanel() {
             status.innerText = 'Status: 🟢 Läuft...';
             testerElo = parseInt(eloSelect.value, 10);
 
+            // WICHTIG: SOWOHL LIMIT-STRENGTH ALS AUCH ELO SETZEN!
             if (testerStockfish) {
+                testerStockfish.postMessage('setoption name UCI_LimitStrength value true');
                 testerStockfish.postMessage(`setoption name UCI_Elo value ${testerElo}`);
             }
 
