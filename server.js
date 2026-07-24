@@ -13,6 +13,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+// Um JSON im Body zu verarbeiten (Wichtig für das Speichern der Stats)
+app.use(express.json());
+
 // 1. MONGODB
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
@@ -40,7 +43,9 @@ if (process.env.TWITCH_CLIENT_ID) {
             if (!user) {
                 user = await User.create({ twitchId: profile.id, displayName: profile.display_name, profileImageUrl: profile.profile_image_url });
             } else {
-                user.displayName = profile.display_name; user.profileImageUrl = profile.profile_image_url; await user.save();
+                user.displayName = profile.display_name; 
+                user.profileImageUrl = profile.profile_image_url; 
+                await user.save();
             }
             return done(null, user);
         } catch (err) { return done(err); }
@@ -52,18 +57,61 @@ passport.deserializeUser(async (id, done) => {
     try { const user = await User.findById(id); done(null, user); } catch (err) { done(err); }
 });
 
-// 3. ROUTES
+// 3. ROUTES & APIS
 app.get('/auth/twitch', passport.authenticate('twitch'));
 app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
+
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
+// === NEU: Suchfunktion für die User ===
+app.get('/api/users/search', async (req, res) => {
+    try {
+        const query = req.query.q;
+        if (!query) return res.json([]);
+        // Case-insensitive Suche nach dem Namen, max 5 Ergebnisse
+        const users = await User.find({ displayName: new RegExp(query, 'i') }).limit(5);
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// === NEU: API zum Speichern der Stats (Wins, Losses, Draws) ===
+app.post('/api/stats/update', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Not logged in' });
+    
+    const { mode, result } = req.body; // mode: 'chess', 'mutant', 'bot' | result: 'win', 'loss', 'draw'
+    if (!mode || !result) return res.status(400).json({ error: 'Missing data' });
+
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (!user.stats) user.stats = {};
+        if (!user.stats[mode]) user.stats[mode] = { wins: 0, losses: 0, draws: 0 };
+        
+        if (result === 'win') user.stats[mode].wins += 1;
+        else if (result === 'loss') user.stats[mode].losses += 1;
+        else if (result === 'draw') user.stats[mode].draws += 1;
+
+        await user.save();
+        res.json({ success: true, stats: user.stats });
+    } catch (err) {
+        console.error("Stats update error:", err);
+        res.status(500).json({ error: 'Could not update stats' });
+    }
+});
+
+// 4. STATISCHE ORDNER FÜR DIE GAMES
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
 
-// 4. CAGERS QUICK CHESS (UNCHANGED)
+// =========================================================
+// 5. CAGERS QUICK CHESS (UNCHANGED)
+// =========================================================
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
@@ -124,7 +172,9 @@ io.on('connection', (socket) => {
     socket.on('leave_room', ({ roomCode }) => { socket.to(roomCode).emit('opponent_left'); socket.leave(roomCode); });
 });
 
-// 5. MUTANT MERGE CHESS (ISOLATED NAMESPACE)
+// =========================================================
+// 6. MUTANT MERGE CHESS (ISOLATED NAMESPACE)
+// =========================================================
 const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
 
@@ -272,7 +322,6 @@ mutantIo.on('connection', (socket) => {
 
         const targetPiece = room.board[toR][toC];
 
-        // ROCHADE (CASTLING)
         if (moveInfo && moveInfo.type === 'castle') {
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
@@ -283,40 +332,31 @@ mutantIo.on('connection', (socket) => {
             room.board[fromR][rookToC] = rookPiece;
             room.board[fromR][rookFromC] = null;
         }
-        // EN PASSANT
         else if (moveInfo && moveInfo.type === 'en_passant') {
             const capturedPawnRow = pieceColor === 'w' ? toR + 1 : toR - 1;
             room.board[capturedPawnRow][toC] = null;
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
         }
-        // PROMOTION
         else if (promotedTo && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p') {
             room.board[toR][toC] = [promotedTo];
             room.board[fromR][fromC] = null;
         }
-        // MERGE FUSION
         else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
             const combined = [...movingPiece, ...targetPiece].map(p => p.toLowerCase().replace('_fused', ''));
 
-            // Block if either piece is ALREADY a fused queen
             if (movingPiece.some(p => p.includes('_fused')) || targetPiece.some(p => p.includes('_fused'))) {
                 return socket.emit('error_msg', 'This fused piece cannot be fused again!');
             }
-            
-            // 1. Disallow identical piece types
             if (new Set(combined).size !== combined.length) {
                 return socket.emit('error_msg', 'Cannot merge identical piece types!');
             }
-            // 2. Disallow redundant Queen fusions (Q+B or Q+R)
             if (combined.includes('q') && (combined.includes('b') || combined.includes('r'))) {
                 return socket.emit('error_msg', 'Queen already moves like Bishop and Rook!');
             }
-            // 3. Disallow Queen + Pawn (Q+P)
             if (combined.includes('q') && combined.includes('p')) {
                 return socket.emit('error_msg', 'Queen cannot merge with Pawn!');
             }
-            // 4. Disallow King + Pawn (K+P)
             if (combined.includes('k') && combined.includes('p')) {
                 return socket.emit('error_msg', 'King cannot merge with Pawn!');
             }
@@ -326,7 +366,6 @@ mutantIo.on('connection', (socket) => {
             }
 
             if (movingPiece.length + targetPiece.length <= 2) {
-                // SPECIAL RULE: ROOK + BISHOP = FUSED QUEEN
                 if (combined.includes('r') && combined.includes('b')) {
                     room.board[toR][toC] = [pieceColor === 'w' ? 'Q_fused' : 'q_fused'];
                 } else {
@@ -338,7 +377,6 @@ mutantIo.on('connection', (socket) => {
                 return socket.emit('error_msg', 'Maximum 2 pieces per square!');
             }
         } 
-        // NORMAL MOVE / CAPTURE
         else {
             let isKingCaptured = false;
             if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) {
