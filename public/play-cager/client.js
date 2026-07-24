@@ -53,7 +53,8 @@ const CAGER_QUOTES = {
     player_capture: ["Ouch! Didn't see that coming...", "Nice capture, fair enough."],
     cager_check: ["Check! Where are you going?", "King in trouble!"],
     cager_win: ["GG! That was a wild game!", "Victory for Cager!"],
-    player_win: ["GG WP! Well played!", "Respect, great game!"]
+    player_win: ["GG WP! Well played!", "Respect, great game!"],
+    cager_resign: ["GG! Thanks for the match!"]
 };
 
 // CONFIG & BOOK LOADING
@@ -411,6 +412,7 @@ function checkGameOver() {
     return false;
 }
 
+// RESTART
 document.getElementById('btn-restart').onclick = () => {
     if (clockTimer) clearInterval(clockTimer);
     clockTimer = null;
@@ -424,11 +426,44 @@ document.getElementById('btn-restart').onclick = () => {
     addChatMessage('TheCager', getRandomQuote('start'));
 };
 
+// UNDO
 document.getElementById('btn-undo').onclick = () => {
     chess.undo();
     chess.undo();
     renderBoard();
     renderClocks();
+};
+
+// RESIGN (AUFGEBEN)
+document.getElementById('btn-resign').onclick = () => {
+    if (chess.game_over()) return;
+
+    if (confirm('Are you sure you want to resign?')) {
+        if (clockTimer) clearInterval(clockTimer);
+        addChatMessage('TheCager', getRandomQuote('cager_resign'));
+        alert('You resigned. TheCager (BOT) wins!');
+    }
+};
+
+// DOWNLOAD PGN
+document.getElementById('btn-pgn').onclick = () => {
+    chess.header('Event', 'TheCager Bot Match');
+    chess.header('Site', 'TheCager Game Hub');
+    chess.header('Date', new Date().toISOString().split('T')[0].replace(/-/g, '.'));
+    chess.header('White', twitchName || 'You');
+    chess.header('Black', 'TheCager (BOT)');
+
+    const pgnContent = chess.pgn();
+    if (!pgnContent || chess.history().length === 0) {
+        alert('No moves played yet!');
+        return;
+    }
+
+    const blob = new Blob([pgnContent], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `cager_match_${Date.now()}.pgn`;
+    link.click();
 };
 
 createBoardDOM();
