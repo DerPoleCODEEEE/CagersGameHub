@@ -27,6 +27,14 @@ function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
     .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
 }
 
+// HELPER: Erkennt ob ein Feld (z.B. "e4" oder "f7") hell oder dunkel ist
+function getSquareColor(squareStr) {
+    if (!squareStr || squareStr.length < 2) return 'light';
+    const file = squareStr.charCodeAt(0) - 'a'.charCodeAt(0); // a=0, b=1, ...
+    const rank = parseInt(squareStr[1], 10);                 // 1..8
+    return (file + rank) % 2 === 0 ? 'dark' : 'light';
+}
+
 // STOCKFISH WEB WORKER (CORS-SAFE BLOB PROXY)
 let stockfish;
 try {
@@ -60,63 +68,85 @@ function getPieceImgUrl(piece) {
     return `https://chessboardjs.com/img/chesspieces/wikipedia/${color}${type}.png`;
 }
 
+// CONTEXT-AWARE CAGER QUOTES
 const CAGER_QUOTES = {
     start: [
-        "Let's go! Good luck & have fun!",
-        "Show me what you got!",
-        "Alright, let's see if you can handle the Cager style!",
-        "Time for some speed chess! Game on!",
-        "Welcome! May the best player win.",
-        "Don't blink! Let me see your best moves!"
+        "Howdy! Welcome back to the channel, let's document the climb!",
+        "Alright, let's see if we can handle this position today.",
+        "Let's go into a Queen's Gambit, keep it clean, classical and solid.",
+        "Don't mind me, just providing some unedited commentary as I play!",
+        "How's your day going? Thanks for sticking around for the game!",
+        "It is raining hard outside right now... but I like the weather like this.",
+        "Alright, let's get our pieces out to natural squares. Game on!",
+        "We're playing against a solid opponent today. Time to focus!"
     ],
     cager_capture: [
-        "And bye-bye! That piece is mine!",
-        "Thanks for the gift!",
-        "Nom nom, free material!",
-        "I'll take that, thank you very much!",
-        "You dropped something!",
-        "Sniped! Clean tactical blow.",
-        "That piece was standing in my way anyway!"
+        { text: "And bye-bye! I'll take that pawn with tempo!", piece: 'p' },
+        { text: "Nom nom, free material! That piece was standing in my way anyway.", piece: 'not_p' },
+        { text: "BANG! We win those, baby! Absolute cinema!" },
+        { text: "Sniped! Clean tactical blow right there." },
+        { text: "Thanks for the gift! I'm totally fine with trading here." },
+        { text: "Taking here comes with an immediate threat. Let's push!" },
+        { text: "Look at that, now his knight is completely out of moves!" }
     ],
     player_capture: [
-        "Ouch! Didn't see that coming...",
-        "Nice capture, fair enough.",
-        "Hey, that was my favorite piece!",
-        "Oof, brutal vision from you!",
-        "A temporary setback, no worries!",
-        "Ouch! You're playing really sharp today."
+        { text: "Oof, I did NOT see that check! That is no bueno..." },
+        { text: "Ouch! I really don't like where my position is going now." },
+        { text: "Oh man, I am getting put in the blender right now..." },
+        { text: "Wait, did I just blunder something? Shoot, my position is getting tangled!" },
+        { text: "Double, double, double dog damn! That is terrifying!" },
+        { text: "Yikes! Those pawns of yours are absolute demons!" },
+        { text: "Frankly, I'm terrified! Time to play some stubborn defense." }
     ],
     cager_check: [
-        "Check! Where are you going?",
-        "King in trouble!",
-        "Check! Watch your king safety!",
-        "Your king is feeling the heat!",
-        "Knock knock! King safety inspection!",
-        "Check! Things are getting dangerous..."
+        { text: "Check! Watch your king safety, things are getting spicy!" },
+        { text: "Check! Where is your king going now?" },
+        { text: "Check! Now you have to respond to my immediate threat!" },
+        { text: "Knock knock! Giving a check on the light squares!", color: 'light' },
+        { text: "Check on the dark squares! Keeping the pressure on!", color: 'dark' },
+        { text: "Check! That gives me a lot of juicy counterplay!" }
     ],
     cager_win: [
-        "GG! That was a wild game!",
-        "Victory for Cager!",
-        "GG! That tactical frenzy went my way!",
-        "Good game! Loved the aggression in that match.",
-        "GG! Rematch anytime!",
-        "What a battle! GG WP!"
+        "BANG! WE WIN THOSE, BABY! What an absolute comeback!",
+        "GG WP! Oh my god, what a battle! That was absolute cinema!",
+        "GG! I don't care how it happened, a win is a win! Let's go!",
+        "GG! That comeback victory felt so hyped! Rematch anytime!",
+        "Oh man, games like these will give you arrhythmia! GG WP!",
+        "GG! Please consider liking the video, I need that sweet dopamine!"
     ],
     player_win: [
-        "GG WP! Well played!",
-        "Respect, great game!",
-        "Ouch, clean mate! Outplayed completely.",
-        "GG! Masterclass performance from you!",
-        "I got outplayed! Great win!",
-        "Well played! You caught me off guard."
+        "GG WP! Man, I got completely outplayed in that endgame!",
+        "Respect, great game! You had me completely stuck in the blender.",
+        "GG! Clean mate, you played that recovery masterfully!",
+        "Ouch! I threw the game away and you punished it instantly. GG!",
+        "Sad day for all the Cager enthusiasts out there... GG WP!"
     ],
     cager_resign: [
-        "GG! Thanks for the match!",
-        "No way out of this position for me, GG!",
-        "Respect! I yield.",
-        "GG! You had me completely outplayed there."
+        "No way out of this position for me... GG, you had me completely outplayed!",
+        "GG! I'm completely losing here, respect for the solid play.",
+        "I yield! I am so bad at chess today, GG WP!",
+        "I double dog dare you to blunder... ah, you didn't. Alright, I resign! GG!"
     ]
 };
+
+// SMART QUOTE PICKER
+function getRandomQuote(cat, context = {}) {
+    const list = CAGER_QUOTES[cat];
+    if (!list || list.length === 0) return "GG!";
+
+    const validQuotes = list.filter(q => {
+        if (typeof q === 'string') return true;
+        if (q.color && context.color && q.color !== context.color) return false;
+        if (q.piece && context.piece) {
+            if (q.piece === 'p' && context.piece !== 'p') return false;
+            if (q.piece === 'not_p' && context.piece === 'p') return false;
+        }
+        return true;
+    });
+
+    const chosen = validQuotes[Math.floor(Math.random() * validQuotes.length)];
+    return typeof chosen === 'string' ? chosen : chosen.text;
+}
 
 // CONFIG & BOOK LOADING
 Promise.all([
@@ -241,9 +271,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// =========================================================================
-// SMART EVAL GUARD & 2100 ELO TACTICAL BLUNDER LOGIC
-// =========================================================================
+// SMART EVAL GUARD & DECISION MATRIX
 function processSoftmaxDecisionMatrix() {
     if (multiPvCandidates.length === 0 || isGameOver) return;
 
@@ -256,12 +284,10 @@ function processSoftmaxDecisionMatrix() {
 
     const bestMoveEval = candidates[0].stockfishEval;
     
-    // Position Complexity Index (Differenz zwischen besten und schlechtesten Kandidaten)
     const worstEvalInPv = candidates[candidates.length - 1].stockfishEval;
     const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
     const isComplexPosition = evalSpread > 180 || chess.in_check();
 
-    // Tilt update
     const evalDelta = lastEval - bestMoveEval;
     if (evalDelta > 100) {
         tiltScore = psycho.tiltFactorAlpha * tiltScore + (1 - psycho.tiltFactorAlpha) * evalDelta;
@@ -270,19 +296,16 @@ function processSoftmaxDecisionMatrix() {
     }
     lastEval = bestMoveEval;
 
-    // 1. EVAL GUARD FILTER: Filtere dumme Patzer aus
+    // EVAL GUARD FILTER
     const safeCandidates = candidates.filter(cand => {
         const evalLoss = bestMoveEval - cand.stockfishEval;
 
-        // HARTER BAN: Ein 2100er stellt NIEMALS mehr als 2.5 Bauern (250 cp) in 1 Zug ein
         if (evalLoss > 250) return false;
 
-        // MITTLERER FEHLER (80 cp bis 250 cp Verlust): Nur erlaubt wenn...
         if (evalLoss > 80) {
             const isAggressiveIntent = cand.moveStr.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to);
             const isHighTiltOrTimePanic = tiltScore > 160 || (clocks[currentTurn] < 15 && !isZenMode);
 
-            // Fehler passiert NUR bei komplexer Stellung + aggressivem Zug (Cager denkt Taktik klappt) ODER unter hohem Druck/Tilt
             if (!isComplexPosition && !isHighTiltOrTimePanic) return false;
             if (!isAggressiveIntent && !isHighTiltOrTimePanic) return false;
         }
@@ -290,10 +313,8 @@ function processSoftmaxDecisionMatrix() {
         return true;
     });
 
-    // Falls durch den Filter alle gestrichen wurden, nimm die Top 2
     const finalCandidates = safeCandidates.length > 0 ? safeCandidates : candidates.slice(0, 2);
 
-    // 2. STIL-BEWERTUNG (Königsangriff, Damen-Tausch-Verweigerung etc.)
     const scoredMoves = finalCandidates.map(cand => {
         let cagerScore = cand.stockfishEval;
         const tempBoard = new Chess(chess.fen());
@@ -317,7 +338,6 @@ function processSoftmaxDecisionMatrix() {
         return { ...cand, cagerScore };
     });
 
-    // 3. SOFTMAX PROBABILITIES
     const botRemainingTime = clocks[currentTurn];
     const lambda = psycho.timePressureLambda || 0.045;
     const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
@@ -355,7 +375,6 @@ function triggerBotTurn() {
     const currentTurn = chess.turn();
     const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
     
-    // 95% BUCH-LOYALITÄT IN DER ERÖFFNUNG!
     const bookLoyalty = profile.openingBookLoyalty || 95;
 
     if ((Math.random() * 100) <= bookLoyalty && cagerBook && cagerBook[stateKey]) {
@@ -394,8 +413,14 @@ function makeBotMove(moveObj) {
     renderClocks();
 
     if (move) {
-        if (move.captured) addChatMessage('TheCager', getRandomQuote('cager_capture'));
-        else if (chess.in_check()) addChatMessage('TheCager', getRandomQuote('cager_check'));
+        const toColor = getSquareColor(move.to);
+        const capturedPiece = move.captured;
+
+        if (move.captured) {
+            addChatMessage('TheCager', getRandomQuote('cager_capture', { color: toColor, piece: capturedPiece }));
+        } else if (chess.in_check()) {
+            addChatMessage('TheCager', getRandomQuote('cager_check', { color: toColor }));
+        }
     }
 
     checkGameOver();
@@ -486,11 +511,6 @@ function handleSquareClick(r, c) {
     renderBoard();
 }
 
-function getRandomQuote(cat) {
-    const list = CAGER_QUOTES[cat];
-    return list[Math.floor(Math.random() * list.length)];
-}
-
 function addChatMessage(sender, text) {
     const box = document.getElementById('chat-messages');
     const msg = document.createElement('div');
@@ -550,7 +570,7 @@ document.getElementById('btn-undo').onclick = () => {
     renderClocks();
 };
 
-// RESIGN (AUFGEBEN)
+// RESIGN
 document.getElementById('btn-resign').onclick = () => {
     if (isGameOver || chess.game_over()) return;
 
