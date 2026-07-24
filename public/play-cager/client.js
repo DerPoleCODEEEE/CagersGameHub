@@ -14,8 +14,16 @@ let clocks = { w: 180, b: 180 };
 let clockTimer = null;
 let gameStarted = false;
 
-// Stockfish Web Worker
-const stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+// STOCKFISH WEB WORKER (CORS-SAFE BLOB PROXY)
+let stockfish;
+try {
+    const workerBlob = new Blob([
+        `importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');`
+    ], { type: 'application/javascript' });
+    stockfish = new Worker(URL.createObjectURL(workerBlob));
+} catch (e) {
+    console.error("Stockfish initialization failed:", e);
+}
 
 let selectedSquare = null;
 let validMoves = [];
@@ -31,11 +39,11 @@ if (twitchPfp) {
     pfp.classList.remove('hidden');
 }
 
-// RELIABLE CHESSBOARD PNG SET (CHESSPRECISION / CHESSBOARDJS CDN)
+// CHESSBOARD PIECE ASSETS
 function getPieceImgUrl(piece) {
     if (!piece) return '';
-    const color = piece.color; // 'w' or 'b'
-    const type = piece.type.toUpperCase(); // 'P', 'N', 'B', 'R', 'Q', 'K'
+    const color = piece.color;
+    const type = piece.type.toUpperCase();
     return `https://chessboardjs.com/img/chesspieces/wikipedia/${color}${type}.png`;
 }
 
@@ -56,26 +64,28 @@ Promise.all([
     if (configData) {
         cagerConfig = configData;
         document.getElementById('bot-elo').innerText = `${configData.targetElo || 2132} ELO`;
-        stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
+        if (stockfish) stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
     }
     if (bookData) {
         cagerBook = bookData.book;
     }
 });
 
-// STOCKFISH MULTI-PV ENGINE SETUP
-stockfish.postMessage('uci');
-stockfish.postMessage('setoption name MultiPV value 5');
+// STOCKFISH SETUP
+if (stockfish) {
+    stockfish.postMessage('uci');
+    stockfish.postMessage('setoption name MultiPV value 5');
 
-stockfish.onmessage = (e) => {
-    const msg = e.data;
-    if (msg.includes('multipv') && msg.includes('pv')) {
-        parseStockfishPvLine(msg);
-    }
-    if (msg.startsWith('bestmove')) {
-        processSoftmaxDecisionMatrix();
-    }
-};
+    stockfish.onmessage = (e) => {
+        const msg = e.data;
+        if (msg.includes('multipv') && msg.includes('pv')) {
+            parseStockfishPvLine(msg);
+        }
+        if (msg.startsWith('bestmove')) {
+            processSoftmaxDecisionMatrix();
+        }
+    };
+}
 
 function parseStockfishPvLine(line) {
     const parts = line.split(' ');
@@ -264,8 +274,10 @@ function triggerBotTurn() {
     }
 
     multiPvCandidates = [];
-    stockfish.postMessage(`position fen ${chess.fen()}`);
-    stockfish.postMessage('go movetime 600');
+    if (stockfish) {
+        stockfish.postMessage(`position fen ${chess.fen()}`);
+        stockfish.postMessage('go movetime 600');
+    }
 }
 
 function makeBotMove(moveObj) {
@@ -309,6 +321,8 @@ function renderBoard() {
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const square = boardEl.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+            if (!square) continue;
+            
             square.innerHTML = '';
             square.classList.remove('selected', 'valid-move', 'capture-move');
 
