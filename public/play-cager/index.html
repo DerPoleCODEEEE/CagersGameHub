@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,10 +18,12 @@
         <div id="game-container">
             <div class="player-bar top">
                 <div class="player-info">
-                    <img class="chess-avatar" src="https://static-cdn.jtvnw.net/user-default-pictures-uv/cdd42a89-2178-4d50-9d01-e23a6331904a-profile_image-70x70.png" alt="Bot">
+                    <img class="chess-avatar" id="bot-avatar" src="https://static-cdn.jtvnw.net/jtv_user_pictures/thecager-profile_image-300x300.png" onerror="this.src='https://static-cdn.jtvnw.net/user-default-pictures-uv/cdd42a89-2178-4d50-9d01-e23a6331904a-profile_image-70x70.png'" alt="TheCager">
                     <span>TheCager (BOT)</span>
                     <span class="bot-elo-tag" id="bot-elo">2132 ELO</span>
                 </div>
+                <!-- BOT CLOCK -->
+                <div class="clock-box" id="bot-clock">03:00</div>
             </div>
 
             <div id="board-wrapper">
@@ -31,8 +33,10 @@
             <div class="player-bar bottom">
                 <div class="player-info">
                     <img id="my-pfp" class="chess-avatar hidden" src="">
-                    <span id="my-name">Du</span>
+                    <span id="my-name">You</span>
                 </div>
+                <!-- PLAYER CLOCK -->
+                <div class="clock-box" id="player-clock">03:00</div>
             </div>
         </div>
 
@@ -43,28 +47,28 @@
                 <span class="tag">VS BOT</span>
             </div>
 
-            <!-- BOT PARAMS DISPLAY -->
+            <!-- TIME CONTROL SETTINGS -->
             <div class="stats-section scribble-box">
-                <div class="sidebar-title">🧠 Aktives Profil (<span id="active-color-tag">WEISS</span>)</div>
-                
-                <div class="stat-item">
-                    <div class="stat-label"><span>📖 Buch-Loyalität</span><span id="val-book">70%</span></div>
-                    <div class="stat-bar-bg"><div id="bar-book" class="stat-bar-fill yellow"></div></div>
-                </div>
-
-                <div class="stat-item">
-                    <div class="stat-label"><span>👑 Königs-Angriff</span><span id="val-attack">35%</span></div>
-                    <div class="stat-bar-bg"><div id="bar-attack" class="stat-bar-fill red"></div></div>
-                </div>
-
-                <div class="stat-item">
-                    <div class="stat-label"><span>💥 Opfer-Bereitschaft</span><span id="val-sac">85%</span></div>
-                    <div class="stat-bar-bg"><div id="bar-sac" class="stat-bar-fill purple"></div></div>
-                </div>
-
-                <div class="stat-item">
-                    <div class="stat-label"><span>🔄 Tausch-Vermeidung</span><span id="val-trade">34%</span></div>
-                    <div class="stat-bar-bg"><div id="bar-trade" class="stat-bar-fill green"></div></div>
+                <div class="sidebar-title">⏱️ Time Control</div>
+                <div class="time-control-grid">
+                    <label>
+                        <span>Mode:</span>
+                        <select id="time-select" class="scribble-select" onchange="updateTimeSettings()">
+                            <option value="180">3 Min (Blitz)</option>
+                            <option value="60">1 Min (Bullet)</option>
+                            <option value="300">5 Min (Blitz)</option>
+                            <option value="600">10 Min (Rapid)</option>
+                            <option value="zen">🧘 Zen Mode (Unlimited)</option>
+                        </select>
+                    </label>
+                    <label id="inc-label">
+                        <span>Increment:</span>
+                        <select id="inc-select" class="scribble-select">
+                            <option value="2">+2 Sec</option>
+                            <option value="0">+0 Sec</option>
+                            <option value="5">+5 Sec</option>
+                        </select>
+                    </label>
                 </div>
             </div>
 
@@ -72,16 +76,16 @@
             <div class="chat-section scribble-box">
                 <div class="chat-header">💬 Cager Live Chat</div>
                 <div id="chat-messages" class="chat-messages">
-                    <div class="chat-msg bot"><b>TheCager:</b> Moin! Mal sehen, wie du gegen meine 2132 Elo ankommst!</div>
+                    <div class="chat-msg bot"><b>TheCager:</b> Hey! Select your time control and let's play!</div>
                 </div>
             </div>
 
             <div class="actions-row">
-                <button id="btn-restart" class="btn btn-primary scribble-btn">Neues Spiel</button>
-                <button id="btn-undo" class="btn btn-secondary scribble-btn">Zug zurück</button>
+                <button id="btn-restart" class="btn btn-primary scribble-btn">New Game</button>
+                <button id="btn-undo" class="btn btn-secondary scribble-btn">Undo Move</button>
             </div>
 
-            <a href="/" class="btn scribble-btn btn-danger btn-leave">Zurück zum Hub</a>
+            <a href="/" class="btn scribble-btn btn-danger btn-leave">Back to Hub</a>
         </div>
     </div>
 
