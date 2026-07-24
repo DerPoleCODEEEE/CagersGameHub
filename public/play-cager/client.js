@@ -2,6 +2,18 @@ const chess = new Chess();
 let cagerBook = null;
 let cagerConfig = null;
 
+// STATS SPEICHERN HELPER
+function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
+    fetch('/api/stats/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, result })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Stats in DB aktualisiert:', data))
+    .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
+}
+
 // PSYCHOLOGY & GAME STATE
 let tiltScore = 0;
 let lastEval = 0;
