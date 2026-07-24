@@ -16,7 +16,7 @@ let clockTimer = null;
 let gameStarted = false;
 
 // STATS SPEICHERN HELPER
-function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
+function saveGameResult(mode, result) {
     fetch('/api/stats/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,8 +30,8 @@ function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
 // HELPER: Erkennt ob ein Feld (z.B. "e4" oder "f7") hell oder dunkel ist
 function getSquareColor(squareStr) {
     if (!squareStr || squareStr.length < 2) return 'light';
-    const file = squareStr.charCodeAt(0) - 'a'.charCodeAt(0); // a=0, b=1, ...
-    const rank = parseInt(squareStr[1], 10);                 // 1..8
+    const file = squareStr.charCodeAt(0) - 'a'.charCodeAt(0);
+    const rank = parseInt(squareStr[1], 10);
     return (file + rank) % 2 === 0 ? 'dark' : 'light';
 }
 
@@ -179,17 +179,93 @@ if (stockfish) {
     };
 }
 
+// BEWERTUNG DER MATT-KOMPLEXITÄT (MENSCHLICHE EVALUATION)
+function evaluatePvComplexity(fen, pvMoves) {
+    const temp = new Chess(fen);
+    let sacrifices = 0;
+    let quietMoves = 0;
+    let nonCheckMoves = 0;
+
+    const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+    for (let i = 0; i < pvMoves.length; i++) {
+        const uci = pvMoves[i];
+        if (uci.length < 4) break;
+
+        const from = uci.substring(0, 2);
+        const to = uci.substring(2, 4);
+        const promotion = uci[4] || 'q';
+
+        const isCagersTurn = (i % 2 === 0);
+
+        const pieceBefore = temp.get(from);
+        const targetBefore = temp.get(to);
+
+        const m = temp.move({ from, to, promotion });
+        if (!m) break;
+
+        if (isCagersTurn) {
+            const isCheck = m.san.includes('+') || m.san.includes('#');
+            const isCapture = !!m.captured;
+
+            if (!isCheck) nonCheckMoves++;
+            if (!isCheck && !isCapture) quietMoves++;
+
+            // Erkennung von Figurenopfern (Höhere Figur greift niedere Figur an / schlägt ab)
+            if (isCapture && pieceBefore && targetBefore) {
+                const attackerVal = values[pieceBefore.type] || 0;
+                const victimVal = values[targetBefore.type] || 0;
+                if (attackerVal > victimVal + 1) {
+                    sacrifices++;
+                }
+            }
+        }
+    }
+
+    // Ein Matt in 4-6 ist EINFACH wenn: Keine Schweren Opfer UND alle Züge sind Schachgebot oder direkte Schlagfälle
+    const isSimple = (sacrifices === 0) && (quietMoves === 0) && (nonCheckMoves <= 1);
+    return { isSimple, sacrifices, quietMoves };
+}
+
+// PARSE STOCKFISH PV LINE MIT NEUER MATT-KOMPLEXITÄT
 function parseStockfishPvLine(line) {
     const parts = line.split(' ');
     const pvIndex = parts.indexOf('pv');
     const scoreIndex = parts.indexOf('cp');
+    const mateIndex = parts.indexOf('mate');
 
     if (pvIndex !== -1 && pvIndex + 1 < parts.length) {
-        const moveStr = parts[pvIndex + 1];
+        const pvMoves = parts.slice(pvIndex + 1);
+        const moveStr = pvMoves[0];
         let score = 0;
+
         if (scoreIndex !== -1 && scoreIndex + 1 < parts.length) {
             score = parseInt(parts[scoreIndex + 1], 10);
+        } else if (mateIndex !== -1 && mateIndex + 1 < parts.length) {
+            const mateIn = parseInt(parts[mateIndex + 1], 10);
+            const absMate = Math.abs(mateIn);
+
+            if (mateIn > 0) { // Gewinner-Matt für Cager
+                if (absMate <= 3) {
+                    // MATT IN 1-3: Sieht Cager IMMER (100% Zwingend)
+                    score = 20000 - absMate * 100;
+                } else if (absMate >= 4 && absMate <= 6) {
+                    // MATT IN 4-6: Nur wenn es EINFACH ist (Schachs/Einfache Züge, keine Opfer)
+                    const complexity = evaluatePvComplexity(chess.fen(), pvMoves);
+                    if (complexity.isSimple) {
+                        score = 19000 - absMate * 100; // Sehr hohe Bewertung -> Bot vollstreckt
+                    } else {
+                        score = 900 - absMate * 50; // Komplexe Opfer-Sequenz -> In normale +9.0 Eval umwandeln
+                    }
+                } else {
+                    // MATT IN 7+: Zu tief zum Matt-Rechnen -> Als starker Positioneller Vorteil bewerten (+7.0 bis +9.0)
+                    score = Math.max(700, 1200 - absMate * 40);
+                }
+            } else { // Verlierer-Matt für Cager
+                score = -20000 + absMate * 100;
+            }
         }
+
         multiPvCandidates.push({
             moveStr: moveStr,
             stockfishEval: score,
@@ -271,7 +347,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// SMART EVAL GUARD & DECISION MATRIX
+// SMART EVAL GUARD & HUMAN MATT CONVERSION
 function processSoftmaxDecisionMatrix() {
     if (multiPvCandidates.length === 0 || isGameOver) return;
 
@@ -284,6 +360,11 @@ function processSoftmaxDecisionMatrix() {
 
     const bestMoveEval = candidates[0].stockfishEval;
     
+    // PERSPEKTIVE: Liegt Bot klar vorne oder sieht er ein direktes einfaches Matt?
+    const botEval = currentTurn === 'b' ? -bestMoveEval : bestMoveEval;
+    const isDirectShortMate = Math.abs(bestMoveEval) >= 18000;
+    const isBotWinningMassively = botEval > 450 || isDirectShortMate;
+
     const worstEvalInPv = candidates[candidates.length - 1].stockfishEval;
     const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
     const isComplexPosition = evalSpread > 180 || chess.in_check();
@@ -296,10 +377,14 @@ function processSoftmaxDecisionMatrix() {
     }
     lastEval = bestMoveEval;
 
-    // EVAL GUARD FILTER
+    // 1. EVAL GUARD FILTER
     const safeCandidates = candidates.filter(cand => {
         const evalLoss = bestMoveEval - cand.stockfishEval;
 
+        // Bei direkt gesehenem einfachen Matt (<=3 Züge oder einfaches 4-6) MUSS der beste Zug genommen werden!
+        if (isDirectShortMate) return evalLoss === 0;
+
+        // HARTER BAN: Max 250 cp Verlust
         if (evalLoss > 250) return false;
 
         if (evalLoss > 80) {
@@ -313,55 +398,65 @@ function processSoftmaxDecisionMatrix() {
         return true;
     });
 
-    const finalCandidates = safeCandidates.length > 0 ? safeCandidates : candidates.slice(0, 2);
+    const finalCandidates = safeCandidates.length > 0 ? safeCandidates : [candidates[0]];
 
+    // 2. STIL & CONVERSION BEWERTUNG
     const scoredMoves = finalCandidates.map(cand => {
         let cagerScore = cand.stockfishEval;
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
 
         if (moveDetails) {
-            if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
-                cagerScore += ((profile.kingAttackBias || 35) / 100) * 80;
-            }
-            if (moveDetails.captured) {
-                if (moveDetails.captured === 'q') {
-                    cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 180;
-                } else if (moveDetails.piece === moveDetails.captured) {
-                    cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
+            if (!isBotWinningMassively) {
+                if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
+                    cagerScore += ((profile.kingAttackBias || 35) / 100) * 80;
                 }
-            }
-            if (['a4','a5','h4','h5'].includes(cand.to) && moveDetails.piece === 'p') {
-                cagerScore += ((profile.flankPawnAggression || 19) / 100) * 60;
+                if (moveDetails.captured) {
+                    if (moveDetails.captured === 'q') {
+                        cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 180;
+                    } else if (moveDetails.piece === moveDetails.captured) {
+                        cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
+                    }
+                }
+            } else {
+                // ABWICKLUNG IM GEWINNSTELLUNGS-MODUS:
+                if (moveDetails.captured) cagerScore += 60;
+                if (moveDetails.san.includes('+')) cagerScore += 40;
             }
         }
         return { ...cand, cagerScore };
     });
 
-    const botRemainingTime = clocks[currentTurn];
-    const lambda = psycho.timePressureLambda || 0.045;
-    const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
-
-    const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + (tiltScore / 400) + (timePanicTerm * 1.2));
-    const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
-    
-    const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
-    const sumExp = expScores.reduce((a, b) => a + b, 0);
-    const probabilities = expScores.map(e => e / sumExp);
-
-    let rand = Math.random();
-    let cumulative = 0;
+    // 3. SELEKTION
     let chosenMove = scoredMoves[0];
 
-    for (let i = 0; i < scoredMoves.length; i++) {
-        cumulative += probabilities[i];
-        if (rand <= cumulative) {
-            chosenMove = scoredMoves[i];
-            break;
+    if (isDirectShortMate) {
+        chosenMove = scoredMoves.reduce((best, m) => m.cagerScore > best.cagerScore ? m : best, scoredMoves[0]);
+    } else {
+        const botRemainingTime = clocks[currentTurn];
+        const lambda = psycho.timePressureLambda || 0.045;
+        const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
+
+        const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + (tiltScore / 400) + (timePanicTerm * 1.2));
+        const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
+        
+        const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
+        const sumExp = expScores.reduce((a, b) => a + b, 0);
+        const probabilities = expScores.map(e => e / sumExp);
+
+        let rand = Math.random();
+        let cumulative = 0;
+
+        for (let i = 0; i < scoredMoves.length; i++) {
+            cumulative += probabilities[i];
+            if (rand <= cumulative) {
+                chosenMove = scoredMoves[i];
+                break;
+            }
         }
     }
 
-    const thinkTime = isZenMode ? 500 : Math.max(150, Math.min(900, botRemainingTime * 25));
+    const thinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
     setTimeout(() => makeBotMove(chosenMove), thinkTime);
 }
 
@@ -393,7 +488,7 @@ function triggerBotTurn() {
     multiPvCandidates = [];
     if (stockfish) {
         stockfish.postMessage(`position fen ${chess.fen()}`);
-        stockfish.postMessage('go movetime 550');
+        stockfish.postMessage('go movetime 650');
     }
 }
 
