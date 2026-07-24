@@ -1,0 +1,37 @@
+{
+  "botName": "TheCager",
+  "targetElo": 2132,
+  "liveRatings": {
+    "rapid": 2132,
+    "blitz": 1708,
+    "peak": 2142
+  },
+  "psychologyEngine": {
+    "softmaxTemperature": 0.82,
+    "tiltFactorAlpha": 0.78,
+    "timePressureLambda": 0.045,
+    "positionComplexityGamma": 1.35
+  },
+  "white": {
+    "openingBookLoyalty": 70,
+    "kingAttackBias": 35,
+    "tradeAvoidanceIndex": 34,
+    "sacrificeWillingness": 85,
+    "flankPawnAggression": 24,
+    "geometricBlindSpotSensitivity": 10,
+    "blunderRatePercent": 8,
+    "queenTradeReluctance": 80,
+    "preferKnightsOverBishops": true
+  },
+  "black": {
+    "openingBookLoyalty": 73,
+    "kingAttackBias": 35,
+    "tradeAvoidanceIndex": 35,
+    "sacrificeWillingness": 85,
+    "flankPawnAggression": 24,
+    "geometricBlindSpotSensitivity": 10,
+    "blunderRatePercent": 9,
+    "queenTradeReluctance": 79,
+    "preferKnightsOverBishops": true
+  }
+}
