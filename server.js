@@ -61,6 +61,7 @@ app.get('/api/user', (req, res) => res.json(req.user || null));
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
+app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
 
 // 4. CAGERS QUICK CHESS (UNCHANGED)
 const rooms = new Map();
