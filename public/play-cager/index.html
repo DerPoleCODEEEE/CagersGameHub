@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play Cager! | Bot Match</title>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+</head>
+<body>
+
+    <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
+    <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
+
+    <div class="layout">
+        <!-- Game Board Section -->
+        <div id="game-container">
+            <div class="player-bar top">
+                <div class="player-info">
+                    <img class="chess-avatar" src="https://static-cdn.jtvnw.net/user-default-pictures-uv/cdd42a89-2178-4d50-9d01-e23a6331904a-profile_image-70x70.png" alt="Bot">
+                    <span>TheCager (BOT)</span>
+                    <span class="bot-elo-tag" id="bot-elo">2132 ELO</span>
+                </div>
+            </div>
+
+            <div id="board-wrapper">
+                <div id="board"></div>
+            </div>
+
+            <div class="player-bar bottom">
+                <div class="player-info">
+                    <img id="my-pfp" class="chess-avatar hidden" src="">
+                    <span id="my-name">Du</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Panel -->
+        <div class="sidebar scribble-box">
+            <div class="logo-area">
+                <h2 style="margin:0; font-size: 24px;">Play Cager!</h2>
+                <span class="tag">VS BOT</span>
+            </div>
+
+            <!-- BOT PARAMS DISPLAY -->
+            <div class="stats-section scribble-box">
+                <div class="sidebar-title">🧠 Aktives Profil (<span id="active-color-tag">WEISS</span>)</div>
+                
+                <div class="stat-item">
+                    <div class="stat-label"><span>📖 Buch-Loyalität</span><span id="val-book">70%</span></div>
+                    <div class="stat-bar-bg"><div id="bar-book" class="stat-bar-fill yellow"></div></div>
+                </div>
+
+                <div class="stat-item">
+                    <div class="stat-label"><span>👑 Königs-Angriff</span><span id="val-attack">35%</span></div>
+                    <div class="stat-bar-bg"><div id="bar-attack" class="stat-bar-fill red"></div></div>
+                </div>
+
+                <div class="stat-item">
+                    <div class="stat-label"><span>💥 Opfer-Bereitschaft</span><span id="val-sac">85%</span></div>
+                    <div class="stat-bar-bg"><div id="bar-sac" class="stat-bar-fill purple"></div></div>
+                </div>
+
+                <div class="stat-item">
+                    <div class="stat-label"><span>🔄 Tausch-Vermeidung</span><span id="val-trade">34%</span></div>
+                    <div class="stat-bar-bg"><div id="bar-trade" class="stat-bar-fill green"></div></div>
+                </div>
+            </div>
+
+            <!-- Chat Section -->
+            <div class="chat-section scribble-box">
+                <div class="chat-header">💬 Cager Live Chat</div>
+                <div id="chat-messages" class="chat-messages">
+                    <div class="chat-msg bot"><b>TheCager:</b> Moin! Mal sehen, wie du gegen meine 2132 Elo ankommst!</div>
+                </div>
+            </div>
+
+            <div class="actions-row">
+                <button id="btn-restart" class="btn btn-primary scribble-btn">Neues Spiel</button>
+                <button id="btn-undo" class="btn btn-secondary scribble-btn">Zug zurück</button>
+            </div>
+
+            <a href="/" class="btn scribble-btn btn-danger btn-leave">Zurück zum Hub</a>
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+</html>
