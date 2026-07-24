@@ -1,3 +1,141 @@
+body {
+    background-color: #ffffff;
+    color: #111;
+    font-family: 'Patrick Hand', cursive, sans-serif;
+    margin: 0; padding: 20px;
+    display: flex; flex-direction: column; align-items: center;
+    background-image: radial-gradient(#ddd 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+/* HELPER CLASS FOR MODALS */
+.hidden {
+    display: none !important;
+}
+
+/* Der "Schlecht gezeichnet" Krakelei-Stil */
+.scribble-box {
+    border: 4px solid #000;
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
+    background: #fff;
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
+}
+
+.header-box { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; padding: 10px 30px; margin-bottom: 50px; box-sizing: border-box; }
+.header-box h1 { font-size: 38px; margin: 0; letter-spacing: 2px; }
+
+.twitch-btn { background-color: #9146FF; color: white; text-decoration: none; display: flex; align-items: center; padding: 8px 16px; font-size: 20px; transition: transform 0.1s; }
+.twitch-btn:hover { transform: scale(1.05); }
+
+.scribble-btn {
+    border: 3px solid #000;
+    border-bottom-left-radius: 15px 255px;
+    border-bottom-right-radius: 225px 15px;
+    border-top-left-radius: 255px 15px;
+    border-top-right-radius: 15px 225px;
+    cursor: pointer; font-family: 'Patrick Hand', cursive, sans-serif;
+}
+
+.profile-info { 
+    display: flex; align-items: center; gap: 12px; 
+    cursor: pointer; 
+    padding: 6px 12px; 
+    border-radius: 12px; 
+    transition: background 0.15s, transform 0.1s; 
+}
+.profile-info:hover { 
+    background: rgba(0,0,0,0.06); 
+    transform: scale(1.02);
+}
+
+.scribble-avatar { width: 48px; height: 48px; border: 3px solid #000; border-radius: 50% 40% 50% 40% / 40% 50% 40% 50%; object-fit: cover; }
+.user-name { font-size: 24px; font-weight: bold; }
+.logout-link { color: #e74c3c; font-size: 16px; text-decoration: underline; margin-left: 5px; }
+
+main { width: 100%; max-width: 900px; }
+.title-scribble { font-size: 36px; margin-bottom: 30px; text-align: center; text-decoration: underline; text-decoration-thickness: 3px; text-decoration-skip-ink: none; }
+.game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; }
+.game-card { padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.2s; }
+.game-card:hover:not(.locked) { transform: translateY(-5px) rotate(-1deg); }
+.game-img { width: 100%; height: 150px; border: 3px solid #000; border-radius: 10px 200px 10px 200px / 200px 10px 200px 10px; margin-bottom: 15px; }
+.game-card h3 { font-size: 26px; margin: 5px 0; }
+.game-card p { font-size: 18px; color: #555; flex-grow: 1; }
+.play-btn { background-color: #f1c40f; color: #000; font-size: 24px; font-weight: bold; padding: 10px 30px; text-decoration: none; margin-top: 15px; display: inline-block; transition: transform 0.1s; }
+.play-btn:hover:not(.disabled) { background-color: #f39c12; transform: scale(1.1); }
+.disabled { background-color: #ccc; cursor: not-allowed; color: #666; }
+.locked { opacity: 0.7; }
+
+/* FLORK BACKGROUND STYLE */
+.flork-bg {
+    position: fixed;
+    bottom: -15px;
+    width: 200px;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.9;
+}
+.flork-left { left: 2%; }
+.flork-right { right: 2%; transform: scaleX(-1); }
+
+header, main {
+    position: relative;
+    z-index: 10;
+}
+
+/* MODAL OVERLAY & PROFILE STYLES */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    width: 90%; max-width: 680px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 25px;
+    position: relative;
+}
+
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 12px; margin-bottom: 20px;
+}
+
+.modal-header h2 { margin: 0; font-size: 32px; }
+
+.close-btn {
+    background: #e74c3c; color: white;
+    border: 3px solid #000; border-radius: 50%;
+    width: 38px; height: 38px;
+    font-size: 20px; font-weight: bold;
+    cursor: pointer;
+    display: flex; justify-content: center; align-items: center;
+}
+
+/* STATS GRID */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px; margin-bottom: 25px;
+}
+
+.stat-box {
+    padding: 12px; text-align: center;
+    background: #f8f9fa; border: 3px solid #000;
+}
+
+.stat-box h4 { margin: 0 0 6px 0; font-size: 20px; }
+.stat-box p { margin: 2px 0; font-size: 16px; color: #444; }
+.stat-box .winrate { font-size: 20px; font-weight: bold; color: #2ecc71; }
+
 /* ACHIEVEMENTS SECTION & GRID */
 .achievements-section h3 { font-size: 26px; margin-bottom: 15px; text-decoration: underline; }
 
