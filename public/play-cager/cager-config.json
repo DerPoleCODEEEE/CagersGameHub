@@ -8,7 +8,7 @@
   },
   "psychologyEngine": {
     "softmaxTemperature": 0.65,
-    "tiltFactorAlpha": 0.78,
+    "tiltFactorAlpha": 0.20,
     "timePressureLambda": 0.045,
     "positionComplexityGamma": 1.35
   },
