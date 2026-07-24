@@ -15,6 +15,23 @@ let clocks = { w: 180, b: 180 };
 let clockTimer = null;
 let gameStarted = false;
 
+// TWITCH DATA & ADMIN CHECK
+const twitchName = localStorage.getItem('cager_twitch_name');
+const twitchPfp = localStorage.getItem('cager_twitch_pfp') || '';
+const isAdmin = (twitchName && twitchName.trim().toLowerCase() === 'schachspielenderpole');
+
+// ADMIN AUTO-PLAY STATE
+let autoPlayActive = false;
+let testerStockfish = null;
+let testerElo = 2000;
+
+if (twitchName) document.getElementById('my-name').innerText = twitchName;
+if (twitchPfp) {
+    const pfp = document.getElementById('my-pfp');
+    pfp.src = twitchPfp;
+    pfp.classList.remove('hidden');
+}
+
 // STATS SPEICHERN HELPER
 function saveGameResult(mode, result) {
     fetch('/api/stats/update', {
@@ -35,7 +52,7 @@ function getSquareColor(squareStr) {
     return (file + rank) % 2 === 0 ? 'dark' : 'light';
 }
 
-// STOCKFISH WEB WORKER (CORS-SAFE BLOB PROXY)
+// CAGER STOCKFISH WEB WORKER
 let stockfish;
 try {
     const workerBlob = new Blob([
@@ -49,16 +66,6 @@ try {
 let selectedSquare = null;
 let validMoves = [];
 let multiPvCandidates = [];
-
-const twitchName = localStorage.getItem('cager_twitch_name');
-const twitchPfp = localStorage.getItem('cager_twitch_pfp') || '';
-
-if (twitchName) document.getElementById('my-name').innerText = twitchName;
-if (twitchPfp) {
-    const pfp = document.getElementById('my-pfp');
-    pfp.src = twitchPfp;
-    pfp.classList.remove('hidden');
-}
 
 // CHESSBOARD PIECE ASSETS
 function getPieceImgUrl(piece) {
@@ -163,7 +170,7 @@ Promise.all([
     }
 });
 
-// STOCKFISH SETUP
+// STOCKFISH SETUP (CAGGER)
 if (stockfish) {
     stockfish.postMessage('uci');
     stockfish.postMessage('setoption name MultiPV value 5');
@@ -179,7 +186,7 @@ if (stockfish) {
     };
 }
 
-// BEWERTUNG DER MATT-KOMPLEXITÄT (MENSCHLICHE EVALUATION)
+// BEWERTUNG DER MATT-KOMPLEXITÄT
 function evaluatePvComplexity(fen, pvMoves) {
     const temp = new Chess(fen);
     let sacrifices = 0;
@@ -211,7 +218,6 @@ function evaluatePvComplexity(fen, pvMoves) {
             if (!isCheck) nonCheckMoves++;
             if (!isCheck && !isCapture) quietMoves++;
 
-            // Erkennung von Figurenopfern (Höhere Figur greift niedere Figur an / schlägt ab)
             if (isCapture && pieceBefore && targetBefore) {
                 const attackerVal = values[pieceBefore.type] || 0;
                 const victimVal = values[targetBefore.type] || 0;
@@ -222,12 +228,11 @@ function evaluatePvComplexity(fen, pvMoves) {
         }
     }
 
-    // Ein Matt in 4-6 ist EINFACH wenn: Keine Schweren Opfer UND alle Züge sind Schachgebot oder direkte Schlagfälle
     const isSimple = (sacrifices === 0) && (quietMoves === 0) && (nonCheckMoves <= 1);
     return { isSimple, sacrifices, quietMoves };
 }
 
-// PARSE STOCKFISH PV LINE MIT NEUER MATT-KOMPLEXITÄT
+// PARSE STOCKFISH PV LINE
 function parseStockfishPvLine(line) {
     const parts = line.split(' ');
     const pvIndex = parts.indexOf('pv');
@@ -245,23 +250,20 @@ function parseStockfishPvLine(line) {
             const mateIn = parseInt(parts[mateIndex + 1], 10);
             const absMate = Math.abs(mateIn);
 
-            if (mateIn > 0) { // Gewinner-Matt für Cager
+            if (mateIn > 0) {
                 if (absMate <= 3) {
-                    // MATT IN 1-3: Sieht Cager IMMER (100% Zwingend)
                     score = 20000 - absMate * 100;
                 } else if (absMate >= 4 && absMate <= 6) {
-                    // MATT IN 4-6: Nur wenn es EINFACH ist (Schachs/Einfache Züge, keine Opfer)
                     const complexity = evaluatePvComplexity(chess.fen(), pvMoves);
                     if (complexity.isSimple) {
-                        score = 19000 - absMate * 100; // Sehr hohe Bewertung -> Bot vollstreckt
+                        score = 19000 - absMate * 100;
                     } else {
-                        score = 900 - absMate * 50; // Komplexe Opfer-Sequenz -> In normale +9.0 Eval umwandeln
+                        score = 900 - absMate * 50;
                     }
                 } else {
-                    // MATT IN 7+: Zu tief zum Matt-Rechnen -> Als starker Positioneller Vorteil bewerten (+7.0 bis +9.0)
                     score = Math.max(700, 1200 - absMate * 40);
                 }
-            } else { // Verlierer-Matt für Cager
+            } else {
                 score = -20000 + absMate * 100;
             }
         }
@@ -347,7 +349,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// SMART EVAL GUARD & HUMAN MATT CONVERSION
+// SMART EVAL GUARD & DECISION MATRIX
 function processSoftmaxDecisionMatrix() {
     if (multiPvCandidates.length === 0 || isGameOver) return;
 
@@ -360,7 +362,6 @@ function processSoftmaxDecisionMatrix() {
 
     const bestMoveEval = candidates[0].stockfishEval;
     
-    // PERSPEKTIVE: Liegt Bot klar vorne oder sieht er ein direktes einfaches Matt?
     const botEval = currentTurn === 'b' ? -bestMoveEval : bestMoveEval;
     const isDirectShortMate = Math.abs(bestMoveEval) >= 18000;
     const isBotWinningMassively = botEval > 450 || isDirectShortMate;
@@ -377,14 +378,12 @@ function processSoftmaxDecisionMatrix() {
     }
     lastEval = bestMoveEval;
 
-    // 1. EVAL GUARD FILTER
+    // EVAL GUARD FILTER
     const safeCandidates = candidates.filter(cand => {
         const evalLoss = bestMoveEval - cand.stockfishEval;
 
-        // Bei direkt gesehenem einfachen Matt (<=3 Züge oder einfaches 4-6) MUSS der beste Zug genommen werden!
         if (isDirectShortMate) return evalLoss === 0;
 
-        // HARTER BAN: Max 250 cp Verlust
         if (evalLoss > 250) return false;
 
         if (evalLoss > 80) {
@@ -400,7 +399,6 @@ function processSoftmaxDecisionMatrix() {
 
     const finalCandidates = safeCandidates.length > 0 ? safeCandidates : [candidates[0]];
 
-    // 2. STIL & CONVERSION BEWERTUNG
     const scoredMoves = finalCandidates.map(cand => {
         let cagerScore = cand.stockfishEval;
         const tempBoard = new Chess(chess.fen());
@@ -419,7 +417,6 @@ function processSoftmaxDecisionMatrix() {
                     }
                 }
             } else {
-                // ABWICKLUNG IM GEWINNSTELLUNGS-MODUS:
                 if (moveDetails.captured) cagerScore += 60;
                 if (moveDetails.san.includes('+')) cagerScore += 40;
             }
@@ -427,7 +424,6 @@ function processSoftmaxDecisionMatrix() {
         return { ...cand, cagerScore };
     });
 
-    // 3. SELEKTION
     let chosenMove = scoredMoves[0];
 
     if (isDirectShortMate) {
@@ -518,7 +514,12 @@ function makeBotMove(moveObj) {
         }
     }
 
-    checkGameOver();
+    if (checkGameOver()) return;
+
+    // WENN AUTO-PLAY AKTIV UND WEISS DRAN IST -> ZU TESTER GEBEN
+    if (autoPlayActive && chess.turn() === 'w' && isAdmin) {
+        setTimeout(triggerTesterTurn, 300);
+    }
 }
 
 function createBoardDOM() {
@@ -568,7 +569,7 @@ function renderBoard() {
 }
 
 function handleSquareClick(r, c) {
-    if (chess.turn() !== 'w' || chess.game_over() || isGameOver) return;
+    if (chess.turn() !== 'w' || chess.game_over() || isGameOver || autoPlayActive) return;
 
     const square = String.fromCharCode('a'.charCodeAt(0) + c) + (8 - r);
     const piece = chess.get(square);
@@ -625,7 +626,12 @@ function checkGameOver() {
         
         const winner = isPlayerWin ? 'You' : 'TheCager';
         addChatMessage('TheCager', isPlayerWin ? getRandomQuote('player_win') : getRandomQuote('cager_win'));
-        alert(`Checkmate! ${winner} wins!`);
+        
+        if (autoPlayActive && isAdmin) {
+            setTimeout(() => { if (autoPlayActive) document.getElementById('btn-restart').click(); }, 3000);
+        } else {
+            alert(`Checkmate! ${winner} wins!`);
+        }
         return true;
     }
     
@@ -634,7 +640,12 @@ function checkGameOver() {
         if (clockTimer) clearInterval(clockTimer);
         saveGameResult('bot', 'draw');
         addChatMessage('TheCager', "GG! A draw. Fair enough.");
-        alert("Draw! Game Over.");
+        
+        if (autoPlayActive && isAdmin) {
+            setTimeout(() => { if (autoPlayActive) document.getElementById('btn-restart').click(); }, 3000);
+        } else {
+            alert("Draw! Game Over.");
+        }
         return true;
     }
     
@@ -654,6 +665,11 @@ document.getElementById('btn-restart').onclick = () => {
     updateTimeSettings();
     renderBoard();
     addChatMessage('TheCager', getRandomQuote('start'));
+
+    // FALLS AUTO-PLAY AKTIV IST, WEISS-ZUG ANSTOSSEN
+    if (autoPlayActive && isAdmin) {
+        setTimeout(triggerTesterTurn, 500);
+    }
 };
 
 // UNDO
@@ -717,6 +733,130 @@ document.getElementById('btn-pgn').onclick = () => {
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
 };
+
+// =========================================================================
+// ADMIN BOT-TESTER PANEL (NUR FÜR SCHACHSPIELENDERPOLE VISIBEL)
+// =========================================================================
+if (isAdmin) {
+    initAdminPanel();
+}
+
+function initAdminPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'admin-test-panel';
+    panel.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #181825;
+        border: 2px solid #f1c40f;
+        border-radius: 10px;
+        padding: 12px;
+        z-index: 9999;
+        color: #fff;
+        font-family: monospace;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 210px;
+    `;
+    panel.innerHTML = `
+        <div style="font-weight:bold; color:#f1c40f; font-size:13px; text-align:center;">
+            🛠️ ADMIN BOT-TESTER
+        </div>
+        <label style="font-size:11px; color:#aaa;">Gegner Stärke (Weiß):</label>
+        <select id="tester-elo-select" style="background:#313244; color:#fff; border:1px solid #555; padding:4px; border-radius:4px; font-family:monospace;">
+            <option value="1200">1200 ELO (Anfänger)</option>
+            <option value="1600">1600 ELO (Mittel)</option>
+            <option value="2000" selected>2000 ELO (Stark)</option>
+            <option value="2300">2300 ELO (Profi)</option>
+            <option value="2800">2800 ELO (Max Engine)</option>
+        </select>
+        <button id="btn-toggle-autoplay" style="background:#27ae60; color:#fff; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold; font-family:monospace;">
+            ▶ Auto-Play Starten
+        </button>
+        <div id="admin-status" style="font-size:10px; color:#a6adc8; text-align:center;">Status: Inaktiv</div>
+    `;
+    document.body.appendChild(panel);
+
+    try {
+        const workerBlob = new Blob([
+            `importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');`
+        ], { type: 'application/javascript' });
+        testerStockfish = new Worker(URL.createObjectURL(workerBlob));
+        testerStockfish.postMessage('uci');
+
+        testerStockfish.onmessage = (e) => {
+            const msg = e.data;
+            if (msg.startsWith('bestmove')) {
+                const parts = msg.split(' ');
+                const moveStr = parts[1];
+                if (moveStr && autoPlayActive && chess.turn() === 'w' && !isGameOver) {
+                    makeTesterMove(moveStr);
+                }
+            }
+        };
+    } catch (e) { console.error("Tester Stockfish init failed", e); }
+
+    document.getElementById('btn-toggle-autoplay').onclick = () => {
+        autoPlayActive = !autoPlayActive;
+        const btn = document.getElementById('btn-toggle-autoplay');
+        const status = document.getElementById('admin-status');
+        const eloSelect = document.getElementById('tester-elo-select');
+
+        if (autoPlayActive) {
+            btn.innerText = '⏸ Auto-Play Stoppen';
+            btn.style.background = '#e74c3c';
+            status.innerText = 'Status: 🟢 Läuft...';
+            testerElo = parseInt(eloSelect.value, 10);
+
+            if (testerStockfish) {
+                testerStockfish.postMessage(`setoption name UCI_Elo value ${testerElo}`);
+            }
+
+            if (isGameOver || chess.game_over()) {
+                document.getElementById('btn-restart').click();
+            } else if (chess.turn() === 'w') {
+                triggerTesterTurn();
+            }
+        } else {
+            btn.innerText = '▶ Auto-Play Starten';
+            btn.style.background = '#27ae60';
+            status.innerText = 'Status: Inaktiv';
+        }
+    };
+}
+
+function triggerTesterTurn() {
+    if (!autoPlayActive || chess.turn() !== 'w' || isGameOver || chess.game_over()) return;
+    if (testerStockfish) {
+        testerStockfish.postMessage(`position fen ${chess.fen()}`);
+        testerStockfish.postMessage('go movetime 400');
+    }
+}
+
+function makeTesterMove(moveStr) {
+    if (!autoPlayActive || isGameOver) return;
+    const from = moveStr.substring(0, 2);
+    const to = moveStr.substring(2, 4);
+    const promotion = moveStr[4] || 'q';
+
+    const move = chess.move({ from, to, promotion });
+    if (move) {
+        if (!gameStarted) {
+            gameStarted = true;
+            startClock();
+        }
+        if (!isZenMode) clocks['w'] += incrementSeconds;
+        renderBoard();
+        renderClocks();
+
+        if (checkGameOver()) return;
+
+        setTimeout(triggerBotTurn, 300);
+    }
+}
 
 createBoardDOM();
 updateTimeSettings();
