@@ -1,5 +1,17 @@
 const socket = io('/mutant-chess');
 
+// STATS SPEICHERN HELPER
+function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
+    fetch('/api/stats/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, result })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Stats in DB aktualisiert:', data))
+    .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
+}
+
 socket.on('connect', () => {
     const splash = document.getElementById('splash-screen');
     if (splash) splash.style.display = 'none';
@@ -233,6 +245,18 @@ socket.on('game_over', ({ winnerColor, reason }) => {
     isGameOver = true;
     clearInterval(clockTimer);
     
+    let result = 'draw';
+    if (winnerColor === null) {
+        result = 'draw';
+    } else if (winnerColor === playerColor) {
+        result = 'win';
+    } else {
+        result = 'loss';
+    }
+
+    // STATS IN DATABASE SPEICHERN
+    saveGameResult('mutant', result);
+
     let text = "";
     if (winnerColor === null) {
         text = "Draw! (Agreed Draw)";
