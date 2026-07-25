@@ -35,6 +35,14 @@ if (twitchPfp) {
     pfp.classList.remove('hidden');
 }
 
+// 🆕 WISSENSCHAFTLICHE MATHEMATIK (Win%)
+function cpToWinPct(cp) {
+    if (cp === undefined || cp === null) return 50.0;
+    const cappedCp = Math.max(-4000, Math.min(4000, cp));
+    // Logistische Formel aus der Studie
+    return 50 + 50 * ((2 / (1 + Math.exp(-0.00368208 * cappedCp))) - 1);
+}
+
 // STATS SPEICHERN HELPER
 function saveGameResult(mode, result) {
     fetch('/api/stats/update', {
@@ -72,7 +80,6 @@ function isEndgamePhase(chessObj) {
     return queens === 0 || nonPawnMaterial <= 25;
 }
 
-// PHASEN-ERKENNUNG
 function getCurrentPhase(chessObj) {
     const moveCount = chessObj.history().length;
     if (isEndgamePhase(chessObj)) return 'endgame';
@@ -80,19 +87,20 @@ function getCurrentPhase(chessObj) {
     return 'middlegame';
 }
 
-// 7 AUFGEFÄCHERTE SCHACHPRINZIPIEN
+// 7 AUFGEFÄCHERTE SCHACHPRINZIPIEN MIT WIN% KORRIDOR
 function applySmartPrinciples(candidateMoves, chessObj, profile) {
     if (!candidateMoves || candidateMoves.length === 0) return candidateMoves;
 
-    const bestEngineScore = candidateMoves[0].stockfishEval;
+    const bestWinPct = cpToWinPct(candidateMoves[0].stockfishEval);
     const phase = getCurrentPhase(chessObj);
     const pAdh = profile.principlesAdherence || {};
 
     return candidateMoves.map(cand => {
-        const evalLoss = bestEngineScore - cand.stockfishEval;
+        const candWinPct = cpToWinPct(cand.stockfishEval);
+        const winLoss = Math.max(0, bestWinPct - candWinPct);
 
-        // Taktisches Sicherheitsnetz: Taktik bricht alle Prinzipien
-        if (evalLoss > 75) {
+        // 🛑 NEUES SICHERHEITSNETZ: Taktik bricht Prinzipien (Toleranz: ~5% Siegchance)
+        if (winLoss > 5.0) {
             return { ...cand, principlePenalty: 0 };
         }
 
@@ -107,11 +115,9 @@ function applySmartPrinciples(candidateMoves, chessObj, profile) {
 
             if (phase === 'opening') {
                 const openP = pAdh.opening || {};
-                // 1. Castle Discipline
                 if (m.piece === 'k' && !m.san.includes('O-O') && !inCheck) {
                     penalty += 120 * ((openP.castleDiscipline || 95) / 100);
                 }
-                // 2. Early Queen Avoidance
                 if (m.piece === 'q' && !m.captured && !inCheck) {
                     penalty += 90 * ((openP.earlyQueenAvoidance || 88) / 100);
                 }
@@ -121,21 +127,16 @@ function applySmartPrinciples(candidateMoves, chessObj, profile) {
                 const midP = pAdh.middlegame || {};
                 const turn = chessObj.turn();
                 
-                // 3. Backrank Avoidance
                 const isBackRank = (turn === 'w' && rankIdx === 0) || (turn === 'b' && rankIdx === 7);
                 if (['n', 'b'].includes(m.piece) && isBackRank && !m.captured && !inCheck) {
                     penalty += 70 * ((midP.backrankAvoidance || 90) / 100);
                 }
-                // 4. King Shield Safety (Bauernschübe vor dem rochierten König)
-                // Einfache Heuristik: f,g,h Bauern, wenn kurz rochiert wurde
                 if (m.piece === 'p' && !m.captured && fileIdx >= 5) {
-                    // Wir nehmen an, eine Seite hat rochiert, wenn der Turm nicht mehr auf h1/h8 steht (vereinfacht)
                     const kingSq = turn === 'w' ? 'g1' : 'g8';
                     if (chessObj.get(kingSq) && chessObj.get(kingSq).type === 'k') {
                         penalty += 80 * ((midP.kingShieldSafety || 85) / 100);
                     }
                 }
-                // 5. Knight Centralization (Vermeide a und h Linie)
                 if (m.piece === 'n' && [0, 7].includes(fileIdx) && !m.captured && !inCheck) {
                     penalty += 40 * ((midP.knightCentralization || 78) / 100);
                 }
@@ -143,13 +144,11 @@ function applySmartPrinciples(candidateMoves, chessObj, profile) {
 
             if (phase === 'endgame') {
                 const endP = pAdh.endgame || {};
-                // 6. King Centralization (Vermeide a und h Linie)
                 if (m.piece === 'k' && [0, 7].includes(fileIdx) && !inCheck) {
                     penalty += 50 * ((endP.kingCentralization || 94) / 100);
                 }
-                // 7. Rook Activity (Belohne Zentrumslinien)
                 if (m.piece === 'r' && [2, 3, 4, 5].includes(fileIdx)) {
-                    penalty -= 40 * ((endP.rookActivity || 80) / 100); // Bonus!
+                    penalty -= 40 * ((endP.rookActivity || 80) / 100);
                 }
             }
         }
@@ -187,58 +186,34 @@ const CAGER_QUOTES = {
         "Howdy! Welcome back to the channel, let's document the climb!",
         "Alright, let's see if we can handle this position today.",
         "Let's go into a Queen's Gambit, keep it clean, classical and solid.",
-        "Don't mind me, just providing some unedited commentary as I play!",
-        "How's your day going? Thanks for sticking around for the game!",
-        "It is raining hard outside right now... but I like the weather like this.",
-        "Alright, let's get our pieces out to natural squares. Game on!",
-        "We're playing against a solid opponent today. Time to focus!"
+        "Don't mind me, just providing some unedited commentary as I play!"
     ],
     cager_capture: [
         { text: "And bye-bye! I'll take that pawn with tempo!", piece: 'p' },
         { text: "Nom nom, free material! That piece was standing in my way anyway.", piece: 'not_p' },
         { text: "BANG! We win those, baby! Absolute cinema!" },
-        { text: "Sniped! Clean tactical blow right there." },
-        { text: "Thanks for the gift! I'm totally fine with trading here." },
-        { text: "Taking here comes with an immediate threat. Let's push!" },
-        { text: "Look at that, now his knight is completely out of moves!" }
+        { text: "Sniped! Clean tactical blow right there." }
     ],
     player_capture: [
         { text: "Oof, I did NOT see that check! That is no bueno..." },
         { text: "Ouch! I really don't like where my position is going now." },
-        { text: "Oh man, I am getting put in the blender right now..." },
-        { text: "Wait, did I just blunder something? Shoot, my position is getting tangled!" },
-        { text: "Double, double, double dog damn! That is terrifying!" },
-        { text: "Yikes! Those pawns of yours are absolute demons!" },
-        { text: "Frankly, I'm terrified! Time to play some stubborn defense." }
+        { text: "Oh man, I am getting put in the blender right now..." }
     ],
     cager_check: [
         { text: "Check! Watch your king safety, things are getting spicy!" },
-        { text: "Check! Where is your king going now?" },
-        { text: "Check! Now you have to respond to my immediate threat!" },
-        { text: "Knock knock! Giving a check on the light squares!", color: 'light' },
-        { text: "Check on the dark squares! Keeping the pressure on!", color: 'dark' },
-        { text: "Check! That gives me a lot of juicy counterplay!" }
+        { text: "Check! Where is your king going now?" }
     ],
     cager_win: [
         "BANG! WE WIN THOSE, BABY! What an absolute comeback!",
-        "GG WP! Oh my god, what a battle! That was absolute cinema!",
-        "GG! I don't care how it happened, a win is a win! Let's go!",
-        "GG! That comeback victory felt so hyped! Rematch anytime!",
-        "Oh man, games like these will give you arrhythmia! GG WP!",
-        "GG! Please consider liking the video, I need that sweet dopamine!"
+        "GG WP! Oh my god, what a battle! That was absolute cinema!"
     ],
     player_win: [
         "GG WP! Man, I got completely outplayed in that endgame!",
-        "Respect, great game! You had me completely stuck in the blender.",
-        "GG! Clean mate, you played that recovery masterfully!",
-        "Ouch! I threw the game away and you punished it instantly. GG!",
-        "Sad day for all the Cager enthusiasts out there... GG WP!"
+        "Respect, great game! You had me completely stuck in the blender."
     ],
     cager_resign: [
         "No way out of this position for me... GG, you had me completely outplayed!",
-        "GG! I'm completely losing here, respect for the solid play.",
-        "I yield! I am so bad at chess today, GG WP!",
-        "I double dog dare you to blunder... ah, you didn't. Alright, I resign! GG!"
+        "I yield! I am so bad at chess today, GG WP!"
     ]
 };
 
@@ -268,6 +243,16 @@ Promise.all([
         cagerConfig = configData;
         const elo = configData.targetElo || 2132;
         document.getElementById('bot-elo').innerText = `${elo} ELO`;
+        
+        // 🆕 HYBRIDE ENGINE KONFIGURATION (UCI_LimitStrength)
+        if (stockfish) {
+            let skill = Math.round((elo - 1000) / (3000 - 1000) * 20);
+            skill = Math.max(0, Math.min(20, skill));
+            
+            stockfish.postMessage(`setoption name UCI_LimitStrength value true`);
+            stockfish.postMessage(`setoption name UCI_Elo value ${elo}`);
+            stockfish.postMessage(`setoption name Skill Level value ${skill}`);
+        }
     }
     if (bookData) {
         cagerBook = bookData.book;
@@ -446,7 +431,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// DECISION MATRIX (MIT NUANCIERTEN ERROR-RATES UND 60cp STIL-KORRIDOR)
+// 🆕 ENTSCHEIDUNGSMATRIX AUF BASIS VON WIN%
 function processSoftmaxDecisionMatrix() {
     const candidates = Object.values(pvMapAtHighestDepth).sort((a, b) => b.stockfishEval - a.stockfishEval);
     pvMapAtHighestDepth = {};
@@ -459,12 +444,10 @@ function processSoftmaxDecisionMatrix() {
     const profile = (cagerConfig && cagerConfig[colorKey]) ? cagerConfig[colorKey] : (cagerConfig || {});
     const psycho = (cagerConfig && cagerConfig.psychologyEngine) ? cagerConfig.psychologyEngine : (cagerConfig || {});
     
-    // NEU: Fehler-Raten
     const errorRates = profile.errorRates || { inaccuraciesPercent: 12, mistakesPercent: 5, blundersPercent: 1 };
 
     const phase = getCurrentPhase(chess);
     const isEndgame = phase === 'endgame';
-    const phaseAcpl = isEndgame ? (profile.acplEndgame || profile.acplMiddlegame || 40) : (profile.acplMiddlegame || 40);
 
     let flankAgg = profile.flankPawnAggression !== undefined ? profile.flankPawnAggression : 50;
     if (phase === 'opening' && profile.flankPawnAggressionOpening !== undefined) flankAgg = profile.flankPawnAggressionOpening;
@@ -480,12 +463,12 @@ function processSoftmaxDecisionMatrix() {
     if (phase === 'endgame' && profile.queenTradeReluctanceEndgame !== undefined) queenTradeReluctVal = profile.queenTradeReluctanceEndgame;
 
     const bestMoveEval = candidates[0].stockfishEval;
-    const botEval = bestMoveEval; 
+    const bestWinPct = cpToWinPct(bestMoveEval);
     const isDirectShortMate = Math.abs(bestMoveEval) >= 18000;
-    const isBotWinningMassively = botEval > 450 || isDirectShortMate;
-    const worstEvalInPv = candidates[candidates.length - 1].stockfishEval;
-    const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
-    const isComplexPosition = evalSpread > 180 || chess.in_check();
+    const isBotWinningMassively = bestWinPct > 95.0 || isDirectShortMate;
+    
+    // Komplexe Stellung = Top Züge liegen nah beieinander
+    const isComplexPosition = (candidates.length >= 2 && (bestWinPct - cpToWinPct(candidates[1].stockfishEval) < 4.0)) || chess.in_check();
 
     const history = chess.history({ verbose: true });
     let lastPlayerMoveUCI = null;
@@ -496,7 +479,7 @@ function processSoftmaxDecisionMatrix() {
         }
     }
 
-    const evalDelta = evalBeforeBotMove - bestMoveEval;
+    const evalDelta = evalBeforeBotMove - bestMoveEval; // CP basiert für Tilt-Trigger
     const opponentFoundPunish = lastExpectedOpponentReply && (lastPlayerMoveUCI === lastExpectedOpponentReply);
 
     if (evalDelta > 150 && opponentFoundPunish) {
@@ -509,23 +492,23 @@ function processSoftmaxDecisionMatrix() {
     if (candidates.length >= 3 && Math.abs(bestMoveEval) < 500) {
         if (bestMoveEval - candidates[2].stockfishEval > 250) isMinefield = true;
     }
-    // Tunnelblick nutzt jetzt den neuen blundersPercent als Backup, falls tunnelVisionPercent 0 ist
     const tunnelVal = psycho.tunnelVisionPercent !== undefined ? psycho.tunnelVisionPercent : errorRates.blundersPercent;
     const triggerTunnelVision = isMinefield && (Math.random() * 100 < tunnelVal);
 
-    // NUANCIERTER EVAL GUARD FILTER
+    // 🆕 Win% BASIERTER EVAL GUARD FILTER
     const safeCandidates = candidates.filter((cand, index) => {
-        const evalLoss = bestMoveEval - cand.stockfishEval;
+        const winLoss = Math.max(0, bestWinPct - cpToWinPct(cand.stockfishEval));
 
-        if (isDirectShortMate) return evalLoss === 0;
+        if (isDirectShortMate) return (bestMoveEval - cand.stockfishEval) === 0;
 
-        if (triggerTunnelVision && index >= 2 && evalLoss <= 350) return true; 
+        if (triggerTunnelVision && index >= 2 && winLoss <= 25.0) return true; 
 
-        if (evalLoss > 250) return false;
+        // Absoluter Cutoff: Züge, die > 18% WinChance kosten, werden blockiert
+        if (winLoss > 18.0) return false;
 
-        if (evalLoss > 80) {
-            // Nuancierter "Mistakes"-Filter: Erlaube echte Mistakes organisch!
-            if (evalLoss <= 160 && (Math.random() * 100 < errorRates.mistakesPercent)) {
+        // Mistake Filter (Zwischen 6% und 15% Win Verlust)
+        if (winLoss > 6.0) {
+            if (winLoss <= 15.0 && (Math.random() * 100 < errorRates.mistakesPercent)) {
                 return true;
             }
 
@@ -539,23 +522,20 @@ function processSoftmaxDecisionMatrix() {
     });
 
     const finalCandidates = safeCandidates.length > 0 ? safeCandidates : [candidates[0]];
-
-    // Prinzipien-Filter anwenden (7 Nuancen)
     const candidatesWithPrinciples = applySmartPrinciples(finalCandidates, chess, profile);
 
     const botRemainingTime = clocks[currentTurn];
     const isLowClockPanic = !isZenMode && botRemainingTime < 30;
 
     const scoredMoves = candidatesWithPrinciples.map((cand, idx) => {
+        // CP wird für Score-Aufrechnung behalten, um weiche Temperatur nicht zu zerstören
         let cagerScore = cand.stockfishEval - (cand.principlePenalty || 0);
-        
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
-
-        const evalLoss = bestMoveEval - cand.stockfishEval;
         
-        // 🛑 DAS SICHERHEITSNETZ: Stil-Boni nur, wenn Zug max 60 cp verliert
-        const isPositionallySound = evalLoss <= 60;
+        // 🛑 STIL-KORRIDOR AUF BASIS VON WIN% (Toleranz: 4% Siegchance)
+        const winLoss = Math.max(0, bestWinPct - cpToWinPct(cand.stockfishEval));
+        const isPositionallySound = winLoss <= 4.0;
 
         if (triggerTunnelVision && idx >= 2) {
             cagerScore += 180; 
@@ -563,25 +543,17 @@ function processSoftmaxDecisionMatrix() {
 
         if (moveDetails) {
             if (!isBotWinningMassively) {
-                // KÖNIGSANGRIFF (Nur wenn positionell gesund)
                 if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
-                    if (isPositionallySound) {
-                        cagerScore += (kingAttackBiasVal / 100) * 80;
-                    }
+                    if (isPositionallySound) cagerScore += (kingAttackBiasVal / 100) * 80;
                 }
                 
-                // ABTAUSCH (Vermeidung gilt immer)
                 if (moveDetails.captured) {
-                    if (moveDetails.captured === 'q') {
-                        cagerScore -= (queenTradeReluctVal / 100) * 180;
-                    } else if (moveDetails.piece === moveDetails.captured) {
-                        cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
-                    }
+                    if (moveDetails.captured === 'q') cagerScore -= (queenTradeReluctVal / 100) * 180;
+                    else if (moveDetails.piece === moveDetails.captured) cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
 
                     if (psycho.panicTradeTendency && isLowClockPanic) cagerScore += 90;
                 }
 
-                // FLANKENBAUERN (Nur wenn positionell gesund)
                 if (moveDetails.piece === 'p' && !moveDetails.captured) {
                     const fileIdx = moveDetails.to.charCodeAt(0) - 'a'.charCodeAt(0);
                     const isFlank = [0, 1, 6, 7].includes(fileIdx);
@@ -606,14 +578,10 @@ function processSoftmaxDecisionMatrix() {
     } else {
         const lambda = psycho.timePressureLambda || 0.045;
         const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
-
         const minTiltImpact = Math.min(0.03, tiltScore / 5000);
-        const phaseMultiplier = phaseAcpl / 40; 
         
-        // 🛑 INACCURACIES heben die Temperatur weich an
         const inaccMultiplier = 1 + ((errorRates.inaccuraciesPercent || 10) / 100);
-        
-        const effectiveTemp = (psycho.softmaxTemperature || 0.60) * phaseMultiplier * inaccMultiplier * (1 + minTiltImpact + (timePanicTerm * 1.2));
+        const effectiveTemp = (psycho.softmaxTemperature || 0.50) * inaccMultiplier * (1 + minTiltImpact + (timePanicTerm * 1.2));
         
         const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
         const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
@@ -635,11 +603,15 @@ function processSoftmaxDecisionMatrix() {
     evalBeforeBotMove = bestMoveEval;
     lastExpectedOpponentReply = chosenMove.opponentReply || null;
 
-    const thinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
-    setTimeout(() => makeBotMove(chosenMove), thinkTime);
+    // 🆕 KONTEXT-SENSITIVES ZEITMANAGEMENT
+    let baseThinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
+    if (isComplexPosition && !isLowClockPanic) {
+        baseThinkTime += 600; // Extra Bedenkzeit bei hoher Entropie/Komplexität!
+    }
+
+    setTimeout(() => makeBotMove(chosenMove), baseThinkTime);
 }
 
-// SMARTE ERÖFFNUNGSBUCH-LOGIK (Filtert Misclicks)
 function triggerBotTurn() {
     if (chess.game_over() || isGameOver) return;
 
@@ -663,7 +635,6 @@ function triggerBotTurn() {
             const moveSan = bestMoveEntry[0];
             const moveCount = bestMoveEntry[1];
 
-            // 2. FILTER: Mindestens 2x gespielt für Auto-Pilot
             if (moveCount >= 2) {
                 const m = chess.move(moveSan, { slate: true });
                 if (m) {
@@ -681,7 +652,7 @@ function triggerBotTurn() {
     pvMapAtHighestDepth = {};
     if (stockfish) {
         stockfish.postMessage(`position fen ${chess.fen()}`);
-        stockfish.postMessage('go movetime 650');
+        stockfish.postMessage('go movetime 800'); // Etwas höhere Berechnungszeit für UCI Limit
     }
 }
 
