@@ -5,6 +5,8 @@ let cagerConfig = null;
 // PSYCHOLOGY & GAME STATE
 let tiltScore = 0;
 let lastEval = 0;
+let evalBeforeBotMove = 0;
+let lastExpectedOpponentReply = null;
 let isGameOver = false;
 
 // CLOCK & TIME CONTROL STATE
@@ -45,12 +47,29 @@ function saveGameResult(mode, result) {
     .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
 }
 
-// HELPER: Erkennt ob ein Feld (z.B. "e4" oder "f7") hell oder dunkel ist
 function getSquareColor(squareStr) {
     if (!squareStr || squareStr.length < 2) return 'light';
     const file = squareStr.charCodeAt(0) - 'a'.charCodeAt(0);
     const rank = parseInt(squareStr[1], 10);
     return (file + rank) % 2 === 0 ? 'dark' : 'light';
+}
+
+function isEndgamePhase(chessObj) {
+    let queens = 0;
+    let nonPawnMaterial = 0;
+    const weights = { n: 3, b: 3, r: 5, q: 9 };
+    
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const square = String.fromCharCode('a'.charCodeAt(0) + c) + (8 - r);
+            const piece = chessObj.get(square);
+            if (piece) {
+                if (piece.type === 'q') queens++;
+                if (weights[piece.type]) nonPawnMaterial += weights[piece.type];
+            }
+        }
+    }
+    return queens === 0 || nonPawnMaterial <= 25;
 }
 
 // CAGER STOCKFISH WEB WORKER
@@ -66,9 +85,11 @@ try {
 
 let selectedSquare = null;
 let validMoves = [];
-let multiPvCandidates = [];
 
-// CHESSBOARD PIECE ASSETS
+// DEPTH-AWARE MULTIPV STORAGE
+let currentSearchDepth = 0;
+let pvMapAtHighestDepth = {};
+
 function getPieceImgUrl(piece) {
     if (!piece) return '';
     const color = piece.color;
@@ -76,7 +97,6 @@ function getPieceImgUrl(piece) {
     return `https://chessboardjs.com/img/chesspieces/wikipedia/${color}${type}.png`;
 }
 
-// CONTEXT-AWARE CAGER QUOTES
 const CAGER_QUOTES = {
     start: [
         "Howdy! Welcome back to the channel, let's document the climb!",
@@ -137,7 +157,6 @@ const CAGER_QUOTES = {
     ]
 };
 
-// SMART QUOTE PICKER
 function getRandomQuote(cat, context = {}) {
     const list = CAGER_QUOTES[cat];
     if (!list || list.length === 0) return "GG!";
@@ -163,17 +182,15 @@ Promise.all([
 ]).then(([configData, bookData]) => {
     if (configData) {
         cagerConfig = configData;
-        document.getElementById('bot-elo').innerText = `${configData.targetElo || 2132} ELO`;
-        if (stockfish) {
-            stockfish.postMessage(`setoption name UCI_Elo value ${configData.targetElo || 2132}`);
-        }
+        const elo = configData.targetElo || 2132;
+        document.getElementById('bot-elo').innerText = `${elo} ELO`;
     }
     if (bookData) {
         cagerBook = bookData.book;
     }
 });
 
-// STOCKFISH SETUP (CAGER)
+// STOCKFISH SETUP
 if (stockfish) {
     stockfish.postMessage('uci');
     stockfish.postMessage('setoption name MultiPV value 5');
@@ -189,13 +206,11 @@ if (stockfish) {
     };
 }
 
-// BEWERTUNG DER MATT-KOMPLEXITÄT
 function evaluatePvComplexity(fen, pvMoves) {
     const temp = new Chess(fen);
     let sacrifices = 0;
     let quietMoves = 0;
     let nonCheckMoves = 0;
-
     const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
     for (let i = 0; i < pvMoves.length; i++) {
@@ -205,7 +220,6 @@ function evaluatePvComplexity(fen, pvMoves) {
         const from = uci.substring(0, 2);
         const to = uci.substring(2, 4);
         const promotion = uci[4] || 'q';
-
         const isCagersTurn = (i % 2 === 0);
 
         const pieceBefore = temp.get(from);
@@ -224,27 +238,36 @@ function evaluatePvComplexity(fen, pvMoves) {
             if (isCapture && pieceBefore && targetBefore) {
                 const attackerVal = values[pieceBefore.type] || 0;
                 const victimVal = values[targetBefore.type] || 0;
-                if (attackerVal > victimVal + 1) {
-                    sacrifices++;
-                }
+                if (attackerVal > victimVal + 1) sacrifices++;
             }
         }
     }
-
     const isSimple = (sacrifices === 0) && (quietMoves === 0) && (nonCheckMoves <= 1);
     return { isSimple, sacrifices, quietMoves };
 }
 
-// PARSE STOCKFISH PV LINE
+// SAUBERES FILTERN INKLUSIVE GEGNER-ANTWORT
 function parseStockfishPvLine(line) {
     const parts = line.split(' ');
+    const depthIdx = parts.indexOf('depth');
     const pvIndex = parts.indexOf('pv');
+    const multiPvIdx = parts.indexOf('multipv');
     const scoreIndex = parts.indexOf('cp');
     const mateIndex = parts.indexOf('mate');
 
-    if (pvIndex !== -1 && pvIndex + 1 < parts.length) {
+    if (depthIdx !== -1 && depthIdx + 1 < parts.length) {
+        const depth = parseInt(parts[depthIdx + 1], 10);
+        if (depth > currentSearchDepth) {
+            currentSearchDepth = depth;
+            pvMapAtHighestDepth = {};
+        }
+    }
+
+    if (pvIndex !== -1 && pvIndex + 1 < parts.length && multiPvIdx !== -1) {
+        const multiPvRank = parseInt(parts[multiPvIdx + 1], 10);
         const pvMoves = parts.slice(pvIndex + 1);
         const moveStr = pvMoves[0];
+        const opponentReply = pvMoves.length > 1 ? pvMoves[1] : null; // Extrahierte Gegner-Bestrafung
         let score = 0;
 
         if (scoreIndex !== -1 && scoreIndex + 1 < parts.length) {
@@ -254,15 +277,10 @@ function parseStockfishPvLine(line) {
             const absMate = Math.abs(mateIn);
 
             if (mateIn > 0) {
-                if (absMate <= 3) {
-                    score = 20000 - absMate * 100;
-                } else if (absMate >= 4 && absMate <= 6) {
+                if (absMate <= 3) score = 20000 - absMate * 100;
+                else if (absMate >= 4 && absMate <= 6) {
                     const complexity = evaluatePvComplexity(chess.fen(), pvMoves);
-                    if (complexity.isSimple) {
-                        score = 19000 - absMate * 100;
-                    } else {
-                        score = 900 - absMate * 50;
-                    }
+                    score = complexity.isSimple ? (19000 - absMate * 100) : (900 - absMate * 50);
                 } else {
                     score = Math.max(700, 1200 - absMate * 40);
                 }
@@ -271,17 +289,17 @@ function parseStockfishPvLine(line) {
             }
         }
 
-        multiPvCandidates.push({
+        pvMapAtHighestDepth[multiPvRank] = {
             moveStr: moveStr,
+            opponentReply: opponentReply,
             stockfishEval: score,
             from: moveStr.substring(0, 2),
             to: moveStr.substring(2, 4),
             promotion: moveStr[4] || 'q'
-        });
+        };
     }
 }
 
-// TIME CONTROL LOGIC
 function updateTimeSettings() {
     const val = document.getElementById('time-select').value;
     const incLabel = document.getElementById('inc-label');
@@ -312,7 +330,6 @@ function startClock() {
 
         const turn = chess.turn();
         clocks[turn]--;
-
         renderClocks();
 
         if (clocks[turn] <= 0) {
@@ -352,20 +369,24 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// SMART EVAL GUARD & DECISION MATRIX
+// DECISION MATRIX MIT PRÄZISEM TILT-PUNISH-CHECK
 function processSoftmaxDecisionMatrix() {
-    if (multiPvCandidates.length === 0 || isGameOver) return;
+    const candidates = Object.values(pvMapAtHighestDepth).sort((a, b) => b.stockfishEval - a.stockfishEval);
+    pvMapAtHighestDepth = {};
+    currentSearchDepth = 0;
 
-    const candidates = [...multiPvCandidates];
-    multiPvCandidates = [];
+    if (candidates.length === 0 || isGameOver) return;
 
     const currentTurn = chess.turn();
-    const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
-    const psycho = (cagerConfig && cagerConfig.psychologyEngine) || { softmaxTemperature: 0.65, tiltFactorAlpha: 0.20, timePressureLambda: 0.045 };
+    const colorKey = currentTurn === 'w' ? 'white' : 'black';
+    const profile = (cagerConfig && cagerConfig[colorKey]) ? cagerConfig[colorKey] : (cagerConfig || {});
+    const psycho = (cagerConfig && cagerConfig.psychologyEngine) ? cagerConfig.psychologyEngine : (cagerConfig || {});
+
+    const isEndgame = isEndgamePhase(chess);
+    const phaseAcpl = isEndgame ? (profile.acplEndgame || profile.acplMiddlegame || 40) : (profile.acplMiddlegame || 40);
 
     const bestMoveEval = candidates[0].stockfishEval;
-    
-    const botEval = currentTurn === 'b' ? -bestMoveEval : bestMoveEval;
+    const botEval = bestMoveEval; 
     const isDirectShortMate = Math.abs(bestMoveEval) >= 18000;
     const isBotWinningMassively = botEval > 450 || isDirectShortMate;
 
@@ -373,20 +394,44 @@ function processSoftmaxDecisionMatrix() {
     const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
     const isComplexPosition = evalSpread > 180 || chess.in_check();
 
-    // GEDÄMPFTE TILT-BERECHNUNG
-    const evalDelta = lastEval - bestMoveEval;
-    if (evalDelta > 150) {
+    // PRÜFEN, OB DER GEGNER DIE BESTRAFUNGS-CONTINUATION GEFUNDEN HAT
+    const history = chess.history({ verbose: true });
+    let lastPlayerMoveUCI = null;
+    if (history.length > 0) {
+        const lastM = history[history.length - 1];
+        if (lastM.color !== currentTurn) {
+            lastPlayerMoveUCI = lastM.from + lastM.to + (lastM.promotion || '');
+        }
+    }
+
+    const evalDelta = evalBeforeBotMove - bestMoveEval;
+    const opponentFoundPunish = lastExpectedOpponentReply && (lastPlayerMoveUCI === lastExpectedOpponentReply);
+
+    // TILT NUR WENN DER GEGNER DIE ECHTE CONTINUATION BEREITGESTELLT HAT
+    if (evalDelta > 150 && opponentFoundPunish) {
         tiltScore = (psycho.tiltFactorAlpha || 0.20) * tiltScore + (1 - (psycho.tiltFactorAlpha || 0.20)) * (evalDelta * 0.05);
     } else {
         tiltScore *= (psycho.tiltFactorAlpha || 0.20);
     }
-    lastEval = bestMoveEval;
+
+    // TUNNELBLICK & MINENFELD-ERKENNUNG
+    let isMinefield = false;
+    if (candidates.length >= 3 && Math.abs(bestMoveEval) < 500) {
+        if (bestMoveEval - candidates[2].stockfishEval > 250) {
+            isMinefield = true;
+        }
+    }
+    const triggerTunnelVision = isMinefield && (Math.random() * 100 < (psycho.tunnelVisionPercent || 0));
 
     // EVAL GUARD FILTER
-    const safeCandidates = candidates.filter(cand => {
+    const safeCandidates = candidates.filter((cand, index) => {
         const evalLoss = bestMoveEval - cand.stockfishEval;
 
         if (isDirectShortMate) return evalLoss === 0;
+
+        if (triggerTunnelVision && index >= 2 && evalLoss <= 350) {
+            return true; 
+        }
 
         if (evalLoss > 250) return false;
 
@@ -403,24 +448,47 @@ function processSoftmaxDecisionMatrix() {
 
     const finalCandidates = safeCandidates.length > 0 ? safeCandidates : [candidates[0]];
 
-    const scoredMoves = finalCandidates.map(cand => {
+    const botRemainingTime = clocks[currentTurn];
+    const isLowClockPanic = !isZenMode && botRemainingTime < 30;
+
+    const scoredMoves = finalCandidates.map((cand, idx) => {
         let cagerScore = cand.stockfishEval;
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
+
+        if (triggerTunnelVision && idx >= 2) {
+            cagerScore += 180; 
+        }
 
         if (moveDetails) {
             if (!isBotWinningMassively) {
                 if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
                     cagerScore += ((profile.kingAttackBias || 35) / 100) * 80;
                 }
+                
                 if (moveDetails.captured) {
                     if (moveDetails.captured === 'q') {
                         cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 180;
                     } else if (moveDetails.piece === moveDetails.captured) {
                         cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
                     }
+
+                    if (psycho.panicTradeTendency && isLowClockPanic) {
+                        cagerScore += 90;
+                    }
                 }
-                // FLANK PAWN AGGRESSION WURDE HIER KOMPLETT ENTFERNT
+
+                if (moveDetails.piece === 'p' && !moveDetails.captured) {
+                    const fileIdx = moveDetails.to.charCodeAt(0) - 'a'.charCodeAt(0);
+                    const isFlank = [0, 1, 6, 7].includes(fileIdx);
+                    const flankAgg = profile.flankPawnAggression !== undefined ? profile.flankPawnAggression : 50;
+
+                    if (isFlank) {
+                        cagerScore += (flankAgg - 50) * 1.2;
+                    } else {
+                        cagerScore += (50 - flankAgg) * 1.2;
+                    }
+                }
             } else {
                 if (moveDetails.captured) cagerScore += 60;
                 if (moveDetails.san.includes('+')) cagerScore += 40;
@@ -434,12 +502,12 @@ function processSoftmaxDecisionMatrix() {
     if (isDirectShortMate) {
         chosenMove = scoredMoves.reduce((best, m) => m.cagerScore > best.cagerScore ? m : best, scoredMoves[0]);
     } else {
-        const botRemainingTime = clocks[currentTurn];
         const lambda = psycho.timePressureLambda || 0.045;
         const timePanicTerm = isZenMode ? 0 : Math.exp(-lambda * botRemainingTime);
 
         const minTiltImpact = Math.min(0.03, tiltScore / 5000);
-        const effectiveTemp = (psycho.softmaxTemperature || 0.65) * (1 + minTiltImpact + (timePanicTerm * 1.2));
+        const phaseMultiplier = phaseAcpl / 40; 
+        const effectiveTemp = (psycho.softmaxTemperature || 0.65) * phaseMultiplier * (1 + minTiltImpact + (timePanicTerm * 1.2));
         
         const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
         const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
@@ -458,6 +526,10 @@ function processSoftmaxDecisionMatrix() {
         }
     }
 
+    // WERTE FÜR NÄCHSTE TILT-PRÜFUNG MERKEN
+    evalBeforeBotMove = bestMoveEval;
+    lastExpectedOpponentReply = chosenMove.opponentReply || null;
+
     const thinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
     setTimeout(() => makeBotMove(chosenMove), thinkTime);
 }
@@ -470,9 +542,10 @@ function triggerBotTurn() {
     if (history.length > 0) stateKey = 'start_' + history.join('_');
 
     const currentTurn = chess.turn();
-    const profile = (cagerConfig && cagerConfig[currentTurn === 'w' ? 'white' : 'black']) || {};
+    const colorKey = currentTurn === 'w' ? 'white' : 'black';
+    const profile = (cagerConfig && cagerConfig[colorKey]) ? cagerConfig[colorKey] : (cagerConfig || {});
     
-    const bookLoyalty = profile.openingBookLoyalty || 95;
+    const bookLoyalty = profile.openingBookLoyalty !== undefined ? profile.openingBookLoyalty : 95;
 
     if ((Math.random() * 100) <= bookLoyalty && cagerBook && cagerBook[stateKey]) {
         const moves = cagerBook[stateKey];
@@ -487,7 +560,8 @@ function triggerBotTurn() {
         }
     }
 
-    multiPvCandidates = [];
+    currentSearchDepth = 0;
+    pvMapAtHighestDepth = {};
     if (stockfish) {
         stockfish.postMessage(`position fen ${chess.fen()}`);
         stockfish.postMessage('go movetime 650');
@@ -667,6 +741,8 @@ document.getElementById('btn-restart').onclick = () => {
     selectedSquare = null;
     validMoves = [];
     tiltScore = 0;
+    evalBeforeBotMove = 0;
+    lastExpectedOpponentReply = null;
     updateTimeSettings();
     renderBoard();
     addChatMessage('TheCager', getRandomQuote('start'));
@@ -738,9 +814,7 @@ document.getElementById('btn-pgn').onclick = () => {
     URL.revokeObjectURL(link.href);
 };
 
-// =========================================================================
-// ADMIN BOT-TESTER PANEL (NUR FÜR SCHACHSPIELENDERPOLE VISIBEL)
-// =========================================================================
+// ADMIN PANEL
 if (isAdmin) {
     initAdminPanel();
 }
@@ -815,13 +889,12 @@ function initAdminPanel() {
             status.innerText = 'Status: 🟢 Läuft...';
             testerElo = parseInt(eloSelect.value, 10);
             
-            // Skill Level Map & Depth Limitations für Stockfish 10
             let testerSkill = 10;
             if (testerElo <= 1200) { testerSkill = 0; testerDepth = 2; }
             else if (testerElo <= 1600) { testerSkill = 4; testerDepth = 4; }
             else if (testerElo <= 2000) { testerSkill = 9; testerDepth = 8; }
             else if (testerElo <= 2300) { testerSkill = 14; testerDepth = 12; }
-            else { testerSkill = 20; testerDepth = null; } // Unlimitiert
+            else { testerSkill = 20; testerDepth = null; }
 
             if (testerStockfish) {
                 testerStockfish.postMessage(`setoption name Skill Level value ${testerSkill}`);
@@ -846,7 +919,6 @@ function triggerTesterTurn() {
     if (!autoPlayActive || chess.turn() !== 'w' || isGameOver || chess.game_over()) return;
     if (testerStockfish) {
         testerStockfish.postMessage(`position fen ${chess.fen()}`);
-        // Kombinierter Limit-Einsatz aus Suchtiefe und Skill Level für realistische Schwäche
         if (testerDepth) {
             testerStockfish.postMessage(`go depth ${testerDepth}`);
         } else {
