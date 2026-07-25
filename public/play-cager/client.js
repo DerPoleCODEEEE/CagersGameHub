@@ -72,7 +72,7 @@ function isEndgamePhase(chessObj) {
     return queens === 0 || nonPawnMaterial <= 25;
 }
 
-// 🆕 PHASEN-ERKENNUNG (Opening, Middlegame, Endgame)
+// PHASEN-ERKENNUNG
 function getCurrentPhase(chessObj) {
     const moveCount = chessObj.history().length;
     if (isEndgamePhase(chessObj)) return 'endgame';
@@ -80,72 +80,81 @@ function getCurrentPhase(chessObj) {
     return 'middlegame';
 }
 
-// 🆕 KONTEXTBASIERTER PRINZIPIEN-FILTER (Taktik-Korridor <= 75 cp)
+// 7 AUFGEFÄCHERTE SCHACHPRINZIPIEN
 function applySmartPrinciples(candidateMoves, chessObj, profile) {
     if (!candidateMoves || candidateMoves.length === 0) return candidateMoves;
 
     const bestEngineScore = candidateMoves[0].stockfishEval;
     const phase = getCurrentPhase(chessObj);
-    
-    let adherence = 85;
-    if (profile.principlesAdherence) {
-        if (typeof profile.principlesAdherence === 'object' && profile.principlesAdherence[phase] !== undefined) {
-            adherence = profile.principlesAdherence[phase];
-        } else if (typeof profile.principlesAdherence === 'number') {
-            adherence = profile.principlesAdherence;
-        }
-    }
-    const adherenceFactor = adherence / 100;
+    const pAdh = profile.principlesAdherence || {};
 
     return candidateMoves.map(cand => {
         const evalLoss = bestEngineScore - cand.stockfishEval;
 
-        // 🛑 SICHERHEITSNETZ: Züge mit > 75 cp Verlust sind taktisch Notwehr oder schwere Patzer.
-        // Prinzipien-Strafen greifen hier NICHT, um die Taktik niemals zu beschädigen!
+        // Taktisches Sicherheitsnetz: Taktik bricht alle Prinzipien
         if (evalLoss > 75) {
             return { ...cand, principlePenalty: 0 };
         }
 
         let penalty = 0;
         const inCheck = chessObj.in_check();
-        
         const temp = new Chess(chessObj.fen());
         const m = temp.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
 
         if (m) {
-            // --- PHASE 1: ERÖFFNUNG ---
+            const fileIdx = m.to.charCodeAt(0) - 'a'.charCodeAt(0);
+            const rankIdx = parseInt(m.to[1], 10) - 1;
+
             if (phase === 'opening') {
-                // Grundloser Königsschritt vor der Rochade
+                const openP = pAdh.opening || {};
+                // 1. Castle Discipline
                 if (m.piece === 'k' && !m.san.includes('O-O') && !inCheck) {
-                    penalty += 120;
+                    penalty += 120 * ((openP.castleDiscipline || 95) / 100);
+                }
+                // 2. Early Queen Avoidance
+                if (m.piece === 'q' && !m.captured && !inCheck) {
+                    penalty += 90 * ((openP.earlyQueenAvoidance || 88) / 100);
                 }
             }
 
-            // --- PHASE 2: MITTELSPIEL ---
             if (phase === 'middlegame') {
-                // Grundloser passiver Rückzug auf die 1./8. Reihe
-                const toRank = m.to[1];
+                const midP = pAdh.middlegame || {};
                 const turn = chessObj.turn();
-                const isBackRank = (turn === 'w' && toRank === '1') || (turn === 'b' && toRank === '8');
                 
+                // 3. Backrank Avoidance
+                const isBackRank = (turn === 'w' && rankIdx === 0) || (turn === 'b' && rankIdx === 7);
                 if (['n', 'b'].includes(m.piece) && isBackRank && !m.captured && !inCheck) {
-                    penalty += 70;
+                    penalty += 70 * ((midP.backrankAvoidance || 90) / 100);
+                }
+                // 4. King Shield Safety (Bauernschübe vor dem rochierten König)
+                // Einfache Heuristik: f,g,h Bauern, wenn kurz rochiert wurde
+                if (m.piece === 'p' && !m.captured && fileIdx >= 5) {
+                    // Wir nehmen an, eine Seite hat rochiert, wenn der Turm nicht mehr auf h1/h8 steht (vereinfacht)
+                    const kingSq = turn === 'w' ? 'g1' : 'g8';
+                    if (chessObj.get(kingSq) && chessObj.get(kingSq).type === 'k') {
+                        penalty += 80 * ((midP.kingShieldSafety || 85) / 100);
+                    }
+                }
+                // 5. Knight Centralization (Vermeide a und h Linie)
+                if (m.piece === 'n' && [0, 7].includes(fileIdx) && !m.captured && !inCheck) {
+                    penalty += 40 * ((midP.knightCentralization || 78) / 100);
                 }
             }
 
-            // --- PHASE 3: ENDSPIEL ---
             if (phase === 'endgame') {
-                // König zieht grundlos an den äußeren Rand (a- oder h-Linie)
-                if (m.piece === 'k' && ['a', 'h'].includes(m.to[0]) && !inCheck) {
-                    penalty += 50;
+                const endP = pAdh.endgame || {};
+                // 6. King Centralization (Vermeide a und h Linie)
+                if (m.piece === 'k' && [0, 7].includes(fileIdx) && !inCheck) {
+                    penalty += 50 * ((endP.kingCentralization || 94) / 100);
+                }
+                // 7. Rook Activity (Belohne Zentrumslinien)
+                if (m.piece === 'r' && [2, 3, 4, 5].includes(fileIdx)) {
+                    penalty -= 40 * ((endP.rookActivity || 80) / 100); // Bonus!
                 }
             }
         }
 
-        return {
-            ...cand,
-            principlePenalty: penalty * adherenceFactor
-        };
+        return { ...cand, principlePenalty: penalty };
     });
 }
 
@@ -163,7 +172,6 @@ try {
 let selectedSquare = null;
 let validMoves = [];
 
-// DEPTH-AWARE MULTIPV STORAGE
 let currentSearchDepth = 0;
 let pvMapAtHighestDepth = {};
 
@@ -252,7 +260,6 @@ function getRandomQuote(cat, context = {}) {
     return typeof chosen === 'string' ? chosen : chosen.text;
 }
 
-// CONFIG & BOOK LOADING
 Promise.all([
     fetch('cager-config.json').then(r => r.json()).catch(() => null),
     fetch('cager-book.json').then(r => r.json()).catch(() => null)
@@ -267,7 +274,6 @@ Promise.all([
     }
 });
 
-// STOCKFISH SETUP
 if (stockfish) {
     stockfish.postMessage('uci');
     stockfish.postMessage('setoption name MultiPV value 5');
@@ -323,7 +329,6 @@ function evaluatePvComplexity(fen, pvMoves) {
     return { isSimple, sacrifices, quietMoves };
 }
 
-// SAUBERES FILTERN INKLUSIVE GEGNER-ANTWORT
 function parseStockfishPvLine(line) {
     const parts = line.split(' ');
     const depthIdx = parts.indexOf('depth');
@@ -404,7 +409,6 @@ function startClock() {
             clockTimer = null;
             return;
         }
-
         const turn = chess.turn();
         clocks[turn]--;
         renderClocks();
@@ -413,10 +417,8 @@ function startClock() {
             clearInterval(clockTimer);
             clockTimer = null;
             isGameOver = true;
-            
             const isPlayerLoss = (turn === 'w');
             saveGameResult('bot', isPlayerLoss ? 'loss' : 'win');
-            
             const winner = isPlayerLoss ? 'TheCager (BOT)' : 'You';
             alert(`Time's up! ${winner} won on time!`);
         }
@@ -425,10 +427,8 @@ function startClock() {
 
 function renderClocks() {
     if (isZenMode) return;
-
     const botColor = 'b';
     const playerColor = 'w';
-
     const botBox = document.getElementById('bot-clock');
     const playerBox = document.getElementById('player-clock');
 
@@ -446,7 +446,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// DECISION MATRIX MIT PHASEN-EINSTELLUNG & KONTEXT-PRINZIPIEN
+// DECISION MATRIX (MIT NUANCIERTEN ERROR-RATES UND 60cp STIL-KORRIDOR)
 function processSoftmaxDecisionMatrix() {
     const candidates = Object.values(pvMapAtHighestDepth).sort((a, b) => b.stockfishEval - a.stockfishEval);
     pvMapAtHighestDepth = {};
@@ -458,13 +458,14 @@ function processSoftmaxDecisionMatrix() {
     const colorKey = currentTurn === 'w' ? 'white' : 'black';
     const profile = (cagerConfig && cagerConfig[colorKey]) ? cagerConfig[colorKey] : (cagerConfig || {});
     const psycho = (cagerConfig && cagerConfig.psychologyEngine) ? cagerConfig.psychologyEngine : (cagerConfig || {});
+    
+    // NEU: Fehler-Raten
+    const errorRates = profile.errorRates || { inaccuraciesPercent: 12, mistakesPercent: 5, blundersPercent: 1 };
 
-    // PHASEN-BESTIMMUNG
     const phase = getCurrentPhase(chess);
     const isEndgame = phase === 'endgame';
     const phaseAcpl = isEndgame ? (profile.acplEndgame || profile.acplMiddlegame || 40) : (profile.acplMiddlegame || 40);
 
-    // PHASEN-SPEZIFISCHE PARAMETER-ZUWEISUNG
     let flankAgg = profile.flankPawnAggression !== undefined ? profile.flankPawnAggression : 50;
     if (phase === 'opening' && profile.flankPawnAggressionOpening !== undefined) flankAgg = profile.flankPawnAggressionOpening;
     else if (phase === 'middlegame' && profile.flankPawnAggressionMiddlegame !== undefined) flankAgg = profile.flankPawnAggressionMiddlegame;
@@ -482,12 +483,10 @@ function processSoftmaxDecisionMatrix() {
     const botEval = bestMoveEval; 
     const isDirectShortMate = Math.abs(bestMoveEval) >= 18000;
     const isBotWinningMassively = botEval > 450 || isDirectShortMate;
-
     const worstEvalInPv = candidates[candidates.length - 1].stockfishEval;
     const evalSpread = Math.abs(bestMoveEval - worstEvalInPv);
     const isComplexPosition = evalSpread > 180 || chess.in_check();
 
-    // PRÜFEN, OB DER GEGNER DIE BESTRAFUNGS-CONTINUATION GEFUNDEN HAT
     const history = chess.history({ verbose: true });
     let lastPlayerMoveUCI = null;
     if (history.length > 0) {
@@ -500,59 +499,63 @@ function processSoftmaxDecisionMatrix() {
     const evalDelta = evalBeforeBotMove - bestMoveEval;
     const opponentFoundPunish = lastExpectedOpponentReply && (lastPlayerMoveUCI === lastExpectedOpponentReply);
 
-    // TILT NUR WENN DER GEGNER DIE ECHTE CONTINUATION BEREITGESTELLT HAT
     if (evalDelta > 150 && opponentFoundPunish) {
         tiltScore = (psycho.tiltFactorAlpha || 0.20) * tiltScore + (1 - (psycho.tiltFactorAlpha || 0.20)) * (evalDelta * 0.05);
     } else {
         tiltScore *= (psycho.tiltFactorAlpha || 0.20);
     }
 
-    // TUNNELBLICK & MINENFELD-ERKENNUNG
     let isMinefield = false;
     if (candidates.length >= 3 && Math.abs(bestMoveEval) < 500) {
-        if (bestMoveEval - candidates[2].stockfishEval > 250) {
-            isMinefield = true;
-        }
+        if (bestMoveEval - candidates[2].stockfishEval > 250) isMinefield = true;
     }
-    const triggerTunnelVision = isMinefield && (Math.random() * 100 < (psycho.tunnelVisionPercent || 0));
+    // Tunnelblick nutzt jetzt den neuen blundersPercent als Backup, falls tunnelVisionPercent 0 ist
+    const tunnelVal = psycho.tunnelVisionPercent !== undefined ? psycho.tunnelVisionPercent : errorRates.blundersPercent;
+    const triggerTunnelVision = isMinefield && (Math.random() * 100 < tunnelVal);
 
-    // EVAL GUARD FILTER
+    // NUANCIERTER EVAL GUARD FILTER
     const safeCandidates = candidates.filter((cand, index) => {
         const evalLoss = bestMoveEval - cand.stockfishEval;
 
         if (isDirectShortMate) return evalLoss === 0;
 
-        if (triggerTunnelVision && index >= 2 && evalLoss <= 350) {
-            return true; 
-        }
+        if (triggerTunnelVision && index >= 2 && evalLoss <= 350) return true; 
 
         if (evalLoss > 250) return false;
 
         if (evalLoss > 80) {
+            // Nuancierter "Mistakes"-Filter: Erlaube echte Mistakes organisch!
+            if (evalLoss <= 160 && (Math.random() * 100 < errorRates.mistakesPercent)) {
+                return true;
+            }
+
             const isAggressiveIntent = cand.moveStr.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to);
             const isHighTiltOrTimePanic = tiltScore > 400 || (clocks[currentTurn] < 12 && !isZenMode);
 
             if (!isComplexPosition && !isHighTiltOrTimePanic) return false;
             if (!isAggressiveIntent && !isHighTiltOrTimePanic) return false;
         }
-
         return true;
     });
 
     const finalCandidates = safeCandidates.length > 0 ? safeCandidates : [candidates[0]];
 
-    // 🆕 ANWENDUNG DES KONTEXTBASIERTEN PRINZIPIEN-FILTERS
+    // Prinzipien-Filter anwenden (7 Nuancen)
     const candidatesWithPrinciples = applySmartPrinciples(finalCandidates, chess, profile);
 
     const botRemainingTime = clocks[currentTurn];
     const isLowClockPanic = !isZenMode && botRemainingTime < 30;
 
     const scoredMoves = candidatesWithPrinciples.map((cand, idx) => {
-        // Starte mit dem um Prinzipien-Strafen angepassten Score
         let cagerScore = cand.stockfishEval - (cand.principlePenalty || 0);
         
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
+
+        const evalLoss = bestMoveEval - cand.stockfishEval;
+        
+        // 🛑 DAS SICHERHEITSNETZ: Stil-Boni nur, wenn Zug max 60 cp verliert
+        const isPositionallySound = evalLoss <= 60;
 
         if (triggerTunnelVision && idx >= 2) {
             cagerScore += 180; 
@@ -560,10 +563,14 @@ function processSoftmaxDecisionMatrix() {
 
         if (moveDetails) {
             if (!isBotWinningMassively) {
+                // KÖNIGSANGRIFF (Nur wenn positionell gesund)
                 if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
-                    cagerScore += (kingAttackBiasVal / 100) * 80;
+                    if (isPositionallySound) {
+                        cagerScore += (kingAttackBiasVal / 100) * 80;
+                    }
                 }
                 
+                // ABTAUSCH (Vermeidung gilt immer)
                 if (moveDetails.captured) {
                     if (moveDetails.captured === 'q') {
                         cagerScore -= (queenTradeReluctVal / 100) * 180;
@@ -571,19 +578,17 @@ function processSoftmaxDecisionMatrix() {
                         cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
                     }
 
-                    if (psycho.panicTradeTendency && isLowClockPanic) {
-                        cagerScore += 90;
-                    }
+                    if (psycho.panicTradeTendency && isLowClockPanic) cagerScore += 90;
                 }
 
+                // FLANKENBAUERN (Nur wenn positionell gesund)
                 if (moveDetails.piece === 'p' && !moveDetails.captured) {
                     const fileIdx = moveDetails.to.charCodeAt(0) - 'a'.charCodeAt(0);
                     const isFlank = [0, 1, 6, 7].includes(fileIdx);
 
-                    if (isFlank) {
-                        cagerScore += (flankAgg - 50) * 1.2;
-                    } else {
-                        cagerScore += (50 - flankAgg) * 1.2;
+                    if (isPositionallySound) {
+                        if (isFlank) cagerScore += (flankAgg - 50) * 1.2;
+                        else cagerScore += (50 - flankAgg) * 1.2;
                     }
                 }
             } else {
@@ -604,7 +609,11 @@ function processSoftmaxDecisionMatrix() {
 
         const minTiltImpact = Math.min(0.03, tiltScore / 5000);
         const phaseMultiplier = phaseAcpl / 40; 
-        const effectiveTemp = (psycho.softmaxTemperature || 0.65) * phaseMultiplier * (1 + minTiltImpact + (timePanicTerm * 1.2));
+        
+        // 🛑 INACCURACIES heben die Temperatur weich an
+        const inaccMultiplier = 1 + ((errorRates.inaccuraciesPercent || 10) / 100);
+        
+        const effectiveTemp = (psycho.softmaxTemperature || 0.60) * phaseMultiplier * inaccMultiplier * (1 + minTiltImpact + (timePanicTerm * 1.2));
         
         const maxScore = Math.max(...scoredMoves.map(m => m.cagerScore));
         const expScores = scoredMoves.map(m => Math.exp((m.cagerScore - maxScore) / (effectiveTemp * 40)));
@@ -623,7 +632,6 @@ function processSoftmaxDecisionMatrix() {
         }
     }
 
-    // WERTE FÜR NÄCHSTE TILT-PRÜFUNG MERKEN
     evalBeforeBotMove = bestMoveEval;
     lastExpectedOpponentReply = chosenMove.opponentReply || null;
 
@@ -631,7 +639,7 @@ function processSoftmaxDecisionMatrix() {
     setTimeout(() => makeBotMove(chosenMove), thinkTime);
 }
 
-// 🆕 SMARTE ERÖFFNUNGSBUCH-LOGIK (Filtert Misclicks & Einmal-Züge raus)
+// SMARTE ERÖFFNUNGSBUCH-LOGIK (Filtert Misclicks)
 function triggerBotTurn() {
     if (chess.game_over() || isGameOver) return;
 
@@ -647,31 +655,28 @@ function triggerBotTurn() {
 
     if ((Math.random() * 100) <= bookLoyalty && cagerBook && cagerBook[stateKey]) {
         const moves = cagerBook[stateKey];
-        const entries = Object.entries(moves); // Erstellt Arrays [Zug, Häufigkeit]
+        const entries = Object.entries(moves); 
 
         if (entries.length > 0) {
-            // 1. Sortiere Züge streng nach Häufigkeit (meistgespielter Zug steht IMMER oben)
             entries.sort((a, b) => b[1] - a[1]);
-
-            const bestMoveEntry = entries[0]; // Deine absolute Hauptvariante in dieser Stellung
+            const bestMoveEntry = entries[0]; 
             const moveSan = bestMoveEntry[0];
             const moveCount = bestMoveEntry[1];
 
-            // 2. FILTER: Nur spielen, wenn es eine erprobte Hauptvariante ist (mindestens 2x gespielt)
+            // 2. FILTER: Mindestens 2x gespielt für Auto-Pilot
             if (moveCount >= 2) {
                 const m = chess.move(moveSan, { slate: true });
                 if (m) {
-                    console.log(`📖 Playing Main Book Move: ${moveSan} (Played ${moveCount}x in PGN)`);
+                    console.log(`📖 Playing Main Book Move: ${moveSan} (Played ${moveCount}x)`);
                     makeBotMove(m);
                     return;
                 }
             } else {
-                console.log(`⚠️ Book move '${moveSan}' played only 1x in PGN. Skipping book to avoid misclicks & blunders.`);
+                console.log(`⚠️ Book move '${moveSan}' played only 1x. Letting engine calculate.`);
             }
         }
     }
 
-    // Falls Buch ignoriert wird, die Stellung neu ist oder der Zug nur 1x vorkam -> Stockfish berechnet
     currentSearchDepth = 0;
     pvMapAtHighestDepth = {};
     if (stockfish) {
@@ -839,11 +844,9 @@ function checkGameOver() {
         }
         return true;
     }
-    
     return false;
 }
 
-// RESTART
 document.getElementById('btn-restart').onclick = () => {
     if (clockTimer) clearInterval(clockTimer);
     clockTimer = null;
@@ -864,7 +867,6 @@ document.getElementById('btn-restart').onclick = () => {
     }
 };
 
-// UNDO
 document.getElementById('btn-undo').onclick = () => {
     if (isGameOver) return;
     chess.undo();
@@ -873,32 +875,26 @@ document.getElementById('btn-undo').onclick = () => {
     renderClocks();
 };
 
-// RESIGN
 document.getElementById('btn-resign').onclick = () => {
     if (isGameOver || chess.game_over()) return;
-
     if (confirm('Are you sure you want to resign?')) {
         isGameOver = true;
         if (clockTimer) {
             clearInterval(clockTimer);
             clockTimer = null;
         }
-        
         saveGameResult('bot', 'loss');
-        
         addChatMessage('TheCager', getRandomQuote('cager_resign'));
         alert('You resigned. TheCager (BOT) wins!');
     }
 };
 
-// DOWNLOAD PGN
 document.getElementById('btn-pgn').onclick = () => {
     const moves = chess.history();
     if (moves.length === 0) {
         alert('No moves played yet!');
         return;
     }
-
     chess.header('Event', 'TheCager Bot Match');
     chess.header('Site', 'TheCager Game Hub');
     chess.header('Date', new Date().toISOString().split('T')[0].replace(/-/g, '.'));
@@ -919,42 +915,27 @@ document.getElementById('btn-pgn').onclick = () => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `cager_match_${Date.now()}.pgn`;
-    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
 };
 
-// ADMIN PANEL
-if (isAdmin) {
-    initAdminPanel();
-}
+if (isAdmin) initAdminPanel();
 
 function initAdminPanel() {
     const panel = document.createElement('div');
     panel.id = 'admin-test-panel';
     panel.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: #181825;
-        border: 2px solid #f1c40f;
-        border-radius: 10px;
-        padding: 12px;
-        z-index: 9999;
-        color: #fff;
-        font-family: monospace;
+        position: fixed; bottom: 20px; right: 20px;
+        background: #181825; border: 2px solid #f1c40f;
+        border-radius: 10px; padding: 12px; z-index: 9999;
+        color: #fff; font-family: monospace;
         box-shadow: 0 4px 20px rgba(0,0,0,0.8);
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        width: 210px;
+        display: flex; flex-direction: column; gap: 8px; width: 210px;
     `;
     panel.innerHTML = `
-        <div style="font-weight:bold; color:#f1c40f; font-size:13px; text-align:center;">
-            🛠️ ADMIN BOT-TESTER
-        </div>
+        <div style="font-weight:bold; color:#f1c40f; font-size:13px; text-align:center;">🛠️ ADMIN BOT-TESTER</div>
         <label style="font-size:11px; color:#aaa;">Gegner Stärke (Weiß):</label>
         <select id="tester-elo-select" style="background:#313244; color:#fff; border:1px solid #555; padding:4px; border-radius:4px; font-family:monospace;">
             <option value="1200">1200 ELO (Anfänger)</option>
@@ -1014,11 +995,8 @@ function initAdminPanel() {
                 testerStockfish.postMessage(`setoption name UCI_Elo value ${testerElo}`);
             }
 
-            if (isGameOver || chess.game_over()) {
-                document.getElementById('btn-restart').click();
-            } else if (chess.turn() === 'w') {
-                triggerTesterTurn();
-            }
+            if (isGameOver || chess.game_over()) document.getElementById('btn-restart').click();
+            else if (chess.turn() === 'w') triggerTesterTurn();
         } else {
             btn.innerText = '▶ Auto-Play Starten';
             btn.style.background = '#27ae60';
@@ -1031,11 +1009,8 @@ function triggerTesterTurn() {
     if (!autoPlayActive || chess.turn() !== 'w' || isGameOver || chess.game_over()) return;
     if (testerStockfish) {
         testerStockfish.postMessage(`position fen ${chess.fen()}`);
-        if (testerDepth) {
-            testerStockfish.postMessage(`go depth ${testerDepth}`);
-        } else {
-            testerStockfish.postMessage('go movetime 400');
-        }
+        if (testerDepth) testerStockfish.postMessage(`go depth ${testerDepth}`);
+        else testerStockfish.postMessage('go movetime 400');
     }
 }
 
@@ -1047,16 +1022,12 @@ function makeTesterMove(moveStr) {
 
     const move = chess.move({ from, to, promotion });
     if (move) {
-        if (!gameStarted) {
-            gameStarted = true;
-            startClock();
-        }
+        if (!gameStarted) { gameStarted = true; startClock(); }
         if (!isZenMode) clocks['w'] += incrementSeconds;
         renderBoard();
         renderClocks();
 
         if (checkGameOver()) return;
-
         setTimeout(triggerBotTurn, 300);
     }
 }
