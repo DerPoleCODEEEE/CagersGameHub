@@ -1,20 +1,20 @@
 {
     "botName": "Thecager",
-    "targetElo": 2384,
+    "targetElo": 2132,
     "psychologyEngine": {
         "softmaxTemperature": 1.12,
         "tunnelVisionPercent": 10,
         "panicTradeTendency": false
     },
     "white": {
-        "openingBookLoyalty": 95,
+        "openingBookLoyalty": 98,
         "flankPawnAggression": 52,
         "blunderRatePercent": 12.6,
         "acplMiddlegame": 46,
         "acplEndgame": 38
     },
     "black": {
-        "openingBookLoyalty": 95,
+        "openingBookLoyalty": 98,
         "flankPawnAggression": 52,
         "blunderRatePercent": 12.6,
         "acplMiddlegame": 46,
