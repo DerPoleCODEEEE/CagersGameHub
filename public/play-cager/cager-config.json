@@ -7,17 +7,39 @@
         "panicTradeTendency": false
     },
     "white": {
-        "openingBookLoyalty": 98,
-        "flankPawnAggression": 52,
+        "openingBookLoyalty": 95,
         "blunderRatePercent": 12.6,
         "acplMiddlegame": 46,
-        "acplEndgame": 38
+        "acplEndgame": 38,
+        "flankPawnAggressionOpening": 22,
+        "flankPawnAggressionMiddlegame": 45,
+        "flankPawnAggressionEndgame": 61,
+        "kingAttackBiasMiddlegame": 90,
+        "kingAttackBiasEndgame": 50,
+        "queenTradeReluctanceMiddlegame": 13,
+        "queenTradeReluctanceEndgame": 10,
+        "principlesAdherence": {
+            "opening": 99,
+            "middlegame": 99,
+            "endgame": 98
+        }
     },
     "black": {
-        "openingBookLoyalty": 98,
-        "flankPawnAggression": 52,
+        "openingBookLoyalty": 95,
         "blunderRatePercent": 12.6,
         "acplMiddlegame": 46,
-        "acplEndgame": 38
+        "acplEndgame": 38,
+        "flankPawnAggressionOpening": 22,
+        "flankPawnAggressionMiddlegame": 45,
+        "flankPawnAggressionEndgame": 61,
+        "kingAttackBiasMiddlegame": 90,
+        "kingAttackBiasEndgame": 50,
+        "queenTradeReluctanceMiddlegame": 13,
+        "queenTradeReluctanceEndgame": 10,
+        "principlesAdherence": {
+            "opening": 99,
+            "middlegame": 99,
+            "endgame": 98
+        }
     }
 }
