@@ -2,7 +2,7 @@ const chess = new Chess();
 let cagerBook = null;
 let cagerConfig = null;
 
-// 🆕 DYNAMISCHES BOT-STATE
+// DYNAMISCHES BOT-STATE
 let currentBotId = 'cager';
 let currentBotName = 'TheCager';
 let currentBotColor = '9b59b6';
@@ -40,15 +40,14 @@ if (twitchPfp) {
     pfp.classList.remove('hidden');
 }
 
-// 🆕 WISSENSCHAFTLICHE MATHEMATIK (Win%)
+// WISSENSCHAFTLICHE MATHEMATIK (Win%)
 function cpToWinPct(cp) {
     if (cp === undefined || cp === null) return 50.0;
     const cappedCp = Math.max(-4000, Math.min(4000, cp));
-    // Logistische Formel aus der Studie
     return 50 + 50 * ((2 / (1 + Math.exp(-0.00368208 * cappedCp))) - 1);
 }
 
-// STATS SPEICHERN HELPER (Speichert jetzt auch, GEGEN WEN gespielt wurde)
+// STATS SPEICHERN HELPER
 function saveGameResult(mode, result) {
     fetch('/api/stats/update', {
         method: 'POST',
@@ -104,7 +103,7 @@ function applySmartPrinciples(candidateMoves, chessObj, profile) {
         const candWinPct = cpToWinPct(cand.stockfishEval);
         const winLoss = Math.max(0, bestWinPct - candWinPct);
 
-        // 🛑 NEUES SICHERHEITSNETZ: Taktik bricht Prinzipien (Toleranz: ~5% Siegchance)
+        // Taktik bricht Prinzipien (Toleranz: ~5% Siegchance)
         if (winLoss > 5.0) {
             return { ...cand, principlePenalty: 0 };
         }
@@ -191,58 +190,34 @@ const CAGER_QUOTES = {
         "Howdy! Welcome back to the channel, let's document the climb!",
         "Alright, let's see if we can handle this position today.",
         "Let's go into a Queen's Gambit, keep it clean, classical and solid.",
-        "Don't mind me, just providing some unedited commentary as I play!",
-        "How's your day going? Thanks for sticking around for the game!",
-        "It is raining hard outside right now... but I like the weather like this.",
-        "Alright, let's get our pieces out to natural squares. Game on!",
-        "We're playing against a solid opponent today. Time to focus!"
+        "Don't mind me, just providing some unedited commentary as I play!"
     ],
     cager_capture: [
         { text: "And bye-bye! I'll take that pawn with tempo!", piece: 'p' },
         { text: "Nom nom, free material! That piece was standing in my way anyway.", piece: 'not_p' },
         { text: "BANG! We win those, baby! Absolute cinema!" },
-        { text: "Sniped! Clean tactical blow right there." },
-        { text: "Thanks for the gift! I'm totally fine with trading here." },
-        { text: "Taking here comes with an immediate threat. Let's push!" },
-        { text: "Look at that, now his knight is completely out of moves!" }
+        { text: "Sniped! Clean tactical blow right there." }
     ],
     player_capture: [
         { text: "Oof, I did NOT see that check! That is no bueno..." },
         { text: "Ouch! I really don't like where my position is going now." },
-        { text: "Oh man, I am getting put in the blender right now..." },
-        { text: "Wait, did I just blunder something? Shoot, my position is getting tangled!" },
-        { text: "Double, double, double dog damn! That is terrifying!" },
-        { text: "Yikes! Those pawns of yours are absolute demons!" },
-        { text: "Frankly, I'm terrified! Time to play some stubborn defense." }
+        { text: "Oh man, I am getting put in the blender right now..." }
     ],
     cager_check: [
         { text: "Check! Watch your king safety, things are getting spicy!" },
-        { text: "Check! Where is your king going now?" },
-        { text: "Check! Now you have to respond to my immediate threat!" },
-        { text: "Knock knock! Giving a check on the light squares!", color: 'light' },
-        { text: "Check on the dark squares! Keeping the pressure on!", color: 'dark' },
-        { text: "Check! That gives me a lot of juicy counterplay!" }
+        { text: "Check! Where is your king going now?" }
     ],
     cager_win: [
         "BANG! WE WIN THOSE, BABY! What an absolute comeback!",
-        "GG WP! Oh my god, what a battle! That was absolute cinema!",
-        "GG! I don't care how it happened, a win is a win! Let's go!",
-        "GG! That comeback victory felt so hyped! Rematch anytime!",
-        "Oh man, games like these will give you arrhythmia! GG WP!",
-        "GG! Please consider liking the video, I need that sweet dopamine!"
+        "GG WP! Oh my god, what a battle! That was absolute cinema!"
     ],
     player_win: [
         "GG WP! Man, I got completely outplayed in that endgame!",
-        "Respect, great game! You had me completely stuck in the blender.",
-        "GG! Clean mate, you played that recovery masterfully!",
-        "Ouch! I threw the game away and you punished it instantly. GG!",
-        "Sad day for all the Cager enthusiasts out there... GG WP!"
+        "Respect, great game! You had me completely stuck in the blender."
     ],
     cager_resign: [
         "No way out of this position for me... GG, you had me completely outplayed!",
-        "GG! I'm completely losing here, respect for the solid play.",
-        "I yield! I am so bad at chess today, GG WP!",
-        "I double dog dare you to blunder... ah, you didn't. Alright, I resign! GG!"
+        "I yield! I am so bad at chess today, GG WP!"
     ]
 };
 
@@ -264,34 +239,42 @@ function getRandomQuote(cat, context = {}) {
     return typeof chosen === 'string' ? chosen : chosen.text;
 }
 
-// 🆕 DYNAMISCHES BOT LADEN
+// 🆕 DYNAMISCHES BOT LADEN (MIT CHESS.COM AVATAR API)
 window.changeBot = function() {
     const selectEl = document.getElementById('bot-select');
     if (!selectEl) return;
     
     currentBotId = selectEl.value;
-    
-    // Farben für die dynamischen Avatare generieren
-    const colorMap = {
-        cager: "9b59b6",
-        hikaru: "e74c3c",
-        gotham: "3498db",
-        magnus: "f1c40f",
-        botez: "e67e22"
-    };
-    currentBotColor = colorMap[currentBotId] || "34495e";
-
-    // Text-Bezeichner (Die Namen) können wir aus dem Select-Feld auslesen
     currentBotName = selectEl.options[selectEl.selectedIndex].text;
 
-    // UI aktualisieren
+    // Generiert einen schönen Hex-Farbcode als Fallback!
+    let hash = 0;
+    for (let i = 0; i < currentBotName.length; i++) {
+        hash = currentBotName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    currentBotColor = Math.abs(hash).toString(16).substring(0, 6).padStart(6, '0');
+    const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentBotName)}&background=${currentBotColor}&color=fff&bold=true`;
+
+    // UI Text aktualisieren
     const botNameEl = document.getElementById('bot-name');
-    const botAvatarEl = document.getElementById('bot-avatar');
     const chatWelcomeEl = document.getElementById('chat-welcome-name');
+    const botAvatarEl = document.getElementById('bot-avatar');
     
     if(botNameEl) botNameEl.innerText = `${currentBotName} (BOT)`;
     if(chatWelcomeEl) chatWelcomeEl.innerText = `${currentBotName}:`;
-    if(botAvatarEl) botAvatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentBotName)}&background=${currentBotColor}&color=fff&bold=true`;
+    if(botAvatarEl) botAvatarEl.src = fallbackAvatar;
+
+    // CHESS.COM API ABFRAGE FÜR DAS ECHTE PROFILBILD
+    const chessComUsername = currentBotName.replace(/\s+/g, '').toLowerCase();
+    
+    fetch(`https://api.chess.com/pub/player/${chessComUsername}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.avatar) {
+                if (botAvatarEl) botAvatarEl.src = data.avatar;
+            }
+        })
+        .catch(err => console.log("Kein Chess.com Bild gefunden, nutze Fallback."));
 
     // Hole die Bot-spezifischen JSON-Dateien
     Promise.all([
@@ -304,7 +287,7 @@ window.changeBot = function() {
             const eloEl = document.getElementById('bot-elo');
             if(eloEl) eloEl.innerText = `${elo} ELO`;
             
-            // HYBRIDE ENGINE KONFIGURATION (UCI_LimitStrength)
+            // HYBRIDE ENGINE KONFIGURATION
             if (stockfish) {
                 let skill = Math.round((elo - 1000) / (3000 - 1000) * 20);
                 skill = Math.max(0, Math.min(20, skill));
@@ -314,7 +297,6 @@ window.changeBot = function() {
                 stockfish.postMessage(`setoption name Skill Level value ${skill}`);
             }
         } else {
-            // Fallback, wenn keine Config da ist
             cagerConfig = {};
             const eloEl = document.getElementById('bot-elo');
             if(eloEl) eloEl.innerText = `??? ELO`;
@@ -326,7 +308,7 @@ window.changeBot = function() {
             cagerBook = {};
         }
 
-        // Restart das Game, wenn wir den Bot fliegend wechseln
+        // Restart das Game, wenn wir den Bot wechseln
         const restartBtn = document.getElementById('btn-restart');
         if (restartBtn) restartBtn.click();
     });
@@ -679,7 +661,7 @@ function processSoftmaxDecisionMatrix() {
     // KONTEXT-SENSITIVES ZEITMANAGEMENT
     let baseThinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
     if (isComplexPosition && !isLowClockPanic) {
-        baseThinkTime += 600; // Extra Bedenkzeit bei hoher Entropie/Komplexität!
+        baseThinkTime += 600; 
     }
 
     setTimeout(() => makeBotMove(chosenMove), baseThinkTime);
@@ -725,7 +707,7 @@ function triggerBotTurn() {
     pvMapAtHighestDepth = {};
     if (stockfish) {
         stockfish.postMessage(`position fen ${chess.fen()}`);
-        stockfish.postMessage('go movetime 800'); // Etwas höhere Berechnungszeit für UCI Limit
+        stockfish.postMessage('go movetime 800'); 
     }
 }
 
@@ -748,7 +730,7 @@ function makeBotMove(moveObj) {
         const toColor = getSquareColor(move.to);
         const capturedPiece = move.captured;
 
-        // 🆕 Der Bot benutzt jetzt seinen echten Namen im Chat!
+        // Chat check
         if (move.captured) {
             addChatMessage(currentBotName, getRandomQuote('cager_capture', { color: toColor, piece: capturedPiece }));
         } else if (chess.in_check()) {
@@ -851,7 +833,6 @@ function handleSquareClick(r, c) {
 function addChatMessage(sender, text) {
     const box = document.getElementById('chat-messages');
     const msg = document.createElement('div');
-    // 🆕 Der Chat erkennt jetzt dynamisch, ob der aktuelle Bot schreibt
     msg.className = `chat-msg ${sender === currentBotName ? 'bot' : ''}`;
     msg.innerHTML = `<b>${sender}:</b> ${text}`;
     box.appendChild(msg);
@@ -1078,7 +1059,7 @@ function makeTesterMove(moveStr) {
     }
 }
 
-// 🆕 INITIALISIERUNG: Wartet kurz, bis das DOM geladen ist, und wählt dann den Standard-Bot (Cager)
+// 🆕 INITIALISIERUNG
 setTimeout(() => {
     if(window.changeBot) window.changeBot();
 }, 200);
