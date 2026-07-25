@@ -72,6 +72,83 @@ function isEndgamePhase(chessObj) {
     return queens === 0 || nonPawnMaterial <= 25;
 }
 
+// 🆕 PHASEN-ERKENNUNG (Opening, Middlegame, Endgame)
+function getCurrentPhase(chessObj) {
+    const moveCount = chessObj.history().length;
+    if (isEndgamePhase(chessObj)) return 'endgame';
+    if (moveCount <= 12) return 'opening';
+    return 'middlegame';
+}
+
+// 🆕 KONTEXTBASIERTER PRINZIPIEN-FILTER (Taktik-Korridor <= 75 cp)
+function applySmartPrinciples(candidateMoves, chessObj, profile) {
+    if (!candidateMoves || candidateMoves.length === 0) return candidateMoves;
+
+    const bestEngineScore = candidateMoves[0].stockfishEval;
+    const phase = getCurrentPhase(chessObj);
+    
+    let adherence = 85;
+    if (profile.principlesAdherence) {
+        if (typeof profile.principlesAdherence === 'object' && profile.principlesAdherence[phase] !== undefined) {
+            adherence = profile.principlesAdherence[phase];
+        } else if (typeof profile.principlesAdherence === 'number') {
+            adherence = profile.principlesAdherence;
+        }
+    }
+    const adherenceFactor = adherence / 100;
+
+    return candidateMoves.map(cand => {
+        const evalLoss = bestEngineScore - cand.stockfishEval;
+
+        // 🛑 SICHERHEITSNETZ: Züge mit > 75 cp Verlust sind taktisch Notwehr oder schwere Patzer.
+        // Prinzipien-Strafen greifen hier NICHT, um die Taktik niemals zu beschädigen!
+        if (evalLoss > 75) {
+            return { ...cand, principlePenalty: 0 };
+        }
+
+        let penalty = 0;
+        const inCheck = chessObj.in_check();
+        
+        const temp = new Chess(chessObj.fen());
+        const m = temp.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
+
+        if (m) {
+            // --- PHASE 1: ERÖFFNUNG ---
+            if (phase === 'opening') {
+                // Grundloser Königsschritt vor der Rochade
+                if (m.piece === 'k' && !m.san.includes('O-O') && !inCheck) {
+                    penalty += 120;
+                }
+            }
+
+            // --- PHASE 2: MITTELSPIEL ---
+            if (phase === 'middlegame') {
+                // Grundloser passiver Rückzug auf die 1./8. Reihe
+                const toRank = m.to[1];
+                const turn = chessObj.turn();
+                const isBackRank = (turn === 'w' && toRank === '1') || (turn === 'b' && toRank === '8');
+                
+                if (['n', 'b'].includes(m.piece) && isBackRank && !m.captured && !inCheck) {
+                    penalty += 70;
+                }
+            }
+
+            // --- PHASE 3: ENDSPIEL ---
+            if (phase === 'endgame') {
+                // König zieht grundlos an den äußeren Rand (a- oder h-Linie)
+                if (m.piece === 'k' && ['a', 'h'].includes(m.to[0]) && !inCheck) {
+                    penalty += 50;
+                }
+            }
+        }
+
+        return {
+            ...cand,
+            principlePenalty: penalty * adherenceFactor
+        };
+    });
+}
+
 // CAGER STOCKFISH WEB WORKER
 let stockfish;
 try {
@@ -267,7 +344,7 @@ function parseStockfishPvLine(line) {
         const multiPvRank = parseInt(parts[multiPvIdx + 1], 10);
         const pvMoves = parts.slice(pvIndex + 1);
         const moveStr = pvMoves[0];
-        const opponentReply = pvMoves.length > 1 ? pvMoves[1] : null; // Extrahierte Gegner-Bestrafung
+        const opponentReply = pvMoves.length > 1 ? pvMoves[1] : null;
         let score = 0;
 
         if (scoreIndex !== -1 && scoreIndex + 1 < parts.length) {
@@ -369,7 +446,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// DECISION MATRIX MIT PRÄZISEM TILT-PUNISH-CHECK
+// DECISION MATRIX MIT PHASEN-EINSTELLUNG & KONTEXT-PRINZIPIEN
 function processSoftmaxDecisionMatrix() {
     const candidates = Object.values(pvMapAtHighestDepth).sort((a, b) => b.stockfishEval - a.stockfishEval);
     pvMapAtHighestDepth = {};
@@ -382,8 +459,24 @@ function processSoftmaxDecisionMatrix() {
     const profile = (cagerConfig && cagerConfig[colorKey]) ? cagerConfig[colorKey] : (cagerConfig || {});
     const psycho = (cagerConfig && cagerConfig.psychologyEngine) ? cagerConfig.psychologyEngine : (cagerConfig || {});
 
-    const isEndgame = isEndgamePhase(chess);
+    // PHASEN-BESTIMMUNG
+    const phase = getCurrentPhase(chess);
+    const isEndgame = phase === 'endgame';
     const phaseAcpl = isEndgame ? (profile.acplEndgame || profile.acplMiddlegame || 40) : (profile.acplMiddlegame || 40);
+
+    // PHASEN-SPEZIFISCHE PARAMETER-ZUWEISUNG
+    let flankAgg = profile.flankPawnAggression !== undefined ? profile.flankPawnAggression : 50;
+    if (phase === 'opening' && profile.flankPawnAggressionOpening !== undefined) flankAgg = profile.flankPawnAggressionOpening;
+    else if (phase === 'middlegame' && profile.flankPawnAggressionMiddlegame !== undefined) flankAgg = profile.flankPawnAggressionMiddlegame;
+    else if (phase === 'endgame' && profile.flankPawnAggressionEndgame !== undefined) flankAgg = profile.flankPawnAggressionEndgame;
+
+    let kingAttackBiasVal = profile.kingAttackBias !== undefined ? profile.kingAttackBias : 35;
+    if (phase === 'middlegame' && profile.kingAttackBiasMiddlegame !== undefined) kingAttackBiasVal = profile.kingAttackBiasMiddlegame;
+    if (phase === 'endgame' && profile.kingAttackBiasEndgame !== undefined) kingAttackBiasVal = profile.kingAttackBiasEndgame;
+
+    let queenTradeReluctVal = profile.queenTradeReluctance !== undefined ? profile.queenTradeReluctance : 80;
+    if (phase === 'middlegame' && profile.queenTradeReluctanceMiddlegame !== undefined) queenTradeReluctVal = profile.queenTradeReluctanceMiddlegame;
+    if (phase === 'endgame' && profile.queenTradeReluctanceEndgame !== undefined) queenTradeReluctVal = profile.queenTradeReluctanceEndgame;
 
     const bestMoveEval = candidates[0].stockfishEval;
     const botEval = bestMoveEval; 
@@ -448,11 +541,16 @@ function processSoftmaxDecisionMatrix() {
 
     const finalCandidates = safeCandidates.length > 0 ? safeCandidates : [candidates[0]];
 
+    // 🆕 ANWENDUNG DES KONTEXTBASIERTEN PRINZIPIEN-FILTERS
+    const candidatesWithPrinciples = applySmartPrinciples(finalCandidates, chess, profile);
+
     const botRemainingTime = clocks[currentTurn];
     const isLowClockPanic = !isZenMode && botRemainingTime < 30;
 
-    const scoredMoves = finalCandidates.map((cand, idx) => {
-        let cagerScore = cand.stockfishEval;
+    const scoredMoves = candidatesWithPrinciples.map((cand, idx) => {
+        // Starte mit dem um Prinzipien-Strafen angepassten Score
+        let cagerScore = cand.stockfishEval - (cand.principlePenalty || 0);
+        
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
 
@@ -463,12 +561,12 @@ function processSoftmaxDecisionMatrix() {
         if (moveDetails) {
             if (!isBotWinningMassively) {
                 if (moveDetails.san.includes('+') || ['g4','g5','h4','h5','f4','f5'].includes(cand.to)) {
-                    cagerScore += ((profile.kingAttackBias || 35) / 100) * 80;
+                    cagerScore += (kingAttackBiasVal / 100) * 80;
                 }
                 
                 if (moveDetails.captured) {
                     if (moveDetails.captured === 'q') {
-                        cagerScore -= ((profile.queenTradeReluctance || 80) / 100) * 180;
+                        cagerScore -= (queenTradeReluctVal / 100) * 180;
                     } else if (moveDetails.piece === moveDetails.captured) {
                         cagerScore -= ((profile.tradeAvoidanceIndex || 35) / 100) * 50;
                     }
@@ -481,7 +579,6 @@ function processSoftmaxDecisionMatrix() {
                 if (moveDetails.piece === 'p' && !moveDetails.captured) {
                     const fileIdx = moveDetails.to.charCodeAt(0) - 'a'.charCodeAt(0);
                     const isFlank = [0, 1, 6, 7].includes(fileIdx);
-                    const flankAgg = profile.flankPawnAggression !== undefined ? profile.flankPawnAggression : 50;
 
                     if (isFlank) {
                         cagerScore += (flankAgg - 50) * 1.2;
