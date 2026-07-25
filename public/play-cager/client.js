@@ -2,6 +2,11 @@ const chess = new Chess();
 let cagerBook = null;
 let cagerConfig = null;
 
+// 🆕 DYNAMISCHES BOT-STATE
+let currentBotId = 'cager';
+let currentBotName = 'TheCager';
+let currentBotColor = '9b59b6';
+
 // PSYCHOLOGY & GAME STATE
 let tiltScore = 0;
 let lastEval = 0;
@@ -43,12 +48,12 @@ function cpToWinPct(cp) {
     return 50 + 50 * ((2 / (1 + Math.exp(-0.00368208 * cappedCp))) - 1);
 }
 
-// STATS SPEICHERN HELPER
+// STATS SPEICHERN HELPER (Speichert jetzt auch, GEGEN WEN gespielt wurde)
 function saveGameResult(mode, result) {
     fetch('/api/stats/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, result })
+        body: JSON.stringify({ mode, result, botId: currentBotId })
     })
     .then(res => res.json())
     .then(data => console.log('✅ Stats in DB aktualisiert:', data))
@@ -186,34 +191,58 @@ const CAGER_QUOTES = {
         "Howdy! Welcome back to the channel, let's document the climb!",
         "Alright, let's see if we can handle this position today.",
         "Let's go into a Queen's Gambit, keep it clean, classical and solid.",
-        "Don't mind me, just providing some unedited commentary as I play!"
+        "Don't mind me, just providing some unedited commentary as I play!",
+        "How's your day going? Thanks for sticking around for the game!",
+        "It is raining hard outside right now... but I like the weather like this.",
+        "Alright, let's get our pieces out to natural squares. Game on!",
+        "We're playing against a solid opponent today. Time to focus!"
     ],
     cager_capture: [
         { text: "And bye-bye! I'll take that pawn with tempo!", piece: 'p' },
         { text: "Nom nom, free material! That piece was standing in my way anyway.", piece: 'not_p' },
         { text: "BANG! We win those, baby! Absolute cinema!" },
-        { text: "Sniped! Clean tactical blow right there." }
+        { text: "Sniped! Clean tactical blow right there." },
+        { text: "Thanks for the gift! I'm totally fine with trading here." },
+        { text: "Taking here comes with an immediate threat. Let's push!" },
+        { text: "Look at that, now his knight is completely out of moves!" }
     ],
     player_capture: [
         { text: "Oof, I did NOT see that check! That is no bueno..." },
         { text: "Ouch! I really don't like where my position is going now." },
-        { text: "Oh man, I am getting put in the blender right now..." }
+        { text: "Oh man, I am getting put in the blender right now..." },
+        { text: "Wait, did I just blunder something? Shoot, my position is getting tangled!" },
+        { text: "Double, double, double dog damn! That is terrifying!" },
+        { text: "Yikes! Those pawns of yours are absolute demons!" },
+        { text: "Frankly, I'm terrified! Time to play some stubborn defense." }
     ],
     cager_check: [
         { text: "Check! Watch your king safety, things are getting spicy!" },
-        { text: "Check! Where is your king going now?" }
+        { text: "Check! Where is your king going now?" },
+        { text: "Check! Now you have to respond to my immediate threat!" },
+        { text: "Knock knock! Giving a check on the light squares!", color: 'light' },
+        { text: "Check on the dark squares! Keeping the pressure on!", color: 'dark' },
+        { text: "Check! That gives me a lot of juicy counterplay!" }
     ],
     cager_win: [
         "BANG! WE WIN THOSE, BABY! What an absolute comeback!",
-        "GG WP! Oh my god, what a battle! That was absolute cinema!"
+        "GG WP! Oh my god, what a battle! That was absolute cinema!",
+        "GG! I don't care how it happened, a win is a win! Let's go!",
+        "GG! That comeback victory felt so hyped! Rematch anytime!",
+        "Oh man, games like these will give you arrhythmia! GG WP!",
+        "GG! Please consider liking the video, I need that sweet dopamine!"
     ],
     player_win: [
         "GG WP! Man, I got completely outplayed in that endgame!",
-        "Respect, great game! You had me completely stuck in the blender."
+        "Respect, great game! You had me completely stuck in the blender.",
+        "GG! Clean mate, you played that recovery masterfully!",
+        "Ouch! I threw the game away and you punished it instantly. GG!",
+        "Sad day for all the Cager enthusiasts out there... GG WP!"
     ],
     cager_resign: [
         "No way out of this position for me... GG, you had me completely outplayed!",
-        "I yield! I am so bad at chess today, GG WP!"
+        "GG! I'm completely losing here, respect for the solid play.",
+        "I yield! I am so bad at chess today, GG WP!",
+        "I double dog dare you to blunder... ah, you didn't. Alright, I resign! GG!"
     ]
 };
 
@@ -235,29 +264,73 @@ function getRandomQuote(cat, context = {}) {
     return typeof chosen === 'string' ? chosen : chosen.text;
 }
 
-Promise.all([
-    fetch('cager-config.json').then(r => r.json()).catch(() => null),
-    fetch('cager-book.json').then(r => r.json()).catch(() => null)
-]).then(([configData, bookData]) => {
-    if (configData) {
-        cagerConfig = configData;
-        const elo = configData.targetElo || 2132;
-        document.getElementById('bot-elo').innerText = `${elo} ELO`;
-        
-        // 🆕 HYBRIDE ENGINE KONFIGURATION (UCI_LimitStrength)
-        if (stockfish) {
-            let skill = Math.round((elo - 1000) / (3000 - 1000) * 20);
-            skill = Math.max(0, Math.min(20, skill));
+// 🆕 DYNAMISCHES BOT LADEN
+window.changeBot = function() {
+    const selectEl = document.getElementById('bot-select');
+    if (!selectEl) return;
+    
+    currentBotId = selectEl.value;
+    
+    // Farben für die dynamischen Avatare generieren
+    const colorMap = {
+        cager: "9b59b6",
+        hikaru: "e74c3c",
+        gotham: "3498db",
+        magnus: "f1c40f",
+        botez: "e67e22"
+    };
+    currentBotColor = colorMap[currentBotId] || "34495e";
+
+    // Text-Bezeichner (Die Namen) können wir aus dem Select-Feld auslesen
+    currentBotName = selectEl.options[selectEl.selectedIndex].text;
+
+    // UI aktualisieren
+    const botNameEl = document.getElementById('bot-name');
+    const botAvatarEl = document.getElementById('bot-avatar');
+    const chatWelcomeEl = document.getElementById('chat-welcome-name');
+    
+    if(botNameEl) botNameEl.innerText = `${currentBotName} (BOT)`;
+    if(chatWelcomeEl) chatWelcomeEl.innerText = `${currentBotName}:`;
+    if(botAvatarEl) botAvatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentBotName)}&background=${currentBotColor}&color=fff&bold=true`;
+
+    // Hole die Bot-spezifischen JSON-Dateien
+    Promise.all([
+        fetch(`${currentBotId}-config.json`).then(r => r.json()).catch(() => null),
+        fetch(`${currentBotId}-book.json`).then(r => r.json()).catch(() => null)
+    ]).then(([configData, bookData]) => {
+        if (configData) {
+            cagerConfig = configData;
+            const elo = configData.targetElo || 1500;
+            const eloEl = document.getElementById('bot-elo');
+            if(eloEl) eloEl.innerText = `${elo} ELO`;
             
-            stockfish.postMessage(`setoption name UCI_LimitStrength value true`);
-            stockfish.postMessage(`setoption name UCI_Elo value ${elo}`);
-            stockfish.postMessage(`setoption name Skill Level value ${skill}`);
+            // HYBRIDE ENGINE KONFIGURATION (UCI_LimitStrength)
+            if (stockfish) {
+                let skill = Math.round((elo - 1000) / (3000 - 1000) * 20);
+                skill = Math.max(0, Math.min(20, skill));
+                
+                stockfish.postMessage(`setoption name UCI_LimitStrength value true`);
+                stockfish.postMessage(`setoption name UCI_Elo value ${elo}`);
+                stockfish.postMessage(`setoption name Skill Level value ${skill}`);
+            }
+        } else {
+            // Fallback, wenn keine Config da ist
+            cagerConfig = {};
+            const eloEl = document.getElementById('bot-elo');
+            if(eloEl) eloEl.innerText = `??? ELO`;
         }
-    }
-    if (bookData) {
-        cagerBook = bookData.book;
-    }
-});
+        
+        if (bookData) {
+            cagerBook = bookData.book;
+        } else {
+            cagerBook = {};
+        }
+
+        // Restart das Game, wenn wir den Bot fliegend wechseln
+        const restartBtn = document.getElementById('btn-restart');
+        if (restartBtn) restartBtn.click();
+    });
+};
 
 if (stockfish) {
     stockfish.postMessage('uci');
@@ -404,7 +477,7 @@ function startClock() {
             isGameOver = true;
             const isPlayerLoss = (turn === 'w');
             saveGameResult('bot', isPlayerLoss ? 'loss' : 'win');
-            const winner = isPlayerLoss ? 'TheCager (BOT)' : 'You';
+            const winner = isPlayerLoss ? `${currentBotName} (BOT)` : 'You';
             alert(`Time's up! ${winner} won on time!`);
         }
     }, 1000);
@@ -431,7 +504,7 @@ function formatTime(sec) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-// 🆕 ENTSCHEIDUNGSMATRIX AUF BASIS VON WIN%
+// ENTSCHEIDUNGSMATRIX AUF BASIS VON WIN%
 function processSoftmaxDecisionMatrix() {
     const candidates = Object.values(pvMapAtHighestDepth).sort((a, b) => b.stockfishEval - a.stockfishEval);
     pvMapAtHighestDepth = {};
@@ -495,7 +568,7 @@ function processSoftmaxDecisionMatrix() {
     const tunnelVal = psycho.tunnelVisionPercent !== undefined ? psycho.tunnelVisionPercent : errorRates.blundersPercent;
     const triggerTunnelVision = isMinefield && (Math.random() * 100 < tunnelVal);
 
-    // 🆕 Win% BASIERTER EVAL GUARD FILTER
+    // Win% BASIERTER EVAL GUARD FILTER
     const safeCandidates = candidates.filter((cand, index) => {
         const winLoss = Math.max(0, bestWinPct - cpToWinPct(cand.stockfishEval));
 
@@ -603,7 +676,7 @@ function processSoftmaxDecisionMatrix() {
     evalBeforeBotMove = bestMoveEval;
     lastExpectedOpponentReply = chosenMove.opponentReply || null;
 
-    // 🆕 KONTEXT-SENSITIVES ZEITMANAGEMENT
+    // KONTEXT-SENSITIVES ZEITMANAGEMENT
     let baseThinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
     if (isComplexPosition && !isLowClockPanic) {
         baseThinkTime += 600; // Extra Bedenkzeit bei hoher Entropie/Komplexität!
@@ -675,10 +748,11 @@ function makeBotMove(moveObj) {
         const toColor = getSquareColor(move.to);
         const capturedPiece = move.captured;
 
+        // 🆕 Der Bot benutzt jetzt seinen echten Namen im Chat!
         if (move.captured) {
-            addChatMessage('TheCager', getRandomQuote('cager_capture', { color: toColor, piece: capturedPiece }));
+            addChatMessage(currentBotName, getRandomQuote('cager_capture', { color: toColor, piece: capturedPiece }));
         } else if (chess.in_check()) {
-            addChatMessage('TheCager', getRandomQuote('cager_check', { color: toColor }));
+            addChatMessage(currentBotName, getRandomQuote('cager_check', { color: toColor }));
         }
     }
 
@@ -756,7 +830,7 @@ function handleSquareClick(r, c) {
             renderBoard();
             renderClocks();
 
-            if (move.captured) addChatMessage('TheCager', getRandomQuote('player_capture'));
+            if (move.captured) addChatMessage('You', getRandomQuote('player_capture'));
             if (checkGameOver()) return;
 
             setTimeout(triggerBotTurn, 400);
@@ -777,7 +851,8 @@ function handleSquareClick(r, c) {
 function addChatMessage(sender, text) {
     const box = document.getElementById('chat-messages');
     const msg = document.createElement('div');
-    msg.className = `chat-msg ${sender === 'TheCager' ? 'bot' : ''}`;
+    // 🆕 Der Chat erkennt jetzt dynamisch, ob der aktuelle Bot schreibt
+    msg.className = `chat-msg ${sender === currentBotName ? 'bot' : ''}`;
     msg.innerHTML = `<b>${sender}:</b> ${text}`;
     box.appendChild(msg);
     box.scrollTop = box.scrollHeight;
@@ -791,8 +866,8 @@ function checkGameOver() {
         const isPlayerWin = chess.turn() === 'b';
         saveGameResult('bot', isPlayerWin ? 'win' : 'loss');
         
-        const winner = isPlayerWin ? 'You' : 'TheCager';
-        addChatMessage('TheCager', isPlayerWin ? getRandomQuote('player_win') : getRandomQuote('cager_win'));
+        const winner = isPlayerWin ? 'You' : `${currentBotName} (BOT)`;
+        addChatMessage(currentBotName, isPlayerWin ? getRandomQuote('player_win') : getRandomQuote('cager_win'));
         
         if (autoPlayActive && isAdmin) {
             setTimeout(() => { if (autoPlayActive) document.getElementById('btn-restart').click(); }, 3000);
@@ -806,7 +881,7 @@ function checkGameOver() {
         isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
         saveGameResult('bot', 'draw');
-        addChatMessage('TheCager', "GG! A draw. Fair enough.");
+        addChatMessage(currentBotName, "GG! A draw. Fair enough.");
         
         if (autoPlayActive && isAdmin) {
             setTimeout(() => { if (autoPlayActive) document.getElementById('btn-restart').click(); }, 3000);
@@ -831,7 +906,7 @@ document.getElementById('btn-restart').onclick = () => {
     lastExpectedOpponentReply = null;
     updateTimeSettings();
     renderBoard();
-    addChatMessage('TheCager', getRandomQuote('start'));
+    addChatMessage(currentBotName, getRandomQuote('start'));
 
     if (autoPlayActive && isAdmin) {
         setTimeout(triggerTesterTurn, 500);
@@ -855,8 +930,8 @@ document.getElementById('btn-resign').onclick = () => {
             clockTimer = null;
         }
         saveGameResult('bot', 'loss');
-        addChatMessage('TheCager', getRandomQuote('cager_resign'));
-        alert('You resigned. TheCager (BOT) wins!');
+        addChatMessage(currentBotName, getRandomQuote('cager_resign'));
+        alert(`You resigned. ${currentBotName} (BOT) wins!`);
     }
 };
 
@@ -866,11 +941,11 @@ document.getElementById('btn-pgn').onclick = () => {
         alert('No moves played yet!');
         return;
     }
-    chess.header('Event', 'TheCager Bot Match');
-    chess.header('Site', 'TheCager Game Hub');
+    chess.header('Event', `${currentBotName} Bot Match`);
+    chess.header('Site', 'Chess Hub');
     chess.header('Date', new Date().toISOString().split('T')[0].replace(/-/g, '.'));
     chess.header('White', twitchName || 'You');
-    chess.header('Black', 'TheCager (BOT)');
+    chess.header('Black', `${currentBotName} (BOT)`);
 
     let pgnContent = chess.pgn();
     if (!pgnContent) {
@@ -879,13 +954,13 @@ document.getElementById('btn-pgn').onclick = () => {
             if (idx % 2 === 0) moveStr += `${(idx / 2) + 1}. `;
             moveStr += `${m} `;
         });
-        pgnContent = `[Event "TheCager Bot Match"]\n[White "${twitchName || 'You'}"]\n[Black "TheCager (BOT)"]\n\n${moveStr.trim()}`;
+        pgnContent = `[Event "${currentBotName} Bot Match"]\n[White "${twitchName || 'You'}"]\n[Black "${currentBotName} (BOT)"]\n\n${moveStr.trim()}`;
     }
 
     const blob = new Blob([pgnContent], { type: 'text/plain;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `cager_match_${Date.now()}.pgn`;
+    link.download = `${currentBotId}_match_${Date.now()}.pgn`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1002,6 +1077,11 @@ function makeTesterMove(moveStr) {
         setTimeout(triggerBotTurn, 300);
     }
 }
+
+// 🆕 INITIALISIERUNG: Wartet kurz, bis das DOM geladen ist, und wählt dann den Standard-Bot (Cager)
+setTimeout(() => {
+    if(window.changeBot) window.changeBot();
+}, 200);
 
 createBoardDOM();
 updateTimeSettings();
