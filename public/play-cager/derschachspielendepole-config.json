@@ -1,6 +1,6 @@
 {
     "botName": "Derschachspielendepole",
-    "targetElo": 2015,
+    "targetElo": 1400,
     "psychologyEngine": {
         "softmaxTemperature": 0.5,
         "tunnelVisionPercent": 7,
