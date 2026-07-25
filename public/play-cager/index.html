@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Play Cager! | Bot Match</title>
+    <title>Chess Hub | Play Bots</title>
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
@@ -18,8 +18,9 @@
         <div id="game-container">
             <div class="player-bar top">
                 <div class="player-info">
-                    <img class="chess-avatar" id="bot-avatar" src="https://ui-avatars.com/api/?name=The+Cager&background=9b59b6&color=fff&bold=true" alt="TheCager">
-                    <span>TheCager (BOT)</span>
+                    <!-- IDs hinzugefügt für dynamischen Wechsel -->
+                    <img class="chess-avatar" id="bot-avatar" src="https://ui-avatars.com/api/?name=The+Cager&background=9b59b6&color=fff&bold=true" alt="Bot Avatar">
+                    <span id="bot-name">TheCager (BOT)</span>
                     <span class="bot-elo-tag" id="bot-elo">2132 ELO</span>
                 </div>
                 <!-- BOT CLOCK -->
@@ -43,8 +44,23 @@
         <!-- Sidebar Panel -->
         <div class="sidebar scribble-box">
             <div class="logo-area">
-                <h2 style="margin:0; font-size: 24px;">Play Cager!</h2>
-                <span class="tag">VS BOT</span>
+                <h2 style="margin:0; font-size: 24px;" id="sidebar-title">Play Bots!</h2>
+                <span class="tag">VS AI</span>
+            </div>
+
+            <!-- 🆕 NEU: BOT AUSWAHL -->
+            <div class="stats-section scribble-box">
+                <div class="sidebar-title">🤖 Choose Opponent</div>
+                <label>
+                    <select id="bot-select" class="scribble-select" onchange="changeBot()">
+                        <!-- Die Werte ("cager", "hikaru") entsprechen dem Dateinamen: hikaru-config.json -->
+                        <option value="cager">TheCager</option>
+                        <option value="hikaru">Hikaru Nakamura</option>
+                        <option value="gotham">GothamChess</option>
+                        <option value="magnus">Magnus Carlsen</option>
+                        <option value="botez">Andrea Botez</option>
+                    </select>
+                </label>
             </div>
 
             <!-- TIME CONTROL SETTINGS -->
@@ -74,9 +90,9 @@
 
             <!-- Chat Section -->
             <div class="chat-section scribble-box">
-                <div class="chat-header">💬 Cager Live Chat</div>
+                <div class="chat-header">💬 Live Chat</div>
                 <div id="chat-messages" class="chat-messages">
-                    <div class="chat-msg bot"><b>TheCager:</b> Hey! Select your time control and let's play!</div>
+                    <div class="chat-msg bot"><b id="chat-welcome-name">TheCager:</b> Hey! Select your opponent and let's play!</div>
                 </div>
             </div>
 
