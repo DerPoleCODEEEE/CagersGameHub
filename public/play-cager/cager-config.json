@@ -1,27 +1,23 @@
 {
     "botName": "Thecager",
-    "targetElo": 2132,
+    "targetElo": 2384,
     "psychologyEngine": {
-        "softmaxTemperature": 1.2,
-        "tiltFactorAlpha": 0.43,
-        "timePressureLambda": 0.08,
-        "criticalSuccessRate": 63.8,
-        "clockCorrelationR": -0.066
+        "softmaxTemperature": 1.12,
+        "tunnelVisionPercent": 10,
+        "panicTradeTendency": false
     },
     "white": {
         "openingBookLoyalty": 95,
-        "sacrificeWillingness": 10,
-        "blunderRatePercent": 23.7,
-        "collapseRate": 29,
-        "comebackRate": 35,
-        "acpl": 171
+        "flankPawnAggression": 52,
+        "blunderRatePercent": 12.6,
+        "acplMiddlegame": 46,
+        "acplEndgame": 38
     },
     "black": {
         "openingBookLoyalty": 95,
-        "sacrificeWillingness": 10,
-        "blunderRatePercent": 23.7,
-        "collapseRate": 29,
-        "comebackRate": 35,
-        "acpl": 171
+        "flankPawnAggression": 52,
+        "blunderRatePercent": 12.6,
+        "acplMiddlegame": 46,
+        "acplEndgame": 38
     }
 }
