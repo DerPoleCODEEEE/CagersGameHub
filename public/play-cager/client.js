@@ -631,6 +631,7 @@ function processSoftmaxDecisionMatrix() {
     setTimeout(() => makeBotMove(chosenMove), thinkTime);
 }
 
+// 🆕 SMARTE ERÖFFNUNGSBUCH-LOGIK (Filtert Misclicks & Einmal-Züge raus)
 function triggerBotTurn() {
     if (chess.game_over() || isGameOver) return;
 
@@ -646,17 +647,31 @@ function triggerBotTurn() {
 
     if ((Math.random() * 100) <= bookLoyalty && cagerBook && cagerBook[stateKey]) {
         const moves = cagerBook[stateKey];
-        const keys = Object.keys(moves);
-        if (keys.length > 0) {
-            const best = keys.reduce((a, b) => moves[a] > moves[b] ? a : b);
-            const m = chess.move(best, { slate: true });
-            if (m) {
-                makeBotMove(m);
-                return;
+        const entries = Object.entries(moves); // Erstellt Arrays [Zug, Häufigkeit]
+
+        if (entries.length > 0) {
+            // 1. Sortiere Züge streng nach Häufigkeit (meistgespielter Zug steht IMMER oben)
+            entries.sort((a, b) => b[1] - a[1]);
+
+            const bestMoveEntry = entries[0]; // Deine absolute Hauptvariante in dieser Stellung
+            const moveSan = bestMoveEntry[0];
+            const moveCount = bestMoveEntry[1];
+
+            // 2. FILTER: Nur spielen, wenn es eine erprobte Hauptvariante ist (mindestens 2x gespielt)
+            if (moveCount >= 2) {
+                const m = chess.move(moveSan, { slate: true });
+                if (m) {
+                    console.log(`📖 Playing Main Book Move: ${moveSan} (Played ${moveCount}x in PGN)`);
+                    makeBotMove(m);
+                    return;
+                }
+            } else {
+                console.log(`⚠️ Book move '${moveSan}' played only 1x in PGN. Skipping book to avoid misclicks & blunders.`);
             }
         }
     }
 
+    // Falls Buch ignoriert wird, die Stellung neu ist oder der Zug nur 1x vorkam -> Stockfish berechnet
     currentSearchDepth = 0;
     pvMapAtHighestDepth = {};
     if (stockfish) {
