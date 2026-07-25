@@ -2,44 +2,72 @@
     "botName": "Thecager",
     "targetElo": 2132,
     "psychologyEngine": {
-        "softmaxTemperature": 0.6,
-        "tunnelVisionPercent": 10,
-        "panicTradeTendency": false
+        "softmaxTemperature": 0.5,
+        "tunnelVisionPercent": 5,
+        "tiltFactorAlpha": 0.211
     },
     "white": {
-        "openingBookLoyalty": 98,
-        "blunderRatePercent": 12.6,
-        "acplMiddlegame": 46,
-        "acplEndgame": 38,
-        "flankPawnAggressionOpening": 22,
+        "openingBookLoyalty": 95,
+        "errorRates": {
+            "inaccuraciesPercent": 14.1,
+            "mistakesPercent": 5.9,
+            "blundersPercent": 3.8
+        },
+        "awlMiddlegame": 3.18,
+        "awlEndgame": 2.19,
+        "flankPawnAggressionOpening": 23,
         "flankPawnAggressionMiddlegame": 45,
         "flankPawnAggressionEndgame": 61,
         "kingAttackBiasMiddlegame": 90,
         "kingAttackBiasEndgame": 50,
-        "queenTradeReluctanceMiddlegame": 13,
+        "queenTradeReluctanceMiddlegame": 8,
         "queenTradeReluctanceEndgame": 10,
         "principlesAdherence": {
-            "opening": 99,
-            "middlegame": 99,
-            "endgame": 98
+            "opening": {
+                "castleDiscipline": 99,
+                "earlyQueenAvoidance": 98
+            },
+            "middlegame": {
+                "backrankAvoidance": 98,
+                "kingShieldSafety": 74,
+                "knightCentralization": 93
+            },
+            "endgame": {
+                "kingCentralization": 86,
+                "rookActivity": 75
+            }
         }
     },
     "black": {
         "openingBookLoyalty": 95,
-        "blunderRatePercent": 12.6,
-        "acplMiddlegame": 46,
-        "acplEndgame": 38,
-        "flankPawnAggressionOpening": 22,
+        "errorRates": {
+            "inaccuraciesPercent": 14.1,
+            "mistakesPercent": 5.9,
+            "blundersPercent": 3.8
+        },
+        "awlMiddlegame": 3.18,
+        "awlEndgame": 2.19,
+        "flankPawnAggressionOpening": 23,
         "flankPawnAggressionMiddlegame": 45,
         "flankPawnAggressionEndgame": 61,
         "kingAttackBiasMiddlegame": 90,
         "kingAttackBiasEndgame": 50,
-        "queenTradeReluctanceMiddlegame": 13,
+        "queenTradeReluctanceMiddlegame": 8,
         "queenTradeReluctanceEndgame": 10,
         "principlesAdherence": {
-            "opening": 99,
-            "middlegame": 99,
-            "endgame": 98
+            "opening": {
+                "castleDiscipline": 99,
+                "earlyQueenAvoidance": 98
+            },
+            "middlegame": {
+                "backrankAvoidance": 98,
+                "kingShieldSafety": 74,
+                "knightCentralization": 93
+            },
+            "endgame": {
+                "kingCentralization": 86,
+                "rookActivity": 75
+            }
         }
     }
 }
