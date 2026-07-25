@@ -1,35 +1,27 @@
 {
-  "botName": "TheCager",
-  "targetElo": 2132,
-  "liveRatings": {
-    "rapid": 2132,
-    "blitz": 1708,
-    "peak": 2142
-  },
-  "psychologyEngine": {
-    "softmaxTemperature": 0.65,
-    "tiltFactorAlpha": 0.20,
-    "timePressureLambda": 0.045,
-    "positionComplexityGamma": 1.35
-  },
-  "white": {
-    "openingBookLoyalty": 95,
-    "kingAttackBias": 35,
-    "tradeAvoidanceIndex": 35,
-    "sacrificeWillingness": 80,
-    "geometricBlindSpotSensitivity": 10,
-    "blunderRatePercent": 2,
-    "queenTradeReluctance": 82,
-    "preferKnightsOverBishops": false
-  },
-  "black": {
-    "openingBookLoyalty": 95,
-    "kingAttackBias": 35,
-    "tradeAvoidanceIndex": 35,
-    "sacrificeWillingness": 80,
-    "geometricBlindSpotSensitivity": 10,
-    "blunderRatePercent": 2,
-    "queenTradeReluctance": 78,
-    "preferKnightsOverBishops": false
-  }
+    "botName": "Thecager",
+    "targetElo": 2132,
+    "psychologyEngine": {
+        "softmaxTemperature": 1.2,
+        "tiltFactorAlpha": 0.43,
+        "timePressureLambda": 0.08,
+        "criticalSuccessRate": 63.8,
+        "clockCorrelationR": -0.066
+    },
+    "white": {
+        "openingBookLoyalty": 95,
+        "sacrificeWillingness": 10,
+        "blunderRatePercent": 23.7,
+        "collapseRate": 29,
+        "comebackRate": 35,
+        "acpl": 171
+    },
+    "black": {
+        "openingBookLoyalty": 95,
+        "sacrificeWillingness": 10,
+        "blunderRatePercent": 23.7,
+        "collapseRate": 29,
+        "comebackRate": 35,
+        "acpl": 171
+    }
 }
