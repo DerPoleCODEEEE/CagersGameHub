@@ -41,15 +41,15 @@
                     <span id="top-player-name">Opponent</span>
                 </div>
 
-                <div id="board-wrapper">
-                    <!-- TIMER / LADEBALKEN FÜR DASS NÄCHSTE EVENT -->
-                    <div class="chaos-progress-container scribble-box">
-                        <span class="progress-label">NÄCHSTE CHAOS-KARTE:</span>
-                        <div class="progress-bar-bg">
-                            <div id="chaos-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
-                        </div>
+                <!-- TIMER / LADEBALKEN (Jetzt SAUBER AUSSERHALB vom Board!) -->
+                <div class="chaos-progress-container scribble-box">
+                    <span class="progress-label">NÄCHSTE CHAOS-KARTE:</span>
+                    <div class="progress-bar-bg">
+                        <div id="chaos-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
                     </div>
+                </div>
 
+                <div id="board-wrapper">
                     <div id="board"></div>
 
                     <!-- ROUNDS-STYLE OVERLAY FÜR KARTENAUSWAHL -->
@@ -59,7 +59,7 @@
                             <p class="vote-timer-text">Chat stimmt ab... <span id="vote-timer">30</span>s</p>
                             
                             <div id="cards-container" class="cards-container">
-                                <!-- Karten werden hier dinamisch erzeugt -->
+                                <!-- Karten werden dynamisch erzeugt -->
                             </div>
                         </div>
                     </div>
