@@ -2,7 +2,19 @@ const socket = io('/chaos-chess');
 
 let roomCode = null, playerColor = null;
 let myName = 'Player', opponentName = 'Opponent';
-let board = [];
+
+// Standard-Startaufstellung für sofortiges Rendering
+let board = [
+    ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+    ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+    ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+];
+
 let isGameStarted = false;
 let currentTurn = 'w';
 let selectedSquare = null;
@@ -60,6 +72,7 @@ socket.on('chaos_opponent_joined', (data) => {
 socket.on('start_match', () => {
     isGameStarted = true;
     document.getElementById('btn-ready').classList.add('hidden');
+    renderBoard();
 });
 
 socket.on('apply_chaos_move', (data) => {
@@ -69,11 +82,9 @@ socket.on('apply_chaos_move', (data) => {
     document.getElementById('turn-display-tag').innerText = currentTurn === playerColor ? "YOUR TURN" : "OPPONENT";
     document.getElementById('turn-display-tag').style.color = currentTurn === playerColor ? "#2ecc71" : "#e74c3c";
 
-    // Ladebalken für das nächste Katen-Event aktualisieren (z.B. alle 6 Züge)
     const progressPct = Math.min(100, ((data.moveCount % 6) / 6) * 100);
     document.getElementById('chaos-progress-fill').style.width = `${progressPct}%`;
 
-    // Aktiver Effekt im UI anzeigen
     const cardBox = document.getElementById('active-card-box');
     if (data.activeEffect) {
         cardBox.style.display = 'block';
@@ -87,7 +98,6 @@ socket.on('apply_chaos_move', (data) => {
     renderBoard();
 });
 
-// EVENT: Kartenauswahl-Phase gestartet!
 socket.on('start_card_selection', ({ cards, duration }) => {
     const overlay = document.getElementById('card-selection-overlay');
     const container = document.getElementById('cards-container');
@@ -123,7 +133,6 @@ socket.on('start_card_selection', ({ cards, duration }) => {
     }, 1000);
 });
 
-// EVENT: Stimmen-Update von Sockets / Chat
 socket.on('update_votes', ({ votesPct }) => {
     votesPct.forEach((pct, index) => {
         const fill = document.getElementById(`vote-fill-${index}`);
@@ -164,6 +173,7 @@ function startGame() {
     document.getElementById('top-player-name').innerText = opponentName;
 
     createBoardDOM();
+    renderBoard(); // Rendert Figuren direkt beim Aufruf!
 }
 
 function createBoardDOM() {
