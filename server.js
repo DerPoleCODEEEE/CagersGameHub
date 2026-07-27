@@ -17,14 +17,18 @@ const io = new Server(server, { cors: { origin: "*" } });
 // Um JSON im Body zu verarbeiten (Wichtig für das Speichern der Stats)
 app.use(express.json());
 
+// =========================================================
 // 1. MONGODB
+// =========================================================
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
         .then(() => console.log('  MongoDB connected!'))
         .catch(err => console.log('  MongoDB Error:', err));
 }
 
+// =========================================================
 // 2. SESSION & TWITCH LOGIN
+// =========================================================
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thecager_geheim_123',
     resave: false, saveUninitialized: false
@@ -58,13 +62,15 @@ passport.deserializeUser(async (id, done) => {
     try { const user = await User.findById(id); done(null, user); } catch (err) { done(err); }
 });
 
+// =========================================================
 // 3. ROUTES & APIS
+// =========================================================
 app.get('/auth/twitch', passport.authenticate('twitch'));
 app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
-// === NEU: Suchfunktion für die User ===
+// === Suchfunktion für die User ===
 app.get('/api/users/search', async (req, res) => {
     try {
         const query = req.query.q;
@@ -77,7 +83,7 @@ app.get('/api/users/search', async (req, res) => {
     }
 });
 
-// === NEU: API zum Speichern der Stats (Wins, Losses, Draws) ===
+// === API zum Speichern der Stats (Wins, Losses, Draws) ===
 app.post('/api/stats/update', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Not logged in' });
     
@@ -103,7 +109,7 @@ app.post('/api/stats/update', async (req, res) => {
     }
 });
 
-// === NEU: API für die Hall of Fame (Top 3) ===
+// === API für die Hall of Fame (Top 3) ===
 app.get('/api/leaderboard', async (req, res) => {
     try {
         const users = await User.find({});
@@ -128,11 +134,14 @@ app.get('/api/leaderboard', async (req, res) => {
     }
 });
 
+// =========================================================
 // 4. STATISCHE ORDNER FÜR DIE GAMES
+// =========================================================
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
+app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // NEU: Statischer Ordner für Chaos Chess
 
 // =========================================================
 // 5. CAGERS QUICK CHESS (SERVER-VALIDIERT)
@@ -140,7 +149,7 @@ app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager'))
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
-// --- NEU: Serverseitiges Board & Schachlogik für Anti-Cheat ---
+// --- Serverseitiges Board & Schachlogik für Anti-Cheat ---
 const INITIAL_CHESS_BOARD = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
     ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -587,6 +596,119 @@ mutantIo.on('connection', (socket) => {
 
     socket.on('disconnecting', () => {
         socket.rooms.forEach(code => { socket.to(code).emit('mutant_opponent_left'); });
+    });
+});
+
+// =========================================================
+// 7. CHAOS CHESS (Rundenbasiert + Karten-Events)
+// =========================================================
+const chaosIo = io.of('/chaos-chess');
+const chaosRooms = new Map();
+
+chaosIo.on('connection', (socket) => {
+    socket.on('create_chaos_room', ({ playerName, pfp }) => {
+        const roomCode = generateRoomCode();
+        const roomData = {
+            players: {
+                w: { id: socket.id, name: playerName, pfp, ready: false },
+                b: null
+            },
+            board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)),
+            turn: 'w',
+            moveCount: 0, // Zählt die Halbzüge
+            activeEffect: null // Speichert die aktuell aktive Karte
+        };
+        chaosRooms.set(roomCode, roomData);
+        socket.join(roomCode);
+        socket.emit('chaos_room_created', { roomCode, playerId: socket.id, color: 'w', playerName, pfp });
+    });
+
+    socket.on('join_chaos_room', ({ roomCode, playerName, pfp }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = chaosRooms.get(code);
+        if (!room) return socket.emit('error_msg', 'Room not found!');
+        if (room.players.b) return socket.emit('error_msg', 'Room is full!');
+        
+        room.players.b = { id: socket.id, name: playerName, pfp, ready: false };
+        socket.join(code);
+        
+        socket.emit('chaos_room_joined', {
+            roomCode: code, playerId: socket.id, color: 'b',
+            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp
+        });
+        socket.to(code).emit('chaos_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
+    });
+
+    socket.on('player_ready', ({ roomCode }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = chaosRooms.get(code);
+        if (!room) return;
+        
+        if (room.players.w && room.players.w.id === socket.id) room.players.w.ready = true;
+        if (room.players.b && room.players.b.id === socket.id) room.players.b.ready = true;
+        
+        const playersReady = [
+            { color: 'w', ready: room.players.w ? room.players.w.ready : false, name: room.players.w ? room.players.w.name : '' },
+            { color: 'b', ready: room.players.b ? room.players.b.ready : false, name: room.players.b ? room.players.b.name : '' }
+        ];
+        chaosIo.to(code).emit('ready_update', { playersReady });
+        
+        if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
+            chaosIo.to(code).emit('start_match');
+        }
+    });
+
+    socket.on('request_chaos_move', ({ roomCode, fromR, fromC, toR, toC }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = chaosRooms.get(code);
+        if (!room) return;
+
+        const movingPiece = room.board[fromR][fromC];
+        if (!movingPiece) return;
+        
+        const pieceColor = movingPiece === movingPiece.toUpperCase() ? 'w' : 'b';
+        if (room.turn !== pieceColor) return socket.emit('error_msg', 'Not your turn!');
+
+        // --- HIER KOMMT SPÄTER DIE KARTEN-LOGIK REIN ---
+        // Beispiel: if(room.activeEffect.name === 'blutdurst') { prüfe ob geschlagen wurde }
+
+        // Standard-Zug ausführen (vereinfacht für das Grundgerüst)
+        room.board[toR][toC] = movingPiece;
+        room.board[fromR][fromC] = null;
+        
+        // Runden- und Effektabwicklung
+        room.moveCount++;
+        room.turn = room.turn === 'w' ? 'b' : 'w';
+
+        if (room.activeEffect) {
+            room.activeEffect.turnsLeft--;
+            if (room.activeEffect.turnsLeft <= 0) {
+                room.activeEffect = null; // Effekt abgelaufen
+            }
+        }
+
+        // Dummy-Event: Alle 6 Halbzüge (3 volle Runden) wird eine neue Karte gezogen
+        let newCardDrawn = false;
+        if (room.moveCount % 6 === 0) {
+            room.activeEffect = {
+                name: 'Eisglätte',
+                description: 'Türme und Läufer rutschen bis zum Rand!',
+                turnsLeft: 2 // Gilt für 2 Halbzüge (1 pro Spieler)
+            };
+            newCardDrawn = true;
+        }
+
+        chaosIo.to(code).emit('apply_chaos_move', {
+            board: room.board,
+            nextTurn: room.turn,
+            moveCount: room.moveCount,
+            activeEffect: room.activeEffect,
+            newCardDrawn: newCardDrawn
+        });
+    });
+
+    socket.on('disconnecting', () => {
+        socket.rooms.forEach(code => { socket.to(code).emit('chaos_opponent_left'); });
     });
 });
 
