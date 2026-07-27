@@ -8,74 +8,90 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
     <!-- Die Florks im Hintergrund -->
     <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
     <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
-
+    
     <header class="scribble-box header-box">
         <div class="logo">
-            <h1>CAGER GAMES</h1>
+            <!-- 1. NEUER TITEL -->
+            <h1>Cagers Game Hub</h1>
         </div>
         
-        <!-- NEU: Rechter Bereich im Header mit Suche (Immer da) + Auth -->
         <div style="display:flex; align-items:center; gap:25px; flex-wrap: wrap; justify-content: flex-end;">
-            <!-- Suchleiste ist jetzt permanent im HTML -->
             <div class="search-wrapper">
                 <input type="text" id="user-search" class="scribble-input" placeholder="🔍 Search Player...">
                 <div id="search-results" class="search-results hidden"></div>
             </div>
-
-            <!-- Login / Profil Container -->
             <div class="auth-section" id="auth-section">
                 <span id="loading-auth">Loading...</span>
             </div>
         </div>
     </header>
 
-    <main>
-        <h2 class="title-scribble">Choose your game</h2>
-        <div class="game-grid">
-            
-            <div class="game-card scribble-box">
-                <div class="game-img" style="background-color: #739552; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px;">♞</span>
+    <!-- 2. NEUES LAYOUT: SPALTEN FÜR GAMES UND HALL OF FAME -->
+    <main class="main-layout">
+        
+        <!-- LINKE SEITE: DIE SPIELE (Visuell abgetrennt) -->
+        <div class="games-wrapper scribble-box">
+            <div class="game-grid">
+                
+                <!-- CAGERS QUICK CHESS -->
+                <div class="game-card scribble-box">
+                    <div class="badge-new">NEW!</div>
+                    <div class="game-img" style="background-color: #739552; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size: 50px;">🐴</span>
+                    </div>
+                    <h3>Cagers Quick Chess</h3>
+                    <p>Real-Time Action! No turns, just cooldowns.</p>
+                    <a href="/chess" class="play-btn scribble-btn">Play</a>
                 </div>
-                <h3>Cagers Quick Chess</h3>
-                <p>Real-Time Action! No turns, just cooldowns.</p>
-                <a href="/chess" class="play-btn scribble-btn">Play</a>
-            </div>
 
-            <!-- MUTANT MERGE CHESS -->
-            <div class="game-card scribble-box">
-                <div class="game-img" style="background-color: #e74c3c; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px;">🧬</span>
+                <!-- MUTANT MERGE CHESS -->
+                <div class="game-card scribble-box">
+                    <div class="badge-new">NEW!</div>
+                    <div class="game-img" style="background-color: #e74c3c; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size: 50px;">🧬</span>
+                    </div>
+                    <h3>Mutant Merge</h3>
+                    <p>Combine your pieces. Build super mutants. Total chaos!</p>
+                    <a href="/mutant-chess" class="play-btn scribble-btn" style="background: #f1c40f;">Play</a>
                 </div>
-                <h3>Mutant Merge</h3>
-                <p>Combine your pieces. Build super mutants. Total chaos!</p>
-                <a href="/mutant-chess" class="play-btn scribble-btn" style="background: #f1c40f;">Play</a>
-            </div>
 
-            <!-- VS CAGER BOT -->
-            <div class="game-card scribble-box">
-                <div class="game-img" style="background-color: #9b59b6; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px;">🤖</span>
+                <!-- VS CAGER BOT -->
+                <div class="game-card scribble-box">
+                    <div class="badge-new">NEW!</div>
+                    <div class="game-img" style="background-color: #9b59b6; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size: 50px;">🤖</span>
+                    </div>
+                    <h3>VS Cager Bot</h3>
+                    <p>Play against the AI trained on TheCager's playstyle and live stats!</p>
+                    <a href="/play-cager" class="play-btn scribble-btn" style="background: #a855f7; color: white;">Play</a>
                 </div>
-                <h3>VS Cager Bot</h3>
-                <p>Play against the AI trained on TheCager's playstyle and live stats!</p>
-                <a href="/play-cager" class="play-btn scribble-btn" style="background: #a855f7; color: white;">Play</a>
-            </div>
 
-            <div class="game-card scribble-box locked">
-                <div class="game-img" style="background-color: #ddd; display:flex; align-items:center; justify-content:center;">
-                    <span style="font-size: 50px; color:#888;">?</span>
+                <!-- TOWER DEFENSE (LOCKED) -->
+                <div class="game-card scribble-box locked">
+                    <div class="game-img" style="background-color: #ddd; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size: 50px; color:#888;">?</span>
+                    </div>
+                    <h3>Cager Tower Defense</h3>
+                    <p>Coming Soon...</p>
+                    <button class="play-btn scribble-btn disabled" disabled>Locked</button>
                 </div>
-                <h3>Cager Tower Defense</h3>
-                <p>Coming Soon...</p>
-                <button class="play-btn scribble-btn disabled" disabled>Locked</button>
-            </div>
 
+            </div>
         </div>
+
+        <!-- RECHTE SEITE: HALL OF FAME -->
+        <aside class="sidebar-wrapper">
+            <div class="hall-of-fame scribble-box">
+                <h3 style="margin-top:0; border-bottom: 3px solid #000; padding-bottom:10px;">🏆 Hall of Fame</h3>
+                <div id="hof-list" class="hof-list">
+                    <div style="text-align: center; color: #666; font-style: italic;">Lade Legenden...</div>
+                </div>
+            </div>
+        </aside>
+
     </main>
 
     <!-- PROFILE MODAL OVERLAY -->
@@ -86,13 +102,12 @@
                     <img id="modal-avatar" class="scribble-avatar" src="" alt="Avatar">
                     <h2 id="modal-username">User Profile</h2>
                 </div>
-                <button id="close-modal-btn" class="close-btn scribble-btn">✖</button>
+                <button id="close-modal-btn" class="close-btn scribble-btn">❌</button>
             </div>
-
             <!-- STATS BY MODE -->
             <div class="stats-grid">
                 <div class="stat-box scribble-box">
-                    <h4>⚡ Quickchess</h4>
+                    <h4>🐴 Quickchess</h4>
                     <p id="st-chess-record">0 W / 0 L / 0 D</p>
                     <p class="winrate" id="st-chess-wr">0% WR</p>
                 </div>
@@ -107,10 +122,9 @@
                     <p class="winrate" id="st-bot-wr">0% WR</p>
                 </div>
             </div>
-
             <!-- MULTI-TIER ACHIEVEMENTS -->
             <div class="achievements-section">
-                <h3>🏆 Achievements</h3>
+                <h3>🏅 Achievements</h3>
                 <div class="achievements-grid" id="achievements-container"></div>
             </div>
         </div>
@@ -119,27 +133,22 @@
     <script>
         let currentUserData = null;
 
-        // LOGICALLY ORDERED ACHIEVEMENTS (3 PER ROW)
         const ACHIEVEMENT_TIERS = [
-            // ROW 1: Quickchess
-            { id: 'q1', targetKey: 'chess', targetWins: 5, icon: '⚡', title: 'Speed Cadet', desc: 'Win 5 Quickchess games', color: '#f1c40f', tier: 'TIER I', level: 1 },
-            { id: 'q2', targetKey: 'chess', targetWins: 15, icon: '⚡', title: 'Speed Demon', desc: 'Win 15 Quickchess games', color: '#f39c12', tier: 'TIER II', level: 2 },
+            { id: 'q1', targetKey: 'chess', targetWins: 5, icon: '🚀', title: 'Speed Cadet', desc: 'Win 5 Quickchess games', color: '#f1c40f', tier: 'TIER I', level: 1 },
+            { id: 'q2', targetKey: 'chess', targetWins: 15, icon: '🔥', title: 'Speed Demon', desc: 'Win 15 Quickchess games', color: '#f39c12', tier: 'TIER II', level: 2 },
             { id: 'q3', targetKey: 'chess', targetWins: 50, icon: '⚡', title: 'Light Speed', desc: 'Win 50 Quickchess games', color: '#e67e22', tier: 'TIER III', level: 3 },
             
-            // ROW 2: Mutant Merge
-            { id: 'm1', targetKey: 'mutant', targetWins: 5, icon: '🧬', title: 'Gene Splicer', desc: 'Win 5 Mutant games', color: '#2ecc71', tier: 'TIER I', level: 1 },
+            { id: 'm1', targetKey: 'mutant', targetWins: 5, icon: '🧪', title: 'Gene Splicer', desc: 'Win 5 Mutant games', color: '#2ecc71', tier: 'TIER I', level: 1 },
             { id: 'm2', targetKey: 'mutant', targetWins: 15, icon: '🧬', title: 'Mad Scientist', desc: 'Win 15 Mutant games', color: '#27ae60', tier: 'TIER II', level: 2 },
-            { id: 'm3', targetKey: 'mutant', targetWins: 50, icon: '🧬', title: 'Super Mutant', desc: 'Win 50 Mutant games', color: '#16a085', tier: 'TIER III', level: 3 },
-
-            // ROW 3: Bot Slayer
-            { id: 'b1', targetKey: 'bot', targetWins: 1, icon: '🤖', title: 'Bot Buster', desc: 'Defeat Cager Bot once', color: '#9b59b6', tier: 'TIER I', level: 1 },
-            { id: 'b2', targetKey: 'bot', targetWins: 10, icon: '🤖', title: 'AI Nemesis', desc: 'Defeat Cager Bot 10 times', color: '#8e44ad', tier: 'TIER II', level: 2 },
-            { id: 'b3', targetKey: 'bot', targetWins: 30, icon: '🤖', title: 'Cager Slayer', desc: 'Defeat Cager Bot 30 times', color: '#2c3e50', tier: 'TIER III', level: 3 },
-
-            // ROW 4: Total Wins
-            { id: 't1', targetKey: 'total', targetWins: 10, icon: '🏆', title: 'Rising Star', desc: 'Win 10 games in total', color: '#3498db', tier: 'TIER I', level: 1 },
-            { id: 't2', targetKey: 'total', targetWins: 50, icon: '👑', title: 'Chess Master', desc: 'Win 50 games in total', color: '#e74c3c', tier: 'TIER II', level: 2 },
-            { id: 't3', targetKey: 'total', targetWins: 100, icon: '🌟', title: 'Cager Legend', desc: 'Win 100 games in total', color: '#d35400', tier: 'TIER III', level: 3 }
+            { id: 'm3', targetKey: 'mutant', targetWins: 50, icon: '🦠', title: 'Super Mutant', desc: 'Win 50 Mutant games', color: '#16a085', tier: 'TIER III', level: 3 },
+            
+            { id: 'b1', targetKey: 'bot', targetWins: 1, icon: '🔌', title: 'Bot Buster', desc: 'Defeat Cager Bot once', color: '#9b59b6', tier: 'TIER I', level: 1 },
+            { id: 'b2', targetKey: 'bot', targetWins: 10, icon: '🛠️', title: 'AI Nemesis', desc: 'Defeat Cager Bot 10 times', color: '#8e44ad', tier: 'TIER II', level: 2 },
+            { id: 'b3', targetKey: 'bot', targetWins: 30, icon: '💾', title: 'Cager Slayer', desc: 'Defeat Cager Bot 30 times', color: '#2c3e50', tier: 'TIER III', level: 3 },
+            
+            { id: 't1', targetKey: 'total', targetWins: 10, icon: '⭐', title: 'Rising Star', desc: 'Win 10 games in total', color: '#3498db', tier: 'TIER I', level: 1 },
+            { id: 't2', targetKey: 'total', targetWins: 50, icon: '🌟', title: 'Chess Master', desc: 'Win 50 games in total', color: '#e74c3c', tier: 'TIER II', level: 2 },
+            { id: 't3', targetKey: 'total', targetWins: 100, icon: '👑', title: 'Cager Legend', desc: 'Win 100 games in total', color: '#d35400', tier: 'TIER III', level: 3 }
         ];
 
         const modal = document.getElementById('profile-modal');
@@ -154,13 +163,11 @@
             modal.style.display = 'none';
         }
 
-        // Akzeptiert userData. Wenn leer, wird der eigene Nutzer genommen!
         function openProfileModal(userData = currentUserData) {
             if (!userData) return;
-
             document.getElementById('modal-avatar').src = userData.profileImageUrl || '';
             document.getElementById('modal-username').innerText = userData.displayName || 'User Profile';
-
+            
             const stats = userData.stats || {
                 chess: { wins: 0, losses: 0, draws: 0 },
                 mutant: { wins: 0, losses: 0, draws: 0 },
@@ -175,9 +182,6 @@
             modal.style.display = 'flex';
         }
 
-        // ==========================================
-        // SUCHFUNKTION LÄUFT JETZT UNABHÄNGIG VOM LOGIN
-        // ==========================================
         const searchInput = document.getElementById('user-search');
         const searchResults = document.getElementById('search-results');
 
@@ -188,11 +192,9 @@
                 searchResults.classList.add('hidden');
                 return;
             }
-
             try {
                 const res = await fetch(`/api/users/search?q=${query}`);
                 const users = await res.json();
-
                 searchResults.innerHTML = '';
                 if (users.length === 0) {
                     searchResults.innerHTML = '<div class="search-item" style="color:#777;">No player found</div>';
@@ -201,8 +203,6 @@
                         const item = document.createElement('div');
                         item.className = 'search-item';
                         item.innerHTML = `<img src="${u.profileImageUrl}" class="search-avatar" alt="Avatar"> ${u.displayName}`;
-                        
-                        // Beim Klick: Suchleiste schließen & Modal öffnen!
                         item.onclick = () => {
                             searchResults.classList.add('hidden');
                             searchInput.value = '';
@@ -217,22 +217,18 @@
             }
         });
 
-        // Suchergebnisse schließen, wenn man woanders hin klickt
         document.addEventListener('click', (e) => {
             if(!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                 searchResults.classList.add('hidden');
             }
         });
-        // ==========================================
 
-        // AUTH FETCHER
         fetch('/api/user')
             .then(res => res.json())
             .then(user => {
                 const authSection = document.getElementById('auth-section');
                 if (user) {
                     currentUserData = user;
-                    
                     authSection.innerHTML = `
                         <div class="profile-info" id="user-profile-trigger">
                             <img src="${user.profileImageUrl}" alt="Avatar" class="avatar scribble-avatar">
@@ -240,10 +236,8 @@
                             <a href="/auth/logout" class="logout-link" id="logout-btn">Logout</a>
                         </div>
                     `;
-
                     document.getElementById('user-profile-trigger').addEventListener('click', () => openProfileModal(currentUserData));
                     document.getElementById('logout-btn').addEventListener('click', (e) => e.stopPropagation());
-
                     localStorage.setItem('cager_twitch_name', user.displayName);
                     localStorage.setItem('cager_twitch_pfp', user.profileImageUrl);
                 } else {
@@ -265,7 +259,6 @@
             const draws = (data && data.draws) || 0;
             const total = wins + losses + draws;
             const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
-
             document.getElementById(`st-${key}-record`).innerText = `${wins} W / ${losses} L / ${draws} D`;
             document.getElementById(`st-${key}-wr`).innerText = `${wr}% WR`;
         }
@@ -273,7 +266,7 @@
         function renderAchievements(stats) {
             const container = document.getElementById('achievements-container');
             container.innerHTML = '';
-
+            
             const cWins = (stats.chess && stats.chess.wins) || 0;
             const mWins = (stats.mutant && stats.mutant.wins) || 0;
             const bWins = (stats.bot && stats.bot.wins) || 0;
@@ -287,11 +280,10 @@
                 else if (ach.targetKey === 'total') currentWins = totalWins;
 
                 const isUnlocked = currentWins >= ach.targetWins;
-
                 const card = document.createElement('div');
                 card.className = `achievement-card ${isUnlocked ? 'unlocked' : 'locked'} tier-${ach.level}`;
                 if (isUnlocked) card.style.backgroundColor = ach.color;
-
+                
                 card.innerHTML = `
                     <div class="icon">${ach.icon}</div>
                     <div class="title">${ach.title}</div>
@@ -301,6 +293,39 @@
                 container.appendChild(card);
             });
         }
+
+        // ==========================================
+        // LEADERBOARD (HALL OF FAME) FETCHER
+        // ==========================================
+        fetch('/api/leaderboard')
+            .then(res => res.json())
+            .then(users => {
+                const hofList = document.getElementById('hof-list');
+                hofList.innerHTML = '';
+                const medals = ['🥇', '🥈', '🥉'];
+                
+                if (users.length === 0) {
+                    hofList.innerHTML = '<p style="text-align:center; color:#555;">Noch keine Spiele gespielt!</p>';
+                    return;
+                }
+
+                users.forEach((u, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'hof-item scribble-box';
+                    item.innerHTML = `
+                        <div class="hof-rank">${medals[index] || '#'+(index+1)}</div>
+                        <img src="${u.profileImageUrl || 'https://static-cdn.jtvnw.net/user-default-pictures-uv/cdd517fe-def4-11e9-948e-784f43822e80-profile_image-70x70.png'}" class="hof-avatar" alt="Avatar">
+                        <div class="hof-info">
+                            <span class="hof-name">${u.displayName}</span>
+                            <span class="hof-wins">${u.totalWins} Wins total</span>
+                        </div>
+                    `;
+                    item.style.cursor = 'pointer';
+                    item.onclick = () => openProfileModal(u);
+                    hofList.appendChild(item);
+                });
+            })
+            .catch(err => console.error("Leaderboard Error:", err));
     </script>
 </body>
 </html>
