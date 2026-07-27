@@ -60,8 +60,6 @@ socket.on('chaos_opponent_joined', (data) => {
 socket.on('start_match', () => {
     isGameStarted = true;
     document.getElementById('btn-ready').classList.add('hidden');
-    // Board 8x8 mit null füllen, das echte Board kommt beim ersten Zug vom Server
-    // Für dieses Boilerplate sparen wir uns die erste Synchronisation, renderBoard holt sich das Array vom Server
 });
 
 socket.on('apply_chaos_move', (data) => {
@@ -71,19 +69,17 @@ socket.on('apply_chaos_move', (data) => {
     document.getElementById('turn-display-tag').innerText = currentTurn === playerColor ? "YOUR TURN" : "OPPONENT";
     document.getElementById('turn-display-tag').style.color = currentTurn === playerColor ? "#2ecc71" : "#e74c3c";
 
-    // Karten-Update im UI
+    // Ladebalken für das nächste Katen-Event aktualisieren (z.B. alle 6 Züge)
+    const progressPct = Math.min(100, ((data.moveCount % 6) / 6) * 100);
+    document.getElementById('chaos-progress-fill').style.width = `${progressPct}%`;
+
+    // Aktiver Effekt im UI anzeigen
     const cardBox = document.getElementById('active-card-box');
     if (data.activeEffect) {
         cardBox.style.display = 'block';
         document.getElementById('card-name').innerText = "🔥 " + data.activeEffect.name;
         document.getElementById('card-desc').innerText = data.activeEffect.description;
         document.getElementById('card-turns').innerText = `Gilt noch für: ${data.activeEffect.turnsLeft} Züge`;
-        
-        if (data.newCardDrawn) {
-            // Kleiner Wackel-Effekt wenn eine neue Karte gezogen wurde
-            cardBox.style.transform = 'scale(1.05)';
-            setTimeout(() => cardBox.style.transform = 'scale(1)', 300);
-        }
     } else {
         cardBox.style.display = 'none';
     }
@@ -91,13 +87,56 @@ socket.on('apply_chaos_move', (data) => {
     renderBoard();
 });
 
+// EVENT: Kartenauswahl-Phase gestartet!
+socket.on('start_card_selection', ({ cards, duration }) => {
+    const overlay = document.getElementById('card-selection-overlay');
+    const container = document.getElementById('cards-container');
+    container.innerHTML = '';
+
+    cards.forEach((card, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'rounds-card scribble-box';
+        cardEl.innerHTML = `
+            <div class="card-num">!${index + 1}</div>
+            <div class="card-icon">${card.icon || '🃏'}</div>
+            <div class="card-title">${card.name}</div>
+            <div class="card-body">${card.description}</div>
+            <div class="vote-bar"><div class="vote-fill" id="vote-fill-${index}" style="width:0%"></div></div>
+        `;
+        cardEl.onclick = () => {
+            socket.emit('cast_vote', { roomCode, cardIndex: index });
+        };
+        container.appendChild(cardEl);
+    });
+
+    let timeLeft = duration || 30;
+    document.getElementById('vote-timer').innerText = timeLeft;
+    overlay.classList.remove('hidden');
+
+    const timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('vote-timer').innerText = timeLeft;
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            overlay.classList.add('hidden');
+        }
+    }, 1000);
+});
+
+// EVENT: Stimmen-Update von Sockets / Chat
+socket.on('update_votes', ({ votesPct }) => {
+    votesPct.forEach((pct, index) => {
+        const fill = document.getElementById(`vote-fill-${index}`);
+        if (fill) fill.style.width = `${pct}%`;
+    });
+});
+
 function handleSquareClick(r, c) {
-    if (!isGameStarted || currentTurn !== playerColor) return; // Runden-Blocker!
+    if (!isGameStarted || currentTurn !== playerColor) return;
 
     const clickedPiece = board[r]?.[c];
     
     if (selectedSquare) {
-        // Zug absenden
         socket.emit('request_chaos_move', {
             roomCode,
             fromR: selectedSquare.r,
@@ -108,7 +147,6 @@ function handleSquareClick(r, c) {
         selectedSquare = null;
         renderBoard();
     } else if (clickedPiece) {
-        // Figur auswählen
         const isMyPiece = (clickedPiece === clickedPiece.toUpperCase() ? 'w' : 'b') === playerColor;
         if (isMyPiece) {
             selectedSquare = { r, c };
