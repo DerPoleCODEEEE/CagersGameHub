@@ -110,10 +110,96 @@ app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-ches
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
 
 // =========================================================
-// 5. CAGERS QUICK CHESS (UNCHANGED)
+// 5. CAGERS QUICK CHESS (SERVER-VALIDIERT)
 // =========================================================
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
+
+// --- NEU: Serverseitiges Board & Schachlogik für Anti-Cheat ---
+const INITIAL_CHESS_BOARD = [
+    ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+    ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+    ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+];
+
+function isEnemy(p1, p2) {
+    if (!p1 || !p2) return false;
+    return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase());
+}
+
+function getServerValidMoves(board, r, c, enPassantTarget, hasMoved) {
+    let piece = board[r][c];
+    if (!piece) return [];
+    let moves = [];
+    let color = piece === piece.toUpperCase() ? 'w' : 'b';
+    let dir = color === 'w' ? -1 : 1;
+    let startRow = color === 'w' ? 6 : 1;
+
+    const addSliding = (dirs) => {
+        for (let [dr, dc] of dirs) {
+            let nr = r + dr, nc = c + dc;
+            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                else {
+                    if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                    break;
+                }
+                nr += dr; nc += dc;
+            }
+        }
+    };
+
+    switch (piece.toLowerCase()) {
+        case 'p':
+            if (r + dir >= 0 && r + dir < 8 && !board[r + dir][c]) {
+                moves.push({ r: r + dir, c, type: 'normal' });
+                if (r === startRow && !board[r + dir * 2][c]) moves.push({ r: r + dir * 2, c, type: 'normal' });
+            }
+            for (let dc of [-1, 1]) {
+                let targetR = r + dir, targetC = c + dc;
+                if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
+                    if (board[targetR][targetC] && isEnemy(piece, board[targetR][targetC])) moves.push({ r: targetR, c: targetC, type: 'capture' });
+                    else if (enPassantTarget && enPassantTarget.color !== color && enPassantTarget.r === targetR && enPassantTarget.c === targetC) moves.push({ r: targetR, c: targetC, type: 'en_passant' });
+                }
+            }
+            break;
+        case 'r': addSliding([[-1,0],[1,0],[0,-1],[0,1]]); break;
+        case 'b': addSliding([[-1,-1],[-1,1],[1,-1],[1,1]]); break;
+        case 'q': addSliding([[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]); break;
+        case 'n':
+            for (let [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                let nr = r + dr, nc = c + dc;
+                if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                    if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                    else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                }
+            }
+            break;
+        case 'k':
+            for (let [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+                let nr = r + dr, nc = c + dc;
+                if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                    if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                    else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                }
+            }
+            let kRow = color === 'w' ? 7 : 0, kKey = color === 'w' ? 'wK' : 'bK', rookChar = color === 'w' ? 'R' : 'r';
+            if (r === kRow && c === 4 && hasMoved && !hasMoved[kKey]) {
+                let rRight = color === 'w' ? 'wR_right' : 'bR_right';
+                if (!hasMoved[rRight] && board[kRow][7] === rookChar && !board[kRow][5] && !board[kRow][6]) moves.push({ r: kRow, c: 6, type: 'castle' });
+                let rLeft = color === 'w' ? 'wR_left' : 'bR_left';
+                if (!hasMoved[rLeft] && board[kRow][0] === rookChar && !board[kRow][3] && !board[kRow][2] && !board[kRow][1]) moves.push({ r: kRow, c: 2, type: 'castle' });
+            }
+            break;
+    }
+    return moves;
+}
+// ---------------------------------------------------------
 
 io.on('connection', (socket) => {
     socket.on('create_room', ({ playerName, mode, pfp }) => {
@@ -121,7 +207,11 @@ io.on('connection', (socket) => {
         rooms.set(roomCode, {
             mode: mode || 'class',
             players: { w: { id: socket.id, name: playerName, pfp: pfp || '', ready: false }, b: null },
-            board: null, typeCooldowns: null, singleCooldowns: null
+            board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)), // NEU: Board in den Room-State
+            typeCooldowns: null, 
+            singleCooldowns: null,
+            hasMoved: { 'wK': false, 'wR_left': false, 'wR_right': false, 'bK': false, 'bR_left': false, 'bR_right': false }, // NEU: Castling State
+            enPassantTarget: null // NEU: En Passant State
         });
         socket.join(roomCode);
         socket.emit('room_created', { roomCode, playerId: socket.id, color: 'w', mode });
@@ -148,13 +238,14 @@ io.on('connection', (socket) => {
         if (!room) return;
         if (room.players.w && room.players.w.id === playerId) room.players.w.ready = true;
         if (room.players.b && room.players.b.id === playerId) room.players.b.ready = true;
-
+        
         const playersReady = [
             { color: 'w', ready: room.players.w ? room.players.w.ready : false },
             { color: 'b', ready: room.players.b ? room.players.b.ready : false }
         ];
+        
         io.to(roomCode).emit('ready_update', { playersReady });
-
+        
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
             if (room.mode === 'class') {
                 room.typeCooldowns = { 'w': { 'p':0,'n':0,'b':0,'r':0,'q':0,'k':0 }, 'b': { 'p':0,'n':0,'b':0,'r':0,'q':0,'k':0 } };
@@ -166,11 +257,107 @@ io.on('connection', (socket) => {
     });
 
     socket.on('select_square', ({ roomCode, r, c }) => socket.to(roomCode).emit('opponent_select_square', { r, c }));
-    socket.on('request_move', (moveData) => io.to(moveData.roomCode).emit('apply_move', moveData));
+    
+    // --- NEU: SICHERER REQUEST MOVE HANDLER ---
+    socket.on('request_move', (moveData) => {
+        const room = rooms.get(moveData.roomCode);
+        if (!room || !room.board) return;
+
+        // 1. Identifikation des Spielers
+        const color = (room.players.w && room.players.w.id === socket.id) ? 'w' : ((room.players.b && room.players.b.id === socket.id) ? 'b' : null);
+        if (!color) return;
+
+        const { fromR, fromC, toR, toC, promotedTo } = moveData;
+        const piece = room.board[fromR][fromC];
+
+        // 2. Existenz und Besitz prüfen
+        if (!piece) return socket.emit('error_msg', 'Cheat detected: No piece at source');
+        if ((piece === piece.toUpperCase() ? 'w' : 'b') !== color) return socket.emit('error_msg', 'Cheat detected: Not your piece');
+
+        const now = Date.now();
+        const pieceKey = piece.toLowerCase();
+
+        // 3. Serverseitiger Cooldown-Check
+        if (room.mode === 'class') {
+            if (room.typeCooldowns[color][pieceKey] > now) return socket.emit('error_msg', 'Piece is on cooldown!');
+        } else {
+            if (room.singleCooldowns[fromR][fromC] > now) return socket.emit('error_msg', 'Square is on cooldown!');
+        }
+
+        // 4. Logische Regel-Prüfung (Anti-Teleport & Schachregeln)
+        const validMoves = getServerValidMoves(room.board, fromR, fromC, room.enPassantTarget, room.hasMoved);
+        const validMove = validMoves.find(m => m.r === toR && m.c === toC);
+        
+        if (!validMove) return socket.emit('error_msg', 'Cheat detected: Illegal move logic!');
+
+        // 5. Status-Updates (HasMoved für Rochade)
+        if (piece === 'K') room.hasMoved['wK'] = true;
+        if (piece === 'k') room.hasMoved['bK'] = true;
+        if (piece === 'R' && fromR === 7 && fromC === 0) room.hasMoved['wR_left'] = true;
+        if (piece === 'R' && fromR === 7 && fromC === 7) room.hasMoved['wR_right'] = true;
+        if (piece === 'r' && fromR === 0 && fromC === 0) room.hasMoved['bR_left'] = true;
+        if (piece === 'r' && fromR === 0 && fromC === 7) room.hasMoved['bR_right'] = true;
+
+        if (pieceKey === 'p' && Math.abs(toR - fromR) === 2) {
+            room.enPassantTarget = { r: (fromR + toR) / 2, c: fromC, color };
+        } else {
+            room.enPassantTarget = null;
+        }
+
+        // 6. Zug auf dem Server-Board ausführen
+        room.board[fromR][fromC] = null;
+        let finalPiece = piece;
+        
+        if (promotedTo && pieceKey === 'p' && (toR === 0 || toR === 7)) {
+            // Nur gültige Promotions erlauben
+            const validPromotions = color === 'w' ? ['Q','R','N','B'] : ['q','r','n','b'];
+            if (validPromotions.includes(promotedTo)) finalPiece = promotedTo;
+        }
+
+        if (validMove.type === 'castle') {
+            const rFromC = toC === 6 ? 7 : 0;
+            const rToC = toC === 6 ? 5 : 3;
+            room.board[fromR][rToC] = room.board[fromR][rFromC];
+            room.board[fromR][rFromC] = null;
+            if (room.mode !== 'class') room.singleCooldowns[fromR][rFromC] = 0; // Turm Cooldown Reset bei Castling im Single Mode
+        } else if (validMove.type === 'en_passant') {
+            const captureRow = color === 'w' ? toR + 1 : toR - 1;
+            room.board[captureRow][toC] = null;
+        }
+
+        room.board[toR][toC] = finalPiece;
+
+        // 7. Cooldowns im Server speichern
+        let cdDuration = 0;
+        if (room.mode === 'fast_single') cdDuration = 2000;
+        else if (pieceKey === 'p') cdDuration = 3500;
+        else if (pieceKey === 'n' || pieceKey === 'b') cdDuration = 6500;
+        else if (pieceKey === 'r') cdDuration = 10000;
+        else if (pieceKey === 'q') cdDuration = 14000;
+        else if (pieceKey === 'k') cdDuration = 1000;
+
+        const cdEndTime = now + cdDuration;
+        if (room.mode === 'class') {
+            room.typeCooldowns[color][finalPiece.toLowerCase()] = cdEndTime;
+        } else {
+            room.singleCooldowns[toR][toC] = cdEndTime;
+            room.singleCooldowns[fromR][fromC] = 0;
+        }
+
+        // Sicherheits-Überschreibung: Server bestimmt den validierten Type
+        moveData.moveInfo = validMove;
+        
+        // 8. Geprüften Move sicher broadcasten
+        io.to(moveData.roomCode).emit('apply_move', moveData);
+    });
+
     socket.on('mouse_move', ({ roomCode, xPct, yPct }) => socket.to(roomCode).emit('opponent_mouse_move', { xPct, yPct }));
     socket.on('mouse_leave', ({ roomCode }) => socket.to(roomCode).emit('opponent_mouse_leave'));
-    socket.on('leave_room', ({ roomCode }) => { socket.to(roomCode).emit('opponent_left'); socket.leave(roomCode); });
-});
+    
+    socket.on('leave_room', ({ roomCode }) => { 
+        socket.to(roomCode).emit('opponent_left'); 
+        socket.leave(roomCode); 
+    });
 
 // =========================================================
 // 6. MUTANT MERGE CHESS (ISOLATED NAMESPACE)
