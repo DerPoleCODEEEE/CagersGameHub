@@ -12,10 +12,19 @@
     <div id="menu-screen" class="card scribble-box">
         <h1>Chaos Chess</h1>
         <p class="subtitle">Turn-based with crazy event cards!</p>
+        
         <div class="input-group">
-            <input type="text" id="player-name" placeholder="Enter name..." maxlength="15">
+            <label style="display:block; text-align:left; font-weight:bold; margin-bottom:5px;">Your Name:</label>
+            <input type="text" id="player-name" placeholder="Enter name..." maxlength="15" class="scribble-input">
         </div>
-        <div class="button-group">
+
+        <!-- NEU: EINSTELLUNG FÜR KARTEN-INTERVALL -->
+        <div class="input-group" style="margin-top: 15px; text-align: left;">
+            <label style="font-weight:bold; display:block;">Karten-Event alle: <span id="interval-val" style="color:#e74c3c;">6</span> Züge</label>
+            <input type="range" id="card-interval-range" min="2" max="10" step="2" value="6" style="width:100%; accent-color:#f1c40f; cursor:pointer;">
+        </div>
+
+        <div class="button-group" style="margin-top:20px;">
             <button id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
             <div class="divider">or</div>
             <div class="join-box">
@@ -23,9 +32,9 @@
                 <button id="btn-join" class="btn btn-secondary scribble-btn">Join Room</button>
             </div>
             <div class="divider"></div>
-            <a href="/" class="btn scribble-btn btn-back-center" style="background:#ddd;">Back to Hub</a>
+            <a href="/" class="btn scribble-btn btn-back-center" style="background:#ddd; text-decoration:none; display:block; text-align:center; color:#000;">Back to Hub</a>
         </div>
-        <div id="error-msg" class="error-msg"></div>
+        <div id="error-msg" class="error-msg" style="color:red; margin-top:10px;"></div>
     </div>
 
     <div id="lobby-screen" class="card scribble-box hidden">
@@ -41,7 +50,7 @@
                     <span id="top-player-name">Opponent</span>
                 </div>
 
-                <!-- TIMER / LADEBALKEN (Jetzt SAUBER AUSSERHALB vom Board!) -->
+                <!-- TIMER / LADEBALKEN -->
                 <div class="chaos-progress-container scribble-box">
                     <span class="progress-label">NÄCHSTE CHAOS-KARTE:</span>
                     <div class="progress-bar-bg">
@@ -52,11 +61,16 @@
                 <div id="board-wrapper">
                     <div id="board"></div>
 
+                    <!-- PROMOTION MODAL -->
+                    <div id="promotion-modal" style="display:none;" class="modal-overlay">
+                        <div class="promotion-box scribble-box" id="promo-options"></div>
+                    </div>
+
                     <!-- ROUNDS-STYLE OVERLAY FÜR KARTENAUSWAHL -->
                     <div id="card-selection-overlay" class="modal-overlay hidden">
                         <div class="card-selection-box scribble-box">
                             <h2>WÄHLE EINE CHAOS-KARTE!</h2>
-                            <p class="vote-timer-text">Chat stimmt ab... <span id="vote-timer">30</span>s</p>
+                            <p class="vote-timer-text">Chat/Spieler stimmen ab... <span id="vote-timer">30</span>s</p>
                             
                             <div id="cards-container" class="cards-container">
                                 <!-- Karten werden dynamisch erzeugt -->
