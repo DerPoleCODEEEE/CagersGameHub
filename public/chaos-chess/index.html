@@ -9,6 +9,25 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+
+    <!-- ROUNDS-STYLE OVERLAY (JETZT DIREKT AUF SCREEN-EBENE ZENTRIERT) -->
+    <div id="card-selection-overlay" class="modal-overlay hidden" style="display: none;">
+        <div class="card-selection-box scribble-box">
+            <h2>WÄHLE EINE CHAOS-KARTE!</h2>
+            <p class="vote-timer-text">Chat/Spieler stimmen ab... <span id="vote-timer">30</span>s</p>
+            
+            <div id="cards-container" class="cards-container">
+                <!-- Karten werden dynamisch erzeugt -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PROMOTION MODAL -->
+    <div id="promotion-modal" class="modal-overlay" style="display: none;">
+        <div class="promotion-box scribble-box" id="promo-options"></div>
+    </div>
+
+    <!-- PRE-LOBBY MENU -->
     <div id="menu-screen" class="card scribble-box">
         <h1>Chaos Chess</h1>
         <p class="subtitle">Turn-based with crazy event cards!</p>
@@ -18,7 +37,6 @@
             <input type="text" id="player-name" placeholder="Enter name..." maxlength="15" class="scribble-input">
         </div>
 
-        <!-- NEU: EINSTELLUNG FÜR KARTEN-INTERVALL -->
         <div class="input-group" style="margin-top: 15px; text-align: left;">
             <label style="font-weight:bold; display:block;">Karten-Event alle: <span id="interval-val" style="color:#e74c3c;">6</span> Züge</label>
             <input type="range" id="card-interval-range" min="2" max="10" step="2" value="6" style="width:100%; accent-color:#f1c40f; cursor:pointer;">
@@ -42,15 +60,14 @@
         <div class="code-display" id="display-room-code">------</div>
     </div>
 
+    <!-- MAIN GAME SCREEN -->
     <div id="game-screen" class="hidden">
         <div class="layout">
             <div id="game-container">
-                <!-- Info Leiste Gegner -->
                 <div class="player-bar top">
                     <span id="top-player-name">Opponent</span>
                 </div>
 
-                <!-- TIMER / LADEBALKEN -->
                 <div class="chaos-progress-container scribble-box">
                     <span class="progress-label">NÄCHSTE CHAOS-KARTE:</span>
                     <div class="progress-bar-bg">
@@ -60,26 +77,8 @@
 
                 <div id="board-wrapper">
                     <div id="board"></div>
-
-                    <!-- PROMOTION MODAL -->
-                    <div id="promotion-modal" style="display:none;" class="modal-overlay">
-                        <div class="promotion-box scribble-box" id="promo-options"></div>
-                    </div>
-
-                    <!-- ROUNDS-STYLE OVERLAY FÜR KARTENAUSWAHL -->
-                    <div id="card-selection-overlay" class="modal-overlay hidden">
-                        <div class="card-selection-box scribble-box">
-                            <h2>WÄHLE EINE CHAOS-KARTE!</h2>
-                            <p class="vote-timer-text">Chat/Spieler stimmen ab... <span id="vote-timer">30</span>s</p>
-                            
-                            <div id="cards-container" class="cards-container">
-                                <!-- Karten werden dynamisch erzeugt -->
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-                <!-- Info Leiste Du -->
                 <div class="player-bar bottom">
                     <span id="bottom-player-name">You</span>
                 </div>
@@ -94,7 +93,6 @@
                 
                 <button id="btn-ready" class="btn btn-ready scribble-btn">I AM READY!</button>
 
-                <!-- AKTIV WIRKENDE KARTE -->
                 <div id="active-card-box" class="scribble-box" style="padding:15px; margin-top:15px; background: #fff3cd; display:none;">
                     <span style="font-size: 12px; font-weight: bold; color: #888;">AKTIVER EFFEKT:</span>
                     <h3 style="margin:2px 0 0 0; color:#e67e22;" id="card-name">Kein Effekt</h3>
