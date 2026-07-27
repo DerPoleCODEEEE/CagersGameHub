@@ -14,7 +14,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// Um JSON im Body zu verarbeiten (Wichtig für das Speichern der Stats)
 app.use(express.json());
 
 // =========================================================
@@ -70,12 +69,10 @@ app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedire
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
-// === Suchfunktion für die User ===
 app.get('/api/users/search', async (req, res) => {
     try {
         const query = req.query.q;
         if (!query) return res.json([]);
-        // Case-insensitive Suche nach dem Namen, max 5 Ergebnisse
         const users = await User.find({ displayName: new RegExp(query, 'i') }).limit(5);
         res.json(users);
     } catch (err) {
@@ -83,11 +80,10 @@ app.get('/api/users/search', async (req, res) => {
     }
 });
 
-// === API zum Speichern der Stats (Wins, Losses, Draws) ===
 app.post('/api/stats/update', async (req, res) => {
     if (!req.user) return res.status(401).json({ error: 'Not logged in' });
     
-    const { mode, result } = req.body; // mode: 'chess', 'mutant', 'bot' | result: 'win', 'loss', 'draw'
+    const { mode, result } = req.body;
     if (!mode || !result) return res.status(400).json({ error: 'Missing data' });
 
     try {
@@ -109,12 +105,9 @@ app.post('/api/stats/update', async (req, res) => {
     }
 });
 
-// === API für die Hall of Fame (Top 3) ===
 app.get('/api/leaderboard', async (req, res) => {
     try {
         const users = await User.find({});
-        
-        // Berechne für jeden User die Gesamtzahl aller Siege
         const rankedUsers = users.map(u => {
             const stats = u.stats || {};
             const totalWins = (stats.chess?.wins || 0) + (stats.mutant?.wins || 0) + (stats.bot?.wins || 0);
@@ -126,7 +119,6 @@ app.get('/api/leaderboard', async (req, res) => {
             };
         });
 
-        // Absteigend sortieren und die Top 3 zurückgeben
         rankedUsers.sort((a, b) => b.totalWins - a.totalWins);
         res.json(rankedUsers.slice(0, 3));
     } catch (err) {
@@ -144,7 +136,7 @@ app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager'))
 app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess')));
 
 // =========================================================
-// 5. CAGERS QUICK CHESS (SERVER-VALIDIERT)
+// 5. CAGERS QUICK CHESS LOGIK
 // =========================================================
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
@@ -165,7 +157,7 @@ function isEnemy(p1, p2) {
     return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase());
 }
 
-function getServerValidMoves(board, r, c, enPassantTarget, hasMoved) {
+function getServerValidMoves(board, r, c, enPassantTarget, hasMoved, activeEffect) {
     let piece = board[r][c];
     if (!piece) return [];
     let moves = [];
@@ -173,31 +165,55 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved) {
     let dir = color === 'w' ? -1 : 1;
     let startRow = color === 'w' ? 6 : 1;
 
+    const isIce = activeEffect && activeEffect.id === 'ice';
+
     const addSliding = (dirs) => {
         for (let [dr, dc] of dirs) {
             let nr = r + dr, nc = c + dc;
+            let rayMoves = [];
             while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
-                else {
-                    if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                if (!board[nr][nc]) {
+                    rayMoves.push({ r: nr, c: nc, type: 'normal' });
+                } else {
+                    if (isEnemy(piece, board[nr][nc])) {
+                        rayMoves.push({ r: nr, c: nc, type: 'capture' });
+                    }
                     break;
                 }
                 nr += dr; nc += dc;
+            }
+            if (isIce) {
+                if (rayMoves.length > 0) moves.push(rayMoves[rayMoves.length - 1]);
+            } else {
+                moves.push(...rayMoves);
             }
         }
     };
 
     switch (piece.toLowerCase()) {
         case 'p':
-            if (r + dir >= 0 && r + dir < 8 && !board[r + dir][c]) {
-                moves.push({ r: r + dir, c, type: 'normal' });
-                if (r === startRow && !board[r + dir * 2][c]) moves.push({ r: r + dir * 2, c, type: 'normal' });
-            }
-            for (let dc of [-1, 1]) {
-                let targetR = r + dir, targetC = c + dc;
-                if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
-                    if (board[targetR][targetC] && isEnemy(piece, board[targetR][targetC])) moves.push({ r: targetR, c: targetC, type: 'capture' });
-                    else if (enPassantTarget && enPassantTarget.color !== color && enPassantTarget.r === targetR && enPassantTarget.c === targetC) moves.push({ r: targetR, c: targetC, type: 'en_passant' });
+            if (activeEffect && activeEffect.id === 'pawn_jump') {
+                for (let [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                    let nr = r + dr, nc = c + dc;
+                    if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                        if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                        else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                    }
+                }
+            } else {
+                const canSprint = activeEffect && activeEffect.id === 'pawn_sprint';
+                if (r + dir >= 0 && r + dir < 8 && !board[r + dir][c]) {
+                    moves.push({ r: r + dir, c, type: 'normal' });
+                    if ((r === startRow || canSprint) && r + dir * 2 >= 0 && r + dir * 2 < 8 && !board[r + dir * 2][c]) {
+                        moves.push({ r: r + dir * 2, c, type: 'normal' });
+                    }
+                }
+                for (let dc of [-1, 1]) {
+                    let targetR = r + dir, targetC = c + dc;
+                    if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
+                        if (board[targetR][targetC] && isEnemy(piece, board[targetR][targetC])) moves.push({ r: targetR, c: targetC, type: 'capture' });
+                        else if (enPassantTarget && enPassantTarget.color !== color && enPassantTarget.r === targetR && enPassantTarget.c === targetC) moves.push({ r: targetR, c: targetC, type: 'en_passant' });
+                    }
                 }
             }
             break;
@@ -214,11 +230,15 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved) {
             }
             break;
         case 'k':
-            for (let [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
-                let nr = r + dr, nc = c + dc;
-                if (nr>=0 && nr<8 && nc>=0 && nc<8) {
-                    if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
-                    else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+            const maxDist = (activeEffect && activeEffect.id === 'royal_guard') ? 2 : 1;
+            for (let dr = -maxDist; dr <= maxDist; dr++) {
+                for (let dc = -maxDist; dc <= maxDist; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    let nr = r + dr, nc = c + dc;
+                    if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                        if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                        else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                    }
                 }
             }
             let kRow = color === 'w' ? 7 : 0, kKey = color === 'w' ? 'wK' : 'bK', rookChar = color === 'w' ? 'R' : 'r';
@@ -319,10 +339,6 @@ io.on('connection', (socket) => {
 
         if (piece === 'K') room.hasMoved['wK'] = true;
         if (piece === 'k') room.hasMoved['bK'] = true;
-        if (piece === 'R' && fromR === 7 && fromC === 0) room.hasMoved['wR_left'] = true;
-        if (piece === 'R' && fromR === 7 && fromC === 7) room.hasMoved['wR_right'] = true;
-        if (piece === 'r' && fromR === 0 && fromC === 0) room.hasMoved['bR_left'] = true;
-        if (piece === 'r' && fromR === 0 && fromC === 7) room.hasMoved['bR_right'] = true;
 
         if (pieceKey === 'p' && Math.abs(toR - fromR) === 2) {
             room.enPassantTarget = { r: (fromR + toR) / 2, c: fromC, color };
@@ -343,7 +359,6 @@ io.on('connection', (socket) => {
             const rToC = toC === 6 ? 5 : 3;
             room.board[fromR][rToC] = room.board[fromR][rFromC];
             room.board[fromR][rFromC] = null;
-            if (room.mode !== 'class') room.singleCooldowns[fromR][rFromC] = 0; 
         } else if (validMove.type === 'en_passant') {
             const captureRow = color === 'w' ? toR + 1 : toR - 1;
             room.board[captureRow][toC] = null;
@@ -371,17 +386,13 @@ io.on('connection', (socket) => {
         io.to(moveData.roomCode).emit('apply_move', moveData);
     });
 
-    socket.on('mouse_move', ({ roomCode, xPct, yPct }) => socket.to(roomCode).emit('opponent_mouse_move', { xPct, yPct }));
-    socket.on('mouse_leave', ({ roomCode }) => socket.to(roomCode).emit('opponent_mouse_leave'));
-    
-    socket.on('leave_room', ({ roomCode }) => { 
-        socket.to(roomCode).emit('opponent_left'); 
-        socket.leave(roomCode); 
+    socket.on('disconnecting', () => {
+        socket.rooms.forEach(code => { socket.to(code).emit('opponent_left'); });
     });
 });
 
 // =========================================================
-// 6. MUTANT MERGE CHESS (ISOLATED NAMESPACE)
+// 6. MUTANT MERGE CHESS
 // =========================================================
 const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
@@ -417,10 +428,7 @@ function getPieceColor(pieceArr) {
 mutantIo.on('connection', (socket) => {
     socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions }) => {
         const roomCode = generateRoomCode();
-        let hostColor = colorChoice;
-        if (colorChoice === 'random') {
-            hostColor = Math.random() < 0.5 ? 'w' : 'b';
-        }
+        let hostColor = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
         const limitFusions = maxFusions || 3;
         const roomData = {
             players: {
@@ -523,15 +531,9 @@ mutantIo.on('connection', (socket) => {
             room.board[fromR][fromC] = null;
         } else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
             const combined = [...movingPiece, ...targetPiece].map(p => p.toLowerCase().replace('_fused', ''));
-            if (movingPiece.some(p => p.includes('_fused')) || targetPiece.some(p => p.includes('_fused'))) {
-                return socket.emit('error_msg', 'This fused piece cannot be fused again!');
-            }
-            if (new Set(combined).size !== combined.length) {
-                return socket.emit('error_msg', 'Cannot merge identical piece types!');
-            }
-            if (combined.includes('q') && (combined.includes('b') || combined.includes('r'))) {
-                return socket.emit('error_msg', 'Queen already moves like Bishop and Rook!');
-            }
+            if (movingPiece.some(p => p.includes('_fused')) || targetPiece.some(p => p.includes('_fused'))) return socket.emit('error_msg', 'Fused piece cannot be fused again!');
+            if (new Set(combined).size !== combined.length) return socket.emit('error_msg', 'Cannot merge identical pieces!');
+            if (combined.includes('q') && (combined.includes('b') || combined.includes('r'))) return socket.emit('error_msg', 'Queen already moves like Bishop and Rook!');
             if (combined.includes('q') && combined.includes('p')) return socket.emit('error_msg', 'Queen cannot merge with Pawn!');
             if (combined.includes('k') && combined.includes('p')) return socket.emit('error_msg', 'King cannot merge with Pawn!');
             if (room.fusionsLeft[pieceColor] <= 0) return socket.emit('error_msg', 'No fusions remaining!');
@@ -545,7 +547,7 @@ mutantIo.on('connection', (socket) => {
                 room.board[fromR][fromC] = null;
                 room.fusionsLeft[pieceColor]--;
             } else {
-                return socket.emit('error_msg', 'Maximum 2 pieces per square!');
+                return socket.emit('error_msg', 'Max 2 pieces per square!');
             }
         } else {
             let isKingCaptured = false;
@@ -564,52 +566,25 @@ mutantIo.on('connection', (socket) => {
         });
     });
 
-    socket.on('time_out', ({ roomCode, loserColor }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
-        const room = mutantRooms.get(code);
-        if (!room) return;
-        const winnerColor = loserColor === 'w' ? 'b' : 'w';
-        mutantIo.to(code).emit('game_over', { winnerColor, reason: 'time' });
-    });
-
-    socket.on('resign_game', ({ roomCode }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
-        const room = mutantRooms.get(code);
-        if (!room) return;
-        const resigningColor = room.players.w && room.players.w.id === socket.id ? 'w' : 'b';
-        const winnerColor = resigningColor === 'w' ? 'b' : 'w';
-        mutantIo.to(code).emit('game_over', { winnerColor, reason: 'resign' });
-    });
-
-    socket.on('offer_draw', ({ roomCode }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
-        socket.to(code).emit('draw_offered');
-    });
-
-    socket.on('respond_draw', ({ roomCode, accepted }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
-        if (accepted) mutantIo.to(code).emit('game_over', { winnerColor: null, reason: 'draw' });
-        else socket.to(code).emit('draw_declined');
-    });
-
     socket.on('disconnecting', () => {
         socket.rooms.forEach(code => { socket.to(code).emit('mutant_opponent_left'); });
     });
 });
 
 // =========================================================
-// 7. CHAOS CHESS (Rundenbasiert + Karten-Events & Full Chess Logic)
+// 7. CHAOS CHESS (REPARIERTES VOTING + GEBALANCTE KARTEN)
 // =========================================================
 const chaosIo = io.of('/chaos-chess');
 const chaosRooms = new Map();
 
-// KARTEN-DATABASE (Balancierte rundenbasierte Effekte)
 const CHAOS_CARDS_POOL = [
     { id: 'bloodthirst', name: 'Blutdurst', icon: '🩸', description: 'Für 2 Züge MUSS geschlagen werden, wenn ein Schlagzug möglich ist!', turnsDuration: 2 },
-    { id: 'ice', name: 'Eisglätte', icon: '🧊', description: 'Für 2 Züge rutschen Damen, Türme & Läufer bis zum Hindernis!', turnsDuration: 2 },
+    { id: 'peace', name: 'Friedensvertrag', icon: '🕊️', description: 'Für 2 Züge kann KEINE Figur geschlagen werden!', turnsDuration: 2 },
     { id: 'pawn_jump', name: 'Pferdeflüsterer', icon: '🐎', description: 'Für 2 Züge springen alle Bauern wie Springer!', turnsDuration: 2 },
-    { id: 'peace', name: 'Friedensvertrag', icon: '🕊️', description: 'Für 2 Züge kann keine Figur geschlagen werden!', turnsDuration: 2 },
-    { id: 'fog', name: 'Nebelschleier', icon: '🌫️', description: 'Gegnerische Figuren werden für 2 Züge unsichtbar!', turnsDuration: 2 }
+    { id: 'ice', name: 'Eisglätte', icon: '🧊', description: 'Damen, Türme & Läufer rutschen für 2 Züge durch bis zum Hindernis!', turnsDuration: 2 },
+    { id: 'pawn_sprint', name: 'Bauern-Sprint', icon: '🏃', description: 'Bauern dürfen für 2 Züge von überall 2 Felder vorgehen!', turnsDuration: 2 },
+    { id: 'royal_guard', name: 'Königsschutz', icon: '🛡️', description: 'Könige dürfen 2 Züge lang 2 Felder weit ziehen!', turnsDuration: 2 },
+    { id: 'fog', name: 'Nebelschleier', icon: '🌫️', description: 'Gegnerische Figuren sind für 2 Züge in Nebel gehüllt!', turnsDuration: 2 }
 ];
 
 chaosIo.on('connection', (socket) => {
@@ -634,6 +609,7 @@ chaosIo.on('connection', (socket) => {
             votedSockets: new Set()
         };
         chaosRooms.set(roomCode, roomData);
+        socket.roomCode = roomCode; // FIX: Fest auf Socket speichern!
         socket.join(roomCode);
         socket.emit('chaos_room_created', { roomCode, playerId: socket.id, color: 'w', playerName, pfp, cardInterval: interval });
     });
@@ -645,6 +621,7 @@ chaosIo.on('connection', (socket) => {
         if (room.players.b) return socket.emit('error_msg', 'Room is full!');
         
         room.players.b = { id: socket.id, name: playerName, pfp, ready: false };
+        socket.roomCode = code; // FIX: Fest auf Socket speichern!
         socket.join(code);
         
         socket.emit('chaos_room_joined', {
@@ -656,7 +633,7 @@ chaosIo.on('connection', (socket) => {
     });
 
     socket.on('player_ready', ({ roomCode }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
+        const code = socket.roomCode || (roomCode ? roomCode.toUpperCase() : '');
         const room = chaosRooms.get(code);
         if (!room) return;
         
@@ -674,8 +651,8 @@ chaosIo.on('connection', (socket) => {
         }
     });
 
-    socket.on('request_chaos_move', ({ roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
+    socket.on('request_chaos_move', ({ fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
+        const code = socket.roomCode;
         const room = chaosRooms.get(code);
         if (!room || room.isVoting) return;
 
@@ -685,21 +662,38 @@ chaosIo.on('connection', (socket) => {
         const pieceColor = movingPiece === movingPiece.toUpperCase() ? 'w' : 'b';
         if (room.turn !== pieceColor) return socket.emit('error_msg', 'Not your turn!');
 
-        // Serverseitige Schach-Validierung
-        const validMoves = getServerValidMoves(room.board, fromR, fromC, room.enPassantTarget, room.hasMoved);
+        const validMoves = getServerValidMoves(room.board, fromR, fromC, room.enPassantTarget, room.hasMoved, room.activeEffect);
         const validMove = validMoves.find(m => m.r === toR && m.c === toC);
         if (!validMove) return socket.emit('error_msg', 'Illegal move!');
 
-        // Aktive Effekte berücksichtigen (z.B. Friedensvertrag)
+        // --- KARTEN-LOGIK BEIM ZUG ---
         if (room.activeEffect && room.activeEffect.id === 'peace' && (validMove.type === 'capture' || validMove.type === 'en_passant')) {
-            return socket.emit('error_msg', 'Friedensvertrag ist aktiv! Schlagen ist verboten!');
+            return socket.emit('error_msg', '🕊️ Friedensvertrag aktiv! Schlagen verboten!');
         }
 
-        // Rochade Status verwalten
+        if (room.activeEffect && room.activeEffect.id === 'bloodthirst') {
+            let hasAnyCapture = false;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const p = room.board[r][c];
+                    if (p && (p === p.toUpperCase() ? 'w' : 'b') === pieceColor) {
+                        const pMoves = getServerValidMoves(room.board, r, c, room.enPassantTarget, room.hasMoved, room.activeEffect);
+                        if (pMoves.some(m => m.type === 'capture' || m.type === 'en_passant')) {
+                            hasAnyCapture = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasAnyCapture) break;
+            }
+            if (hasAnyCapture && validMove.type !== 'capture' && validMove.type !== 'en_passant') {
+                return socket.emit('error_msg', '🩸 Blutdurst aktiv! Du MUSST schlagen!');
+            }
+        }
+
         if (movingPiece === 'K') room.hasMoved['wK'] = true;
         if (movingPiece === 'k') room.hasMoved['bK'] = true;
 
-        // Zug auf dem Board ausführen
         room.board[fromR][fromC] = null;
         let finalPiece = promotedTo || movingPiece;
 
@@ -713,7 +707,6 @@ chaosIo.on('connection', (socket) => {
             room.board[captureRow][toC] = null;
         }
 
-        // König geschlagen Check
         const targetPiece = room.board[toR][toC];
         let isGameOver = targetPiece && targetPiece.toLowerCase() === 'k';
 
@@ -722,7 +715,6 @@ chaosIo.on('connection', (socket) => {
         room.moveCount++;
         room.turn = room.turn === 'w' ? 'b' : 'w';
 
-        // Aktiven Karten-Effekt herunterzählen
         if (room.activeEffect) {
             room.activeEffect.turnsLeft--;
             if (room.activeEffect.turnsLeft <= 0) {
@@ -730,7 +722,6 @@ chaosIo.on('connection', (socket) => {
             }
         }
 
-        // Prüfen, ob Karten-Abstimmung gestartet werden soll
         const triggerVoting = (room.moveCount > 0 && room.moveCount % room.cardInterval === 0 && !isGameOver);
 
         chaosIo.to(code).emit('apply_chaos_move', {
@@ -742,13 +733,12 @@ chaosIo.on('connection', (socket) => {
             isGameOver
         });
 
-        // KARTEN-VOTING STARTEN
+        // START VOTING
         if (triggerVoting) {
             room.isVoting = true;
             room.votes = [0, 0, 0];
             room.votedSockets.clear();
 
-            // 3 zufällige Karten ziehen
             const shuffled = [...CHAOS_CARDS_POOL].sort(() => 0.5 - Math.random());
             room.currentCards = shuffled.slice(0, 3);
 
@@ -757,12 +747,10 @@ chaosIo.on('connection', (socket) => {
                 duration: 30
             });
 
-            // Timer nach 30 Sekunden auswerten
             setTimeout(() => {
                 const activeRoom = chaosRooms.get(code);
                 if (!activeRoom || !activeRoom.isVoting) return;
 
-                // Gewinner-Karte ermitteln
                 let maxVotes = -1;
                 let winningIndex = 0;
                 activeRoom.votes.forEach((v, idx) => {
@@ -788,12 +776,13 @@ chaosIo.on('connection', (socket) => {
         }
     });
 
-    // VOTING EMPFANGEN
-    socket.on('cast_vote', ({ roomCode, cardIndex }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
+    // VOTING HANDLER (JETZT FÜR ALLE SPIELER PERFEKT RELIABLE)
+    socket.on('cast_vote', ({ cardIndex }) => {
+        const code = socket.roomCode;
+        if (!code) return;
         const room = chaosRooms.get(code);
         if (!room || !room.isVoting) return;
-        if (room.votedSockets.has(socket.id)) return; // Nur 1 Vote pro Spieler/Socket
+        if (room.votedSockets.has(socket.id)) return;
 
         room.votedSockets.add(socket.id);
         room.votes[cardIndex] = (room.votes[cardIndex] || 0) + 1;
@@ -805,12 +794,14 @@ chaosIo.on('connection', (socket) => {
     });
 
     socket.on('disconnecting', () => {
-        socket.rooms.forEach(code => { socket.to(code).emit('chaos_opponent_left'); });
+        if (socket.roomCode) {
+            chaosIo.to(socket.roomCode).emit('chaos_opponent_left');
+        }
     });
 });
 
 // =========================================================
-// 8. SERVER BINDING & PORT (FEHLERBEHOBEN FÜR RENDER.COM)
+// 8. SERVER BINDING
 // =========================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
