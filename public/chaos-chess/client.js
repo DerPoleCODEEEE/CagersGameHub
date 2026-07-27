@@ -3,6 +3,7 @@ const socket = io('/chaos-chess');
 let roomCode = null, playerColor = null;
 let myName = 'Player', opponentName = 'Opponent';
 let cardIntervalSetting = 6;
+let activeEffectGlobal = null;
 
 let board = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -36,7 +37,6 @@ const PIECES = {
     'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
 };
 
-// Intervall-Slider
 const intervalRange = document.getElementById('card-interval-range');
 if(intervalRange) {
     intervalRange.oninput = () => {
@@ -87,19 +87,22 @@ socket.on('start_match', (data) => {
     renderBoard();
 });
 
+socket.on('error_msg', (msg) => {
+    alert(msg);
+});
+
 socket.on('apply_chaos_move', (data) => {
     board = data.board;
     currentTurn = data.nextTurn;
+    activeEffectGlobal = data.activeEffect;
     
     document.getElementById('turn-display-tag').innerText = currentTurn === playerColor ? "YOUR TURN" : "OPPONENT";
     document.getElementById('turn-display-tag').style.color = currentTurn === playerColor ? "#2ecc71" : "#e74c3c";
 
-    // Progress Bar
     const interval = data.cardInterval || 6;
     const progressPct = Math.min(100, ((data.moveCount % interval) / interval) * 100);
     document.getElementById('chaos-progress-fill').style.width = `${progressPct}%`;
 
-    // Aktiver Effekt Box
     updateActiveEffectUI(data.activeEffect);
 
     if (data.isGameOver) {
@@ -109,7 +112,7 @@ socket.on('apply_chaos_move', (data) => {
     renderBoard();
 });
 
-// START DER KARTENAUSWAHL
+// START VOTING
 socket.on('start_card_selection', ({ cards, duration }) => {
     const overlay = document.getElementById('card-selection-overlay');
     const container = document.getElementById('cards-container');
@@ -126,8 +129,7 @@ socket.on('start_card_selection', ({ cards, duration }) => {
             <div class="vote-bar"><div class="vote-fill" id="vote-fill-${index}" style="width:0%"></div></div>
         `;
         cardEl.onclick = () => {
-            socket.emit('cast_vote', { roomCode, cardIndex: index });
-            // Visuelles Feedback
+            socket.emit('cast_vote', { cardIndex: index });
             document.querySelectorAll('.rounds-card').forEach(c => c.style.borderColor = '#000');
             cardEl.style.borderColor = '#2ecc71';
         };
@@ -158,9 +160,12 @@ socket.on('update_votes', ({ votesPct }) => {
 });
 
 socket.on('card_applied', ({ activeEffect }) => {
-    document.getElementById('card-selection-overlay').classList.add('hidden');
-    document.getElementById('card-selection-overlay').style.display = 'none';
+    activeEffectGlobal = activeEffect;
+    const overlay = document.getElementById('card-selection-overlay');
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
     updateActiveEffectUI(activeEffect);
+    renderBoard();
 });
 
 function updateActiveEffectUI(effect) {
@@ -175,7 +180,6 @@ function updateActiveEffectUI(effect) {
     }
 }
 
-// CLIENT-SIDE SCHACH-VALIDIERUNG FÜR HIGHLIGHTS
 function isEnemy(p1, p2) {
     if (!p1 || !p2) return false;
     return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase());
@@ -190,31 +194,54 @@ function getValidMoves(r, c) {
 
     let dir = color === 'w' ? -1 : 1;
     let startRow = color === 'w' ? 6 : 1;
+    const isIce = activeEffectGlobal && activeEffectGlobal.id === 'ice';
 
     const addSliding = (dirs) => {
         for (let [dr, dc] of dirs) {
             let nr = r + dr, nc = c + dc;
+            let rayMoves = [];
             while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
-                else {
-                    if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                if (!board[nr][nc]) {
+                    rayMoves.push({ r: nr, c: nc, type: 'normal' });
+                } else {
+                    if (isEnemy(piece, board[nr][nc])) {
+                        rayMoves.push({ r: nr, c: nc, type: 'capture' });
+                    }
                     break;
                 }
                 nr += dr; nc += dc;
+            }
+            if (isIce) {
+                if (rayMoves.length > 0) moves.push(rayMoves[rayMoves.length - 1]);
+            } else {
+                moves.push(...rayMoves);
             }
         }
     };
 
     switch (piece.toLowerCase()) {
         case 'p':
-            if (r + dir >= 0 && r + dir < 8 && !board[r + dir][c]) {
-                moves.push({ r: r + dir, c, type: 'normal' });
-                if (r === startRow && !board[r + dir * 2][c]) moves.push({ r: r + dir * 2, c, type: 'normal' });
-            }
-            for (let dc of [-1, 1]) {
-                let targetR = r + dir, targetC = c + dc;
-                if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
-                    if (board[targetR][targetC] && isEnemy(piece, board[targetR][targetC])) moves.push({ r: targetR, c: targetC, type: 'capture' });
+            if (activeEffectGlobal && activeEffectGlobal.id === 'pawn_jump') {
+                for (let [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                    let nr = r + dr, nc = c + dc;
+                    if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                        if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                        else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                    }
+                }
+            } else {
+                const canSprint = activeEffectGlobal && activeEffectGlobal.id === 'pawn_sprint';
+                if (r + dir >= 0 && r + dir < 8 && !board[r + dir][c]) {
+                    moves.push({ r: r + dir, c, type: 'normal' });
+                    if ((r === startRow || canSprint) && r + dir * 2 >= 0 && r + dir * 2 < 8 && !board[r + dir * 2][c]) {
+                        moves.push({ r: r + dir * 2, c, type: 'normal' });
+                    }
+                }
+                for (let dc of [-1, 1]) {
+                    let targetR = r + dir, targetC = c + dc;
+                    if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
+                        if (board[targetR][targetC] && isEnemy(piece, board[targetR][targetC])) moves.push({ r: targetR, c: targetC, type: 'capture' });
+                    }
                 }
             }
             break;
@@ -231,11 +258,15 @@ function getValidMoves(r, c) {
             }
             break;
         case 'k':
-            for (let [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
-                let nr = r + dr, nc = c + dc;
-                if (nr>=0 && nr<8 && nc>=0 && nc<8) {
-                    if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
-                    else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+            const maxDist = (activeEffectGlobal && activeEffectGlobal.id === 'royal_guard') ? 2 : 1;
+            for (let dr = -maxDist; dr <= maxDist; dr++) {
+                for (let dc = -maxDist; dc <= maxDist; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    let nr = r + dr, nc = c + dc;
+                    if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                        if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                        else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                    }
                 }
             }
             break;
@@ -258,7 +289,6 @@ function handleSquareClick(r, c) {
             }
 
             socket.emit('request_chaos_move', {
-                roomCode,
                 fromR: selectedSquare.r,
                 fromC: selectedSquare.c,
                 toR: r,
@@ -300,7 +330,7 @@ function triggerPromotion(fromR, fromC, toR, toC, moveInfo) {
             modal.style.display = 'none';
             pendingPromotion = null;
             socket.emit('request_chaos_move', {
-                roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo: p
+                fromR, fromC, toR, toC, moveInfo, promotedTo: p
             });
             selectedSquare = null;
             validMoves = [];
@@ -346,6 +376,8 @@ function createBoardDOM() {
 
 function renderBoard() {
     const boardEl = document.getElementById('board');
+    const isFog = activeEffectGlobal && activeEffectGlobal.id === 'fog';
+
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const square = boardEl.querySelector(`.square[data-r="${r}"][data-c="${c}"]`);
@@ -361,8 +393,15 @@ function renderBoard() {
             square.classList.toggle('capture-move', !!(moveInfo && moveInfo.type === 'capture'));
 
             if (piece) {
-                img.src = PIECES[piece].img;
-                img.classList.remove('hidden');
+                const pColor = piece === piece.toUpperCase() ? 'w' : 'b';
+                
+                // Nebelschleier (Fog of War)
+                if (isFog && pColor !== playerColor) {
+                    img.classList.add('hidden');
+                } else {
+                    img.src = PIECES[piece].img;
+                    img.classList.remove('hidden');
+                }
             } else {
                 img.classList.add('hidden');
             }
