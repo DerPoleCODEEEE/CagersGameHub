@@ -600,14 +600,24 @@ mutantIo.on('connection', (socket) => {
 });
 
 // =========================================================
-// 7. CHAOS CHESS (Rundenbasiert + Karten-Events)
+// 7. CHAOS CHESS (Rundenbasiert + Karten-Events & Full Chess Logic)
 // =========================================================
 const chaosIo = io.of('/chaos-chess');
 const chaosRooms = new Map();
 
+// KARTEN-DATABASE (Balancierte rundenbasierte Effekte)
+const CHAOS_CARDS_POOL = [
+    { id: 'bloodthirst', name: 'Blutdurst', icon: '🩸', description: 'Für 2 Züge MUSS geschlagen werden, wenn ein Schlagzug möglich ist!', turnsDuration: 2 },
+    { id: 'ice', name: 'Eisglätte', icon: '🧊', description: 'Für 2 Züge rutschen Damen, Türme & Läufer bis zum Hindernis!', turnsDuration: 2 },
+    { id: 'pawn_jump', name: 'Pferdeflüsterer', icon: '🐎', description: 'Für 2 Züge springen alle Bauern wie Springer!', turnsDuration: 2 },
+    { id: 'peace', name: 'Friedensvertrag', icon: '🕊️', description: 'Für 2 Züge kann keine Figur geschlagen werden!', turnsDuration: 2 },
+    { id: 'fog', name: 'Nebelschleier', icon: '🌫️', description: 'Gegnerische Figuren werden für 2 Züge unsichtbar!', turnsDuration: 2 }
+];
+
 chaosIo.on('connection', (socket) => {
-    socket.on('create_chaos_room', ({ playerName, pfp }) => {
+    socket.on('create_chaos_room', ({ playerName, pfp, cardInterval }) => {
         const roomCode = generateRoomCode();
+        const interval = parseInt(cardInterval) || 6;
         const roomData = {
             players: {
                 w: { id: socket.id, name: playerName, pfp, ready: false },
@@ -615,12 +625,19 @@ chaosIo.on('connection', (socket) => {
             },
             board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)),
             turn: 'w',
-            moveCount: 0, // Zählt die Halbzüge
-            activeEffect: null // Speichert die aktuell aktive Karte
+            moveCount: 0,
+            cardInterval: interval,
+            activeEffect: null,
+            hasMoved: { 'wK': false, 'wR_left': false, 'wR_right': false, 'bK': false, 'bR_left': false, 'bR_right': false },
+            enPassantTarget: null,
+            isVoting: false,
+            currentCards: [],
+            votes: [0, 0, 0],
+            votedSockets: new Set()
         };
         chaosRooms.set(roomCode, roomData);
         socket.join(roomCode);
-        socket.emit('chaos_room_created', { roomCode, playerId: socket.id, color: 'w', playerName, pfp });
+        socket.emit('chaos_room_created', { roomCode, playerId: socket.id, color: 'w', playerName, pfp, cardInterval: interval });
     });
 
     socket.on('join_chaos_room', ({ roomCode, playerName, pfp }) => {
@@ -634,7 +651,8 @@ chaosIo.on('connection', (socket) => {
         
         socket.emit('chaos_room_joined', {
             roomCode: code, playerId: socket.id, color: 'b',
-            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp
+            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp,
+            cardInterval: room.cardInterval
         });
         socket.to(code).emit('chaos_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
     });
@@ -654,14 +672,14 @@ chaosIo.on('connection', (socket) => {
         chaosIo.to(code).emit('ready_update', { playersReady });
         
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
-            chaosIo.to(code).emit('start_match');
+            chaosIo.to(code).emit('start_match', { board: room.board });
         }
     });
 
-    socket.on('request_chaos_move', ({ roomCode, fromR, fromC, toR, toC }) => {
+    socket.on('request_chaos_move', ({ roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = chaosRooms.get(code);
-        if (!room) return;
+        if (!room || room.isVoting) return;
 
         const movingPiece = room.board[fromR][fromC];
         if (!movingPiece) return;
@@ -669,48 +687,126 @@ chaosIo.on('connection', (socket) => {
         const pieceColor = movingPiece === movingPiece.toUpperCase() ? 'w' : 'b';
         if (room.turn !== pieceColor) return socket.emit('error_msg', 'Not your turn!');
 
-        // --- HIER KOMMT SPÄTER DIE KARTEN-LOGIK REIN ---
-        // Beispiel: if(room.activeEffect.name === 'blutdurst') { prüfe ob geschlagen wurde }
+        // Serverseitige Schach-Validierung
+        const validMoves = getServerValidMoves(room.board, fromR, fromC, room.enPassantTarget, room.hasMoved);
+        const validMove = validMoves.find(m => m.r === toR && m.c === toC);
+        if (!validMove) return socket.emit('error_msg', 'Illegal move!');
 
-        // Standard-Zug ausführen (vereinfacht für das Grundgerüst)
-        room.board[toR][toC] = movingPiece;
+        // Aktive Effekte berücksichtigen (z.B. Friedensvertrag)
+        if (room.activeEffect && room.activeEffect.id === 'peace' && (validMove.type === 'capture' || validMove.type === 'en_passant')) {
+            return socket.emit('error_msg', 'Friedensvertrag ist aktiv! Schlagen ist verboten!');
+        }
+
+        // Rochade Status verwalten
+        if (movingPiece === 'K') room.hasMoved['wK'] = true;
+        if (movingPiece === 'k') room.hasMoved['bK'] = true;
+
+        // Zug auf dem Board ausführen
         room.board[fromR][fromC] = null;
+        let finalPiece = promotedTo || movingPiece;
+
+        if (validMove.type === 'castle') {
+            const rFromC = toC === 6 ? 7 : 0;
+            const rToC = toC === 6 ? 5 : 3;
+            room.board[fromR][rToC] = room.board[fromR][rFromC];
+            room.board[fromR][rFromC] = null;
+        } else if (validMove.type === 'en_passant') {
+            const captureRow = pieceColor === 'w' ? toR + 1 : toR - 1;
+            room.board[captureRow][toC] = null;
+        }
+
+        // König geschlagen Check
+        const targetPiece = room.board[toR][toC];
+        let isGameOver = targetPiece && targetPiece.toLowerCase() === 'k';
+
+        room.board[toR][toC] = finalPiece;
         
-        // Runden- und Effektabwicklung
         room.moveCount++;
         room.turn = room.turn === 'w' ? 'b' : 'w';
 
+        // Aktiven Karten-Effekt herunterzählen
         if (room.activeEffect) {
             room.activeEffect.turnsLeft--;
             if (room.activeEffect.turnsLeft <= 0) {
-                room.activeEffect = null; // Effekt abgelaufen
+                room.activeEffect = null;
             }
         }
 
-        // Dummy-Event: Alle 6 Halbzüge (3 volle Runden) wird eine neue Karte gezogen
-        let newCardDrawn = false;
-        if (room.moveCount % 6 === 0) {
-            room.activeEffect = {
-                name: 'Eisglätte',
-                description: 'Türme und Läufer rutschen bis zum Rand!',
-                turnsLeft: 2 // Gilt für 2 Halbzüge (1 pro Spieler)
-            };
-            newCardDrawn = true;
-        }
+        // Prüfen, ob Karten-Abstimmung gestartet werden soll
+        const triggerVoting = (room.moveCount > 0 && room.moveCount % room.cardInterval === 0 && !isGameOver);
 
         chaosIo.to(code).emit('apply_chaos_move', {
             board: room.board,
             nextTurn: room.turn,
             moveCount: room.moveCount,
+            cardInterval: room.cardInterval,
             activeEffect: room.activeEffect,
-            newCardDrawn: newCardDrawn
+            isGameOver
         });
+
+        // KARTEN-VOTING STARTEN
+        if (triggerVoting) {
+            room.isVoting = true;
+            room.votes = [0, 0, 0];
+            room.votedSockets.clear();
+
+            // 3 zufällige Karten ziehen
+            const shuffled = [...CHAOS_CARDS_POOL].sort(() => 0.5 - Math.random());
+            room.currentCards = shuffled.slice(0, 3);
+
+            chaosIo.to(code).emit('start_card_selection', {
+                cards: room.currentCards,
+                duration: 30
+            });
+
+            // Timer nach 30 Sekunden auswerten
+            setTimeout(() => {
+                const activeRoom = chaosRooms.get(code);
+                if (!activeRoom || !activeRoom.isVoting) return;
+
+                // Gewinner-Karte ermitteln
+                let maxVotes = -1;
+                let winningIndex = 0;
+                activeRoom.votes.forEach((v, idx) => {
+                    if (v > maxVotes) {
+                        maxVotes = v;
+                        winningIndex = idx;
+                    }
+                });
+
+                const selectedCard = activeRoom.currentCards[winningIndex];
+                activeRoom.activeEffect = {
+                    id: selectedCard.id,
+                    name: selectedCard.name,
+                    description: selectedCard.description,
+                    turnsLeft: selectedCard.turnsDuration
+                };
+                activeRoom.isVoting = false;
+
+                chaosIo.to(code).emit('card_applied', {
+                    activeEffect: activeRoom.activeEffect
+                });
+            }, 30000);
+        }
+    });
+
+    // VOTING EMPFANGEN
+    socket.on('cast_vote', ({ roomCode, cardIndex }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = chaosRooms.get(code);
+        if (!room || !room.isVoting) return;
+        if (room.votedSockets.has(socket.id)) return; // Nur 1 Vote pro Spieler/Socket
+
+        room.votedSockets.add(socket.id);
+        room.votes[cardIndex] = (room.votes[cardIndex] || 0) + 1;
+
+        const totalVotes = room.votedSockets.size || 1;
+        const votesPct = room.votes.map(v => Math.round((v / totalVotes) * 100));
+
+        chaosIo.to(code).emit('update_votes', { votesPct });
     });
 
     socket.on('disconnecting', () => {
         socket.rooms.forEach(code => { socket.to(code).emit('chaos_opponent_left'); });
     });
 });
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
