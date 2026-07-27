@@ -141,7 +141,7 @@ app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
-app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // NEU: Statischer Ordner für Chaos Chess
+app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess')));
 
 // =========================================================
 // 5. CAGERS QUICK CHESS (SERVER-VALIDIERT)
@@ -149,7 +149,6 @@ app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 
-// --- Serverseitiges Board & Schachlogik für Anti-Cheat ---
 const INITIAL_CHESS_BOARD = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
     ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -291,7 +290,6 @@ io.on('connection', (socket) => {
 
     socket.on('select_square', ({ roomCode, r, c }) => socket.to(roomCode).emit('opponent_select_square', { r, c }));
     
-    // --- SICHERER REQUEST MOVE HANDLER ---
     socket.on('request_move', (moveData) => {
         const room = rooms.get(moveData.roomCode);
         if (!room || !room.board) return;
@@ -810,3 +808,9 @@ chaosIo.on('connection', (socket) => {
         socket.rooms.forEach(code => { socket.to(code).emit('chaos_opponent_left'); });
     });
 });
+
+// =========================================================
+// 8. SERVER BINDING & PORT (FEHLERBEHOBEN FÜR RENDER.COM)
+// =========================================================
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
