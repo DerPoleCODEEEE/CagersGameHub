@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const passport = require('passport');
 const TwitchStrategy = require('passport-twitch-new').Strategy;
+
 const User = require('./models/User');
 
 const app = express();
@@ -19,8 +20,8 @@ app.use(express.json());
 // 1. MONGODB
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
-        .then(() => console.log('✅ MongoDB connected!'))
-        .catch(err => console.log('❌ MongoDB Error:', err));
+        .then(() => console.log('  MongoDB connected!'))
+        .catch(err => console.log('  MongoDB Error:', err));
 }
 
 // 2. SESSION & TWITCH LOGIN
@@ -61,7 +62,6 @@ passport.deserializeUser(async (id, done) => {
 app.get('/auth/twitch', passport.authenticate('twitch'));
 app.get('/auth/twitch/callback', passport.authenticate('twitch', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/auth/logout', (req, res) => { req.logout(() => { res.redirect('/'); }); });
-
 app.get('/api/user', (req, res) => res.json(req.user || null));
 
 // === NEU: Suchfunktion für die User ===
@@ -100,6 +100,31 @@ app.post('/api/stats/update', async (req, res) => {
     } catch (err) {
         console.error("Stats update error:", err);
         res.status(500).json({ error: 'Could not update stats' });
+    }
+});
+
+// === NEU: API für die Hall of Fame (Top 3) ===
+app.get('/api/leaderboard', async (req, res) => {
+    try {
+        const users = await User.find({});
+        
+        // Berechne für jeden User die Gesamtzahl aller Siege
+        const rankedUsers = users.map(u => {
+            const stats = u.stats || {};
+            const totalWins = (stats.chess?.wins || 0) + (stats.mutant?.wins || 0) + (stats.bot?.wins || 0);
+            return {
+                displayName: u.displayName,
+                profileImageUrl: u.profileImageUrl,
+                totalWins: totalWins,
+                stats: stats
+            };
+        });
+
+        // Absteigend sortieren und die Top 3 zurückgeben
+        rankedUsers.sort((a, b) => b.totalWins - a.totalWins);
+        res.json(rankedUsers.slice(0, 3));
+    } catch (err) {
+        res.status(500).json({ error: 'Leaderboard failed' });
     }
 });
 
@@ -199,7 +224,6 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved) {
     }
     return moves;
 }
-// ---------------------------------------------------------
 
 io.on('connection', (socket) => {
     socket.on('create_room', ({ playerName, mode, pfp }) => {
@@ -207,11 +231,11 @@ io.on('connection', (socket) => {
         rooms.set(roomCode, {
             mode: mode || 'class',
             players: { w: { id: socket.id, name: playerName, pfp: pfp || '', ready: false }, b: null },
-            board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)), // NEU: Board in den Room-State
+            board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)),
             typeCooldowns: null, 
             singleCooldowns: null,
-            hasMoved: { 'wK': false, 'wR_left': false, 'wR_right': false, 'bK': false, 'bR_left': false, 'bR_right': false }, // NEU: Castling State
-            enPassantTarget: null // NEU: En Passant State
+            hasMoved: { 'wK': false, 'wR_left': false, 'wR_right': false, 'bK': false, 'bR_left': false, 'bR_right': false },
+            enPassantTarget: null
         });
         socket.join(roomCode);
         socket.emit('room_created', { roomCode, playerId: socket.id, color: 'w', mode });
@@ -258,39 +282,34 @@ io.on('connection', (socket) => {
 
     socket.on('select_square', ({ roomCode, r, c }) => socket.to(roomCode).emit('opponent_select_square', { r, c }));
     
-    // --- NEU: SICHERER REQUEST MOVE HANDLER ---
+    // --- SICHERER REQUEST MOVE HANDLER ---
     socket.on('request_move', (moveData) => {
         const room = rooms.get(moveData.roomCode);
         if (!room || !room.board) return;
 
-        // 1. Identifikation des Spielers
         const color = (room.players.w && room.players.w.id === socket.id) ? 'w' : ((room.players.b && room.players.b.id === socket.id) ? 'b' : null);
         if (!color) return;
 
         const { fromR, fromC, toR, toC, promotedTo } = moveData;
         const piece = room.board[fromR][fromC];
 
-        // 2. Existenz und Besitz prüfen
         if (!piece) return socket.emit('error_msg', 'Cheat detected: No piece at source');
         if ((piece === piece.toUpperCase() ? 'w' : 'b') !== color) return socket.emit('error_msg', 'Cheat detected: Not your piece');
 
         const now = Date.now();
         const pieceKey = piece.toLowerCase();
 
-        // 3. Serverseitiger Cooldown-Check
         if (room.mode === 'class') {
             if (room.typeCooldowns[color][pieceKey] > now) return socket.emit('error_msg', 'Piece is on cooldown!');
         } else {
             if (room.singleCooldowns[fromR][fromC] > now) return socket.emit('error_msg', 'Square is on cooldown!');
         }
 
-        // 4. Logische Regel-Prüfung (Anti-Teleport & Schachregeln)
         const validMoves = getServerValidMoves(room.board, fromR, fromC, room.enPassantTarget, room.hasMoved);
         const validMove = validMoves.find(m => m.r === toR && m.c === toC);
         
         if (!validMove) return socket.emit('error_msg', 'Cheat detected: Illegal move logic!');
 
-        // 5. Status-Updates (HasMoved für Rochade)
         if (piece === 'K') room.hasMoved['wK'] = true;
         if (piece === 'k') room.hasMoved['bK'] = true;
         if (piece === 'R' && fromR === 7 && fromC === 0) room.hasMoved['wR_left'] = true;
@@ -304,12 +323,10 @@ io.on('connection', (socket) => {
             room.enPassantTarget = null;
         }
 
-        // 6. Zug auf dem Server-Board ausführen
         room.board[fromR][fromC] = null;
         let finalPiece = piece;
         
         if (promotedTo && pieceKey === 'p' && (toR === 0 || toR === 7)) {
-            // Nur gültige Promotions erlauben
             const validPromotions = color === 'w' ? ['Q','R','N','B'] : ['q','r','n','b'];
             if (validPromotions.includes(promotedTo)) finalPiece = promotedTo;
         }
@@ -319,7 +336,7 @@ io.on('connection', (socket) => {
             const rToC = toC === 6 ? 5 : 3;
             room.board[fromR][rToC] = room.board[fromR][rFromC];
             room.board[fromR][rFromC] = null;
-            if (room.mode !== 'class') room.singleCooldowns[fromR][rFromC] = 0; // Turm Cooldown Reset bei Castling im Single Mode
+            if (room.mode !== 'class') room.singleCooldowns[fromR][rFromC] = 0; 
         } else if (validMove.type === 'en_passant') {
             const captureRow = color === 'w' ? toR + 1 : toR - 1;
             room.board[captureRow][toC] = null;
@@ -327,7 +344,6 @@ io.on('connection', (socket) => {
 
         room.board[toR][toC] = finalPiece;
 
-        // 7. Cooldowns im Server speichern
         let cdDuration = 0;
         if (room.mode === 'fast_single') cdDuration = 2000;
         else if (pieceKey === 'p') cdDuration = 3500;
@@ -344,10 +360,7 @@ io.on('connection', (socket) => {
             room.singleCooldowns[fromR][fromC] = 0;
         }
 
-        // Sicherheits-Überschreibung: Server bestimmt den validierten Type
         moveData.moveInfo = validMove;
-        
-        // 8. Geprüften Move sicher broadcasten
         io.to(moveData.roomCode).emit('apply_move', moveData);
     });
 
@@ -358,6 +371,7 @@ io.on('connection', (socket) => {
         socket.to(roomCode).emit('opponent_left'); 
         socket.leave(roomCode); 
     });
+});
 
 // =========================================================
 // 6. MUTANT MERGE CHESS (ISOLATED NAMESPACE)
@@ -366,7 +380,6 @@ const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
 
 const PIECE_RANK = { 'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6 };
-
 function sortCanonically(pieceArr) {
     if (!pieceArr) return pieceArr;
     return pieceArr.slice().sort((a, b) => {
@@ -397,14 +410,11 @@ function getPieceColor(pieceArr) {
 mutantIo.on('connection', (socket) => {
     socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions }) => {
         const roomCode = generateRoomCode();
-        
         let hostColor = colorChoice;
         if (colorChoice === 'random') {
             hostColor = Math.random() < 0.5 ? 'w' : 'b';
         }
-
         const limitFusions = maxFusions || 3;
-
         const roomData = {
             players: {
                 w: hostColor === 'w' ? { id: socket.id, name: playerName, pfp, ready: false } : null,
@@ -419,73 +429,54 @@ mutantIo.on('connection', (socket) => {
             lastTurnTimestamp: null,
             hostColor
         };
-
         mutantRooms.set(roomCode, roomData);
         socket.join(roomCode);
         socket.emit('mutant_room_created', { 
             roomCode, playerId: socket.id, color: hostColor, playerName, pfp,
-            timeControl: roomData.timeControl,
-            clocks: roomData.clocks,
-            maxFusions: roomData.maxFusions,
-            fusionsLeft: roomData.fusionsLeft
+            timeControl: roomData.timeControl, clocks: roomData.clocks,
+            maxFusions: roomData.maxFusions, fusionsLeft: roomData.fusionsLeft
         });
     });
 
     socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
-
         if (!room) return socket.emit('error_msg', 'Room not found!');
         
         let joinerColor = room.players.w ? 'b' : 'w';
         if (room.players[joinerColor]) return socket.emit('error_msg', 'Room is full!');
-
+        
         room.players[joinerColor] = { id: socket.id, name: playerName, pfp, ready: false };
         socket.join(code);
-
         const oppColor = joinerColor === 'w' ? 'b' : 'w';
         const opponent = room.players[oppColor];
-
+        
         socket.emit('mutant_room_joined', {
-            roomCode: code,
-            playerId: socket.id,
-            color: joinerColor,
-            opponentName: opponent.name,
-            opponentPfp: opponent.pfp,
-            timeControl: room.timeControl,
-            clocks: room.clocks,
-            maxFusions: room.maxFusions,
-            fusionsLeft: room.fusionsLeft
+            roomCode: code, playerId: socket.id, color: joinerColor,
+            opponentName: opponent.name, opponentPfp: opponent.pfp,
+            timeControl: room.timeControl, clocks: room.clocks,
+            maxFusions: room.maxFusions, fusionsLeft: room.fusionsLeft
         });
-
-        socket.to(code).emit('mutant_opponent_joined', {
-            opponentName: playerName,
-            opponentPfp: pfp
-        });
+        socket.to(code).emit('mutant_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
     });
 
     socket.on('player_ready', ({ roomCode }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room) return;
-
+        
         if (room.players.w && room.players.w.id === socket.id) room.players.w.ready = true;
         if (room.players.b && room.players.b.id === socket.id) room.players.b.ready = true;
-
+        
         const playersReady = [
             { color: 'w', ready: room.players.w ? room.players.w.ready : false, name: room.players.w ? room.players.w.name : '' },
             { color: 'b', ready: room.players.b ? room.players.b.ready : false, name: room.players.b ? room.players.b.name : '' }
         ];
-        
         mutantIo.to(code).emit('ready_update', { playersReady });
-
+        
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
             room.lastTurnTimestamp = Date.now();
-            mutantIo.to(code).emit('start_match_countdown', { 
-                clocks: room.clocks, 
-                maxFusions: room.maxFusions, 
-                fusionsLeft: room.fusionsLeft 
-            });
+            mutantIo.to(code).emit('start_match_countdown', { clocks: room.clocks, maxFusions: room.maxFusions, fusionsLeft: room.fusionsLeft });
         }
     });
 
@@ -493,45 +484,38 @@ mutantIo.on('connection', (socket) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room) return;
-
         const movingPiece = room.board[fromR][fromC];
         if (!movingPiece) return;
-
+        
         const pieceColor = getPieceColor(movingPiece);
         if (room.turn !== pieceColor) return;
-
+        
         const now = Date.now();
         if (room.lastTurnTimestamp) {
             const elapsedSeconds = (now - room.lastTurnTimestamp) / 1000;
             room.clocks[pieceColor] = Math.max(0, room.clocks[pieceColor] - elapsedSeconds + room.timeControl.increment);
         }
         room.lastTurnTimestamp = now;
-
         const targetPiece = room.board[toR][toC];
-
+        
         if (moveInfo && moveInfo.type === 'castle') {
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
-            
             const rookFromC = toC === 6 ? 7 : 0;
             const rookToC = toC === 6 ? 5 : 3;
             const rookPiece = room.board[fromR][rookFromC];
             room.board[fromR][rookToC] = rookPiece;
             room.board[fromR][rookFromC] = null;
-        }
-        else if (moveInfo && moveInfo.type === 'en_passant') {
+        } else if (moveInfo && moveInfo.type === 'en_passant') {
             const capturedPawnRow = pieceColor === 'w' ? toR + 1 : toR - 1;
             room.board[capturedPawnRow][toC] = null;
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
-        }
-        else if (promotedTo && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p') {
+        } else if (promotedTo && movingPiece.length === 1 && movingPiece[0].toLowerCase() === 'p') {
             room.board[toR][toC] = [promotedTo];
             room.board[fromR][fromC] = null;
-        }
-        else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
+        } else if (targetPiece && getPieceColor(targetPiece) === pieceColor) {
             const combined = [...movingPiece, ...targetPiece].map(p => p.toLowerCase().replace('_fused', ''));
-
             if (movingPiece.some(p => p.includes('_fused')) || targetPiece.some(p => p.includes('_fused'))) {
                 return socket.emit('error_msg', 'This fused piece cannot be fused again!');
             }
@@ -541,17 +525,10 @@ mutantIo.on('connection', (socket) => {
             if (combined.includes('q') && (combined.includes('b') || combined.includes('r'))) {
                 return socket.emit('error_msg', 'Queen already moves like Bishop and Rook!');
             }
-            if (combined.includes('q') && combined.includes('p')) {
-                return socket.emit('error_msg', 'Queen cannot merge with Pawn!');
-            }
-            if (combined.includes('k') && combined.includes('p')) {
-                return socket.emit('error_msg', 'King cannot merge with Pawn!');
-            }
-
-            if (room.fusionsLeft[pieceColor] <= 0) {
-                return socket.emit('error_msg', 'No fusions remaining!');
-            }
-
+            if (combined.includes('q') && combined.includes('p')) return socket.emit('error_msg', 'Queen cannot merge with Pawn!');
+            if (combined.includes('k') && combined.includes('p')) return socket.emit('error_msg', 'King cannot merge with Pawn!');
+            if (room.fusionsLeft[pieceColor] <= 0) return socket.emit('error_msg', 'No fusions remaining!');
+            
             if (movingPiece.length + targetPiece.length <= 2) {
                 if (combined.includes('r') && combined.includes('b')) {
                     room.board[toR][toC] = [pieceColor === 'w' ? 'Q_fused' : 'q_fused'];
@@ -563,22 +540,17 @@ mutantIo.on('connection', (socket) => {
             } else {
                 return socket.emit('error_msg', 'Maximum 2 pieces per square!');
             }
-        } 
-        else {
+        } else {
             let isKingCaptured = false;
-            if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) {
-                isKingCaptured = true;
-            }
+            if (targetPiece && targetPiece.some(t => t.toLowerCase() === 'k')) isKingCaptured = true;
+            
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
-
             if (isKingCaptured) {
                 mutantIo.to(code).emit('game_over', { winnerColor: pieceColor, reason: 'king' });
             }
         }
-
         room.turn = room.turn === 'w' ? 'b' : 'w';
-
         mutantIo.to(code).emit('apply_mutant_move', {
             fromR, fromC, toR, toC, moveInfo, board: room.board, nextTurn: room.turn,
             clocks: room.clocks, fusionsLeft: room.fusionsLeft
@@ -609,17 +581,12 @@ mutantIo.on('connection', (socket) => {
 
     socket.on('respond_draw', ({ roomCode, accepted }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
-        if (accepted) {
-            mutantIo.to(code).emit('game_over', { winnerColor: null, reason: 'draw' });
-        } else {
-            socket.to(code).emit('draw_declined');
-        }
+        if (accepted) mutantIo.to(code).emit('game_over', { winnerColor: null, reason: 'draw' });
+        else socket.to(code).emit('draw_declined');
     });
 
     socket.on('disconnecting', () => {
-        socket.rooms.forEach(code => {
-            socket.to(code).emit('mutant_opponent_left');
-        });
+        socket.rooms.forEach(code => { socket.to(code).emit('mutant_opponent_left'); });
     });
 });
 
