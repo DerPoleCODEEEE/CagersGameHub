@@ -293,3 +293,135 @@ input[type="text"], .select-input {
     background: #e74c3c;
     transition: width 0.2s;
 }
+
+/* MODAL OVERLAY FIX (VOLLBILD & ZENTRIERT) */
+.modal-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.75) !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999 !important;
+}
+
+.modal-overlay.hidden {
+    display: none !important;
+}
+
+/* KARTENAUSWAHL BOX */
+.card-selection-box {
+    background: #fff;
+    padding: 25px;
+    text-align: center;
+    max-width: 680px;
+    width: 90%;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.vote-timer-text {
+    font-size: 20px;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.cards-container {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.rounds-card {
+    flex: 1;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+    background: #fafafa;
+    position: relative;
+    border: 3px solid #000;
+}
+
+.rounds-card:hover {
+    transform: translateY(-8px) scale(1.03);
+    background: #fff;
+}
+
+.card-num {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: #000;
+    color: #fff;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.card-icon {
+    font-size: 45px;
+    margin: 10px 0;
+}
+
+.card-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.card-body {
+    font-size: 14px;
+    color: #444;
+    flex-grow: 1;
+}
+
+.vote-bar {
+    width: 100%;
+    height: 10px;
+    background: #ddd;
+    border: 2px solid #000;
+    margin-top: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.vote-fill {
+    height: 100%;
+    background: #e74c3c;
+    transition: width 0.2s;
+}
+
+/* PROGRESS BAR FÜR NÄCHSTE KARTE */
+.chaos-progress-container {
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-label {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.progress-bar-bg {
+    flex-grow: 1;
+    height: 16px;
+    background: #eee;
+    border: 2px solid #000;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: #f1c40f;
+    transition: width 0.3s ease;
+}
