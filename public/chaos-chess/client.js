@@ -2,8 +2,8 @@ const socket = io('/chaos-chess');
 
 let roomCode = null, playerColor = null;
 let myName = 'Player', opponentName = 'Opponent';
+let cardIntervalSetting = 6;
 
-// Standard-Startaufstellung für sofortiges Rendering
 let board = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
     ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -18,6 +18,8 @@ let board = [
 let isGameStarted = false;
 let currentTurn = 'w';
 let selectedSquare = null;
+let validMoves = [];
+let pendingPromotion = null;
 
 const PIECES = {
     'P': { img: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg' },
@@ -34,9 +36,18 @@ const PIECES = {
     'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
 };
 
+// Intervall-Slider
+const intervalRange = document.getElementById('card-interval-range');
+if(intervalRange) {
+    intervalRange.oninput = () => {
+        document.getElementById('interval-val').innerText = intervalRange.value;
+    };
+}
+
 document.getElementById('btn-create').onclick = () => {
     myName = document.getElementById('player-name').value || 'Player 1';
-    socket.emit('create_chaos_room', { playerName: myName });
+    cardIntervalSetting = parseInt(intervalRange.value) || 6;
+    socket.emit('create_chaos_room', { playerName: myName, cardInterval: cardIntervalSetting });
 };
 
 document.getElementById('btn-join').onclick = () => {
@@ -69,8 +80,9 @@ socket.on('chaos_opponent_joined', (data) => {
     startGame();
 });
 
-socket.on('start_match', () => {
+socket.on('start_match', (data) => {
     isGameStarted = true;
+    if(data && data.board) board = data.board;
     document.getElementById('btn-ready').classList.add('hidden');
     renderBoard();
 });
@@ -82,22 +94,22 @@ socket.on('apply_chaos_move', (data) => {
     document.getElementById('turn-display-tag').innerText = currentTurn === playerColor ? "YOUR TURN" : "OPPONENT";
     document.getElementById('turn-display-tag').style.color = currentTurn === playerColor ? "#2ecc71" : "#e74c3c";
 
-    const progressPct = Math.min(100, ((data.moveCount % 6) / 6) * 100);
+    // Progress Bar
+    const interval = data.cardInterval || 6;
+    const progressPct = Math.min(100, ((data.moveCount % interval) / interval) * 100);
     document.getElementById('chaos-progress-fill').style.width = `${progressPct}%`;
 
-    const cardBox = document.getElementById('active-card-box');
-    if (data.activeEffect) {
-        cardBox.style.display = 'block';
-        document.getElementById('card-name').innerText = "🔥 " + data.activeEffect.name;
-        document.getElementById('card-desc').innerText = data.activeEffect.description;
-        document.getElementById('card-turns').innerText = `Gilt noch für: ${data.activeEffect.turnsLeft} Züge`;
-    } else {
-        cardBox.style.display = 'none';
+    // Aktiver Effekt Box
+    updateActiveEffectUI(data.activeEffect);
+
+    if (data.isGameOver) {
+        alert("GAME OVER! Ein König wurde geschlagen!");
     }
 
     renderBoard();
 });
 
+// START DER KARTENAUSWAHL
 socket.on('start_card_selection', ({ cards, duration }) => {
     const overlay = document.getElementById('card-selection-overlay');
     const container = document.getElementById('cards-container');
@@ -115,6 +127,9 @@ socket.on('start_card_selection', ({ cards, duration }) => {
         `;
         cardEl.onclick = () => {
             socket.emit('cast_vote', { roomCode, cardIndex: index });
+            // Visuelles Feedback
+            document.querySelectorAll('.rounds-card').forEach(c => c.style.borderColor = '#000');
+            cardEl.style.borderColor = '#2ecc71';
         };
         container.appendChild(cardEl);
     });
@@ -122,6 +137,7 @@ socket.on('start_card_selection', ({ cards, duration }) => {
     let timeLeft = duration || 30;
     document.getElementById('vote-timer').innerText = timeLeft;
     overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
 
     const timerInterval = setInterval(() => {
         timeLeft--;
@@ -129,6 +145,7 @@ socket.on('start_card_selection', ({ cards, duration }) => {
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
             overlay.classList.add('hidden');
+            overlay.style.display = 'none';
         }
     }, 1000);
 });
@@ -140,28 +157,158 @@ socket.on('update_votes', ({ votesPct }) => {
     });
 });
 
+socket.on('card_applied', ({ activeEffect }) => {
+    document.getElementById('card-selection-overlay').classList.add('hidden');
+    document.getElementById('card-selection-overlay').style.display = 'none';
+    updateActiveEffectUI(activeEffect);
+});
+
+function updateActiveEffectUI(effect) {
+    const cardBox = document.getElementById('active-card-box');
+    if (effect) {
+        cardBox.style.display = 'block';
+        document.getElementById('card-name').innerText = "🔥 " + effect.name;
+        document.getElementById('card-desc').innerText = effect.description;
+        document.getElementById('card-turns').innerText = `Gilt noch für: ${effect.turnsLeft} Züge`;
+    } else {
+        cardBox.style.display = 'none';
+    }
+}
+
+// CLIENT-SIDE SCHACH-VALIDIERUNG FÜR HIGHLIGHTS
+function isEnemy(p1, p2) {
+    if (!p1 || !p2) return false;
+    return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase());
+}
+
+function getValidMoves(r, c) {
+    let piece = board[r][c];
+    if (!piece) return [];
+    let moves = [];
+    let color = piece === piece.toUpperCase() ? 'w' : 'b';
+    if (color !== playerColor || currentTurn !== playerColor) return [];
+
+    let dir = color === 'w' ? -1 : 1;
+    let startRow = color === 'w' ? 6 : 1;
+
+    const addSliding = (dirs) => {
+        for (let [dr, dc] of dirs) {
+            let nr = r + dr, nc = c + dc;
+            while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                else {
+                    if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                    break;
+                }
+                nr += dr; nc += dc;
+            }
+        }
+    };
+
+    switch (piece.toLowerCase()) {
+        case 'p':
+            if (r + dir >= 0 && r + dir < 8 && !board[r + dir][c]) {
+                moves.push({ r: r + dir, c, type: 'normal' });
+                if (r === startRow && !board[r + dir * 2][c]) moves.push({ r: r + dir * 2, c, type: 'normal' });
+            }
+            for (let dc of [-1, 1]) {
+                let targetR = r + dir, targetC = c + dc;
+                if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
+                    if (board[targetR][targetC] && isEnemy(piece, board[targetR][targetC])) moves.push({ r: targetR, c: targetC, type: 'capture' });
+                }
+            }
+            break;
+        case 'r': addSliding([[-1,0],[1,0],[0,-1],[0,1]]); break;
+        case 'b': addSliding([[-1,-1],[-1,1],[1,-1],[1,1]]); break;
+        case 'q': addSliding([[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]); break;
+        case 'n':
+            for (let [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                let nr = r + dr, nc = c + dc;
+                if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                    if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                    else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                }
+            }
+            break;
+        case 'k':
+            for (let [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+                let nr = r + dr, nc = c + dc;
+                if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                    if (!board[nr][nc]) moves.push({ r: nr, c: nc, type: 'normal' });
+                    else if (isEnemy(piece, board[nr][nc])) moves.push({ r: nr, c: nc, type: 'capture' });
+                }
+            }
+            break;
+    }
+    return moves;
+}
+
 function handleSquareClick(r, c) {
-    if (!isGameStarted || currentTurn !== playerColor) return;
+    if (!isGameStarted || currentTurn !== playerColor || pendingPromotion) return;
 
     const clickedPiece = board[r]?.[c];
-    
+
     if (selectedSquare) {
-        socket.emit('request_chaos_move', {
-            roomCode,
-            fromR: selectedSquare.r,
-            fromC: selectedSquare.c,
-            toR: r,
-            toC: c
-        });
-        selectedSquare = null;
-        renderBoard();
-    } else if (clickedPiece) {
+        let moveInfo = validMoves.find(m => m.r === r && m.c === c);
+        if (moveInfo) {
+            let movingPiece = board[selectedSquare.r][selectedSquare.c];
+            if (movingPiece && movingPiece.toLowerCase() === 'p' && (r === 0 || r === 7)) {
+                triggerPromotion(selectedSquare.r, selectedSquare.c, r, c, moveInfo);
+                return;
+            }
+
+            socket.emit('request_chaos_move', {
+                roomCode,
+                fromR: selectedSquare.r,
+                fromC: selectedSquare.c,
+                toR: r,
+                toC: c,
+                moveInfo
+            });
+            selectedSquare = null;
+            validMoves = [];
+            renderBoard();
+            return;
+        }
+    }
+
+    if (clickedPiece) {
         const isMyPiece = (clickedPiece === clickedPiece.toUpperCase() ? 'w' : 'b') === playerColor;
         if (isMyPiece) {
             selectedSquare = { r, c };
+            validMoves = getValidMoves(r, c);
             renderBoard();
+            return;
         }
     }
+
+    selectedSquare = null;
+    validMoves = [];
+    renderBoard();
+}
+
+function triggerPromotion(fromR, fromC, toR, toC, moveInfo) {
+    pendingPromotion = { fromR, fromC, toR, toC, moveInfo };
+    let modal = document.getElementById('promotion-modal'), box = document.getElementById('promo-options');
+    box.innerHTML = '';
+    
+    (playerColor === 'w' ? ['Q', 'R', 'N', 'B'] : ['q', 'r', 'n', 'b']).forEach(p => {
+        let img = document.createElement('img');
+        img.className = 'promo-piece';
+        img.src = PIECES[p].img;
+        img.onclick = () => {
+            modal.style.display = 'none';
+            pendingPromotion = null;
+            socket.emit('request_chaos_move', {
+                roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo: p
+            });
+            selectedSquare = null;
+            validMoves = [];
+            renderBoard();
+        };
+        box.appendChild(img);
+    });
+    modal.style.display = 'flex';
 }
 
 function startGame() {
@@ -173,7 +320,7 @@ function startGame() {
     document.getElementById('top-player-name').innerText = opponentName;
 
     createBoardDOM();
-    renderBoard(); // Rendert Figuren direkt beim Aufruf!
+    renderBoard();
 }
 
 function createBoardDOM() {
@@ -207,7 +354,11 @@ function renderBoard() {
             const piece = board[r]?.[c];
             const img = square.querySelector('.piece');
             
-            square.classList.toggle('selected', selectedSquare && selectedSquare.r === r && selectedSquare.c === c);
+            square.classList.toggle('selected', !!(selectedSquare && selectedSquare.r === r && selectedSquare.c === c));
+
+            let moveInfo = validMoves.find(m => m.r === r && m.c === c);
+            square.classList.toggle('valid-move', !!(moveInfo && moveInfo.type === 'normal'));
+            square.classList.toggle('capture-move', !!(moveInfo && moveInfo.type === 'capture'));
 
             if (piece) {
                 img.src = PIECES[piece].img;
