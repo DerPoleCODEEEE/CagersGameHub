@@ -6,6 +6,7 @@
     <title>The Cager Game Hub</title>
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <!-- Die Florks im Hintergrund (Jetzt beide angepasst und nicht mehr abgeschnitten) -->
@@ -68,19 +69,6 @@
                     <a href="/play-cager" class="play-btn scribble-btn" style="background: #a855f7; color: white;">Play</a>
                 </div>
 
-                <!-- CHAOS CHESS (AUSGEKLAMMERT FÜR STREAM) -->
-                <!--
-                <div class="game-card scribble-box">
-                    <div class="badge-new">NEW!</div>
-                    <div class="game-img" style="background-color: #3498db; display:flex; align-items:center; justify-content:center;">
-                        <span style="font-size: 50px;">🃏</span>
-                    </div>
-                    <h3>Chaos Chess</h3>
-                    <p>Rundenbasiertes Schach, aber verrückte Event-Karten brechen alle Regeln!</p>
-                    <a href="/chaos-chess" class="play-btn scribble-btn" style="background: #2980b9; color: white;">Play</a>
-                </div>
-                -->
-
                 <!-- SECRET GAME (LOCKED) -->
                 <div class="game-card scribble-box locked">
                     <div class="game-img" style="background-color: #ddd; display:flex; align-items:center; justify-content:center;">
@@ -94,12 +82,28 @@
             </div>
         </div>
 
-        <!-- RECHTE SEITE: HALL OF FAME -->
+        <!-- RECHTE SEITE: HALL OF FAME & GLOBAL CHAT -->
         <aside class="sidebar-wrapper">
             <div class="hall-of-fame scribble-box">
                 <h3 style="margin-top:0; border-bottom: 3px solid #000; padding-bottom:10px;">🏆 Hall of Fame</h3>
                 <div id="hof-list" class="hof-list">
                     <div style="text-align: center; color: #666; font-style: italic;">Lade Legenden...</div>
+                </div>
+            </div>
+
+            <!-- GLOBAL HUB CHAT -->
+            <div class="hub-chat-box scribble-box" id="hub-chat-box">
+                <div class="hub-chat-header">
+                    <span>💬 Hub Chat</span>
+                    <button id="hub-chat-toggle-btn" class="scribble-btn hub-chat-toggle-btn">👁️ Verbergen</button>
+                </div>
+                <div class="hub-chat-body" id="hub-chat-body">
+                    <div id="hub-chat-messages" class="hub-chat-messages">
+                        <div style="text-align:center; color:#888; font-style:italic;">Lade Chat...</div>
+                    </div>
+                    <div id="hub-chat-input-area" class="hub-chat-input-area">
+                        <!-- Dynamisch befüllt je nach Login-Status -->
+                    </div>
                 </div>
             </div>
         </aside>
@@ -262,8 +266,12 @@
                     localStorage.removeItem('cager_twitch_name');
                     localStorage.removeItem('cager_twitch_pfp');
                 }
+                updateChatInputState(user);
             })
-            .catch(err => console.error("User Auth Fetch Error:", err));
+            .catch(err => {
+                console.error("User Auth Fetch Error:", err);
+                updateChatInputState(null);
+            });
 
         function renderStatBox(key, data) {
             const wins = (data && data.wins) || 0;
@@ -338,6 +346,95 @@
                 });
             })
             .catch(err => console.error("Leaderboard Error:", err));
+
+        // ==========================================
+        // GLOBAL HUB CHAT SYSTEM
+        // ==========================================
+        const hubSocket = io();
+        const chatBox = document.getElementById('hub-chat-box');
+        const chatToggleBtn = document.getElementById('hub-chat-toggle-btn');
+        const chatMessages = document.getElementById('hub-chat-messages');
+        const chatInputArea = document.getElementById('hub-chat-input-area');
+
+        chatToggleBtn.addEventListener('click', () => {
+            chatBox.classList.toggle('collapsed');
+            if (chatBox.classList.contains('collapsed')) {
+                chatToggleBtn.innerText = '🙈 Anzeigen';
+            } else {
+                chatToggleBtn.innerText = '👁️ Verbergen';
+            }
+        });
+
+        function updateChatInputState(user) {
+            if (user) {
+                chatInputArea.innerHTML = `
+                    <input type="text" id="hub-chat-input" class="scribble-input hub-chat-input" placeholder="Nachricht schreiben..." maxlength="150">
+                    <button id="hub-chat-send-btn" class="scribble-btn hub-chat-send-btn">Senden</button>
+                `;
+                const input = document.getElementById('hub-chat-input');
+                const sendBtn = document.getElementById('hub-chat-send-btn');
+                
+                const sendMessage = () => {
+                    const text = input.value.trim();
+                    if (text && currentUserData) {
+                        hubSocket.emit('send_hub_chat', {
+                            text,
+                            user: {
+                                name: currentUserData.displayName,
+                                pfp: currentUserData.profileImageUrl
+                            }
+                        });
+                        input.value = '';
+                    }
+                };
+
+                sendBtn.addEventListener('click', sendMessage);
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') sendMessage();
+                });
+            } else {
+                chatInputArea.innerHTML = `
+                    <div class="hub-chat-login-notice">
+                        🔒 <a href="/auth/twitch" style="color:#9146FF; font-weight:bold; text-decoration:underline;">Logge dich mit Twitch ein</a> um zu chatten!
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.innerText = text;
+            return div.innerHTML;
+        }
+
+        function appendHubChatMessage(msg) {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'hub-chat-msg';
+            msgEl.innerHTML = `
+                <img src="${msg.pfp || 'https://static-cdn.jtvnw.net/user-default-pictures-uv/cdd517fe-def4-11e9-948e-784f43822e80-profile_image-70x70.png'}" class="hub-chat-avatar" alt="pfp">
+                <div class="hub-chat-content">
+                    <span class="hub-chat-user">${msg.name}</span>
+                    <span class="hub-chat-text">${escapeHtml(msg.text)}</span>
+                </div>
+            `;
+            chatMessages.appendChild(msgEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        hubSocket.on('hub_chat_history', (history) => {
+            chatMessages.innerHTML = '';
+            if (!history || history.length === 0) {
+                chatMessages.innerHTML = '<div style="text-align:center; color:#888; font-style:italic;">Noch keine Nachrichten...</div>';
+            } else {
+                history.forEach(appendHubChatMessage);
+            }
+        });
+
+        hubSocket.on('receive_hub_chat', (msg) => {
+            const placeholder = chatMessages.querySelector('div[style*="text-align:center"]');
+            if (placeholder) placeholder.remove();
+            appendHubChatMessage(msg);
+        });
     </script>
 </body>
 </html>
