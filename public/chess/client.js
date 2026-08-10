@@ -166,32 +166,6 @@ btnReady.onclick = () => {
 function leaveGame() { clearSession(); location.reload(); }
 function showError(msg) { errorMsg.innerText = msg; }
 
-boardEl.addEventListener('mousemove', (e) => {
-    if (!roomCode || isGameOver) return;
-    const rect = boardEl.getBoundingClientRect();
-    let xPct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    let yPct = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    socket.emit('mouse_move', { roomCode, xPct: playerColor === 'b' ? (100 - xPct) : xPct, yPct: playerColor === 'b' ? (100 - yPct) : yPct });
-});
-
-boardEl.addEventListener('mouseleave', () => { 
-    if (roomCode) socket.emit('mouse_leave', { roomCode }); 
-});
-
-socket.on('opponent_mouse_move', ({ xPct, yPct }) => {
-    const oppCursor = document.getElementById('opponent-cursor'); 
-    if (oppCursor) {
-        oppCursor.classList.remove('hidden');
-        oppCursor.style.left = `${playerColor === 'b' ? (100 - xPct) : xPct}%`;
-        oppCursor.style.top = `${playerColor === 'b' ? (100 - yPct) : yPct}%`;
-    }
-});
-
-socket.on('opponent_mouse_leave', () => {
-    const oppCursor = document.getElementById('opponent-cursor');
-    if (oppCursor) oppCursor.classList.add('hidden');
-});
-
 socket.on('opponent_select_square', ({ r, c }) => { opponentSelectedSquare = (r !== null) ? { r, c } : null; renderBoard(); });
 
 socket.on('room_created', (data) => {
