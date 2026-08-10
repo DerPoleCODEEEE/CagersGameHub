@@ -112,24 +112,6 @@ input[type="text"], .select-input {
 #animation-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 35; }
 .animating-wrapper { position: absolute; width: 12.5%; height: 12.5%; pointer-events: none; transition-property: transform; }
 
-/* OPPONENT CURSOR DOT STYLES */
-.opponent-cursor { 
-    position: absolute; 
-    pointer-events: none; 
-    z-index: 120; 
-    transform: translate(-50%, -50%);
-    transition: left 0.05s linear, top 0.05s linear;
-}
-
-.cursor-dot {
-    width: 18px;
-    height: 18px;
-    background-color: #ff3d00;
-    border: 3px solid #ffffff;
-    border-radius: 50%;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.8), 0 0 10px #ff3d00;
-}
-
 .square.locked::before { content: ''; position: absolute; top:0; left:0; width:100%; height:100%; background-color: rgba(250, 70, 34, 0.25); pointer-events: none; }
 .cd-bar { position: absolute; bottom: 0; left: 0; height: 5px; background-color: var(--danger); width: 0%; pointer-events: none; z-index: 15; }
 
