@@ -21,14 +21,14 @@ function updateUIConnectionStatus(status) {
     if (status === 'online') {
         if (indicator) {
             indicator.className = 'status-online';
-            indicator.innerText = 'Verbunden';
+            indicator.innerText = 'Connected';
         }
         if (gameBoard) gameBoard.classList.remove('disabled-ui');
         if (splash) splash.style.display = 'none';
     } else {
         if (indicator) {
             indicator.className = 'status-offline';
-            indicator.innerText = 'Verbindung verloren... Reconnect...';
+            indicator.innerText = 'Connection lost... Reconnecting...';
         }
         if (gameBoard) gameBoard.classList.add('disabled-ui');
     }
