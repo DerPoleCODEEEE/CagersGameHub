@@ -80,7 +80,7 @@ input[type="text"], .select-input {
 .layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
 #game-container { position: relative; border-radius: 4px; overflow: hidden; }
 
-/* UI BARS MIT AVATAR - HELL GEMACHT */
+/* UI BARS MIT AVATAR */
 .player-bar { 
     background: #fff; padding: 8px 12px; font-weight: bold; font-size: 20px;
     display: flex; justify-content: space-between; align-items: center; 
@@ -95,7 +95,7 @@ input[type="text"], .select-input {
 .status-banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(243, 156, 18, 0.95); color: white; text-align: center; padding: 16px; border-radius: 8px; font-weight: bold; z-index: 130; border: 4px solid #000; font-size: 24px; }
 #board-wrapper { position: relative; width: 600px; height: 600px; transition: filter 0.3s, opacity 0.3s; box-shadow: 6px 6px 0px rgba(0,0,0,0.9); border: 4px solid #000; background: var(--board-light); }
 
-/* --- AB HIER: DAS SCHACHBRETT (100% UNVERÄNDERT) --- */
+/* DAS SCHACHBRETT */
 #board, .square, .piece { user-select: none; -webkit-user-select: none; -moz-user-select: none; -webkit-user-drag: none; }
 #board { display: grid; grid-template-columns: repeat(8, 12.5%); grid-template-rows: repeat(8, 12.5%); width: 600px; height: 600px; }
 #board.flipped { transform: rotate(180deg); }
@@ -111,14 +111,41 @@ input[type="text"], .select-input {
 .piece { width: 100%; height: 100%; object-fit: contain; z-index: 10; pointer-events: none; }
 #animation-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 35; }
 .animating-wrapper { position: absolute; width: 12.5%; height: 12.5%; pointer-events: none; transition-property: transform; }
-.opponent-cursor { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 120; }
-.cursor-svg { position: absolute; width: 38px; height: 38px; top: -19px; left: -19px; }
-.cursor-name { position: absolute; left: 22px; top: -10px; background: #fff; color: #000; font-size: 14px; padding: 2px 7px; border: 2px solid #000; }
+
+/* OPPONENT CARTOON CURSOR STYLES */
+.opponent-cursor { 
+    position: absolute; 
+    pointer-events: none; 
+    z-index: 120; 
+    transition: left 0.05s linear, top 0.05s linear;
+}
+.cursor-svg { 
+    position: absolute; 
+    width: 45px; 
+    height: 45px; 
+    top: 0; 
+    left: 0; 
+    filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.35));
+}
+.cursor-name { 
+    position: absolute; 
+    left: 36px; 
+    top: 24px; 
+    background: #ffffff; 
+    color: #000000; 
+    font-size: 14px; 
+    font-weight: bold;
+    padding: 2px 8px; 
+    border: 2.5px solid #000000;
+    border-radius: 6px;
+    white-space: nowrap;
+    box-shadow: 2px 2px 0px rgba(0,0,0,0.9);
+}
+
 .square.locked::before { content: ''; position: absolute; top:0; left:0; width:100%; height:100%; background-color: rgba(250, 70, 34, 0.25); pointer-events: none; }
 .cd-bar { position: absolute; bottom: 0; left: 0; height: 5px; background-color: var(--danger); width: 0%; pointer-events: none; z-index: 15; }
-/* --- ENDE SCHACHBRETT --- */
 
-/* SIDEBAR & REGELN IM SCRIBBLE STIL */
+/* SIDEBAR & REGELN */
 .sidebar { padding: 20px; width: 280px; display: flex; flex-direction: column; }
 .logo-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;}
 .tag { background: #f1c40f; padding: 3px 8px; border: 2px solid #000; border-radius: 4px; font-size: 14px; font-weight: bold; }
@@ -138,7 +165,7 @@ input[type="text"], .select-input {
 .promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.1s; }
 .promo-piece:hover { transform: scale(1.1); }
 
-/* --- UI SPERREN & KALTSTART --- */
+/* UI SPERREN & KALTSTART */
 #splash-screen {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background-color: rgba(255,255,255,0.9);
