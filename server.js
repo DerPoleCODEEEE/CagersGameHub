@@ -140,6 +140,7 @@ app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager'))
 // =========================================================
 const rooms = new Map();
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
+function generatePlayerId() { return Math.random().toString(36).substring(2, 12); }
 
 const INITIAL_CHESS_BOARD = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -256,40 +257,86 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved, activeEffec
 io.on('connection', (socket) => {
     socket.on('create_room', ({ playerName, mode, pfp }) => {
         const roomCode = generateRoomCode();
+        const playerId = generatePlayerId();
         rooms.set(roomCode, {
             mode: mode || 'class',
-            players: { w: { id: socket.id, name: playerName, pfp: pfp || '', ready: false }, b: null },
+            players: { w: { socketId: socket.id, playerId, name: playerName, pfp: pfp || '', ready: false, connected: true }, b: null },
             board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)),
             typeCooldowns: null, 
             singleCooldowns: null,
             hasMoved: { 'wK': false, 'wR_left': false, 'wR_right': false, 'bK': false, 'bR_left': false, 'bR_right': false },
-            enPassantTarget: null
+            enPassantTarget: null,
+            isGameStarted: false,
+            isGameOver: false,
+            disconnectTimers: { w: null, b: null }
         });
         socket.join(roomCode);
-        socket.emit('room_created', { roomCode, playerId: socket.id, color: 'w', mode });
+        socket.emit('room_created', { roomCode, playerId, color: 'w', mode });
     });
 
     socket.on('join_room', ({ roomCode, playerName, pfp }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = rooms.get(code);
         if (!room) return socket.emit('error_msg', 'Room not found!');
-        if (room.players.b) return socket.emit('error_msg', 'Room is full!');
+        if (room.players.b && room.players.b.connected) return socket.emit('error_msg', 'Room is full!');
         
-        room.players.b = { id: socket.id, name: playerName, pfp: pfp || '', ready: false };
+        const playerId = generatePlayerId();
+        room.players.b = { socketId: socket.id, playerId, name: playerName, pfp: pfp || '', ready: false, connected: true };
         socket.join(code);
         
         socket.emit('room_joined', { 
-            roomCode: code, playerId: socket.id, color: 'b', mode: room.mode, 
+            roomCode: code, playerId, color: 'b', mode: room.mode, 
             opponentName: room.players.w.name, opponentPfp: room.players.w.pfp 
         });
         socket.to(code).emit('opponent_joined', { opponentName: playerName, opponentPfp: pfp });
     });
 
+    socket.on('reconnect_room', ({ roomCode, playerId, playerColor }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = rooms.get(code);
+        if (!room || !room.players[playerColor]) return socket.emit('error_msg', 'Room or session expired!');
+        
+        const player = room.players[playerColor];
+        if (player.playerId !== playerId) return socket.emit('error_msg', 'Invalid session credentials!');
+
+        player.socketId = socket.id;
+        player.connected = true;
+
+        if (room.disconnectTimers[playerColor]) {
+            clearTimeout(room.disconnectTimers[playerColor]);
+            room.disconnectTimers[playerColor] = null;
+        }
+
+        socket.join(code);
+        const oppColor = playerColor === 'w' ? 'b' : 'w';
+        const opponent = room.players[oppColor];
+
+        socket.emit('room_reconnected', {
+            roomCode: code,
+            playerId,
+            color: playerColor,
+            mode: room.mode,
+            board: room.board,
+            typeCooldowns: room.typeCooldowns,
+            singleCooldowns: room.singleCooldowns,
+            isGameStarted: room.isGameStarted,
+            isGameOver: room.isGameOver,
+            opponentName: opponent ? opponent.name : '',
+            opponentPfp: opponent ? opponent.pfp : '',
+            playersReady: [
+                { color: 'w', ready: room.players.w ? room.players.w.ready : false },
+                { color: 'b', ready: room.players.b ? room.players.b.ready : false }
+            ]
+        });
+
+        socket.to(code).emit('opponent_reconnected', { color: playerColor });
+    });
+
     socket.on('player_ready', ({ roomCode, playerId }) => {
         const room = rooms.get(roomCode);
         if (!room) return;
-        if (room.players.w && room.players.w.id === playerId) room.players.w.ready = true;
-        if (room.players.b && room.players.b.id === playerId) room.players.b.ready = true;
+        if (room.players.w && room.players.w.playerId === playerId) room.players.w.ready = true;
+        if (room.players.b && room.players.b.playerId === playerId) room.players.b.ready = true;
         
         const playersReady = [
             { color: 'w', ready: room.players.w ? room.players.w.ready : false },
@@ -304,6 +351,7 @@ io.on('connection', (socket) => {
             } else {
                 room.singleCooldowns = Array(8).fill(null).map(() => Array(8).fill(0));
             }
+            room.isGameStarted = true;
             io.to(roomCode).emit('start_match_countdown', { typeCooldowns: room.typeCooldowns, singleCooldowns: room.singleCooldowns });
         }
     });
@@ -312,9 +360,9 @@ io.on('connection', (socket) => {
     
     socket.on('request_move', (moveData) => {
         const room = rooms.get(moveData.roomCode);
-        if (!room || !room.board) return;
+        if (!room || !room.board || room.isGameOver) return;
 
-        const color = (room.players.w && room.players.w.id === socket.id) ? 'w' : ((room.players.b && room.players.b.id === socket.id) ? 'b' : null);
+        const color = (room.players.w && room.players.w.socketId === socket.id) ? 'w' : ((room.players.b && room.players.b.socketId === socket.id) ? 'b' : null);
         if (!color) return;
 
         const { fromR, fromC, toR, toC, promotedTo } = moveData;
@@ -364,6 +412,10 @@ io.on('connection', (socket) => {
             room.board[captureRow][toC] = null;
         }
 
+        if (room.board[toR][toC] && room.board[toR][toC].toLowerCase() === 'k') {
+            room.isGameOver = true;
+        }
+
         room.board[toR][toC] = finalPiece;
 
         let cdDuration = 0;
@@ -387,7 +439,27 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnecting', () => {
-        socket.rooms.forEach(code => { socket.to(code).emit('opponent_left'); });
+        socket.rooms.forEach(code => {
+            const room = rooms.get(code);
+            if (!room) return;
+
+            let discColor = null;
+            if (room.players.w && room.players.w.socketId === socket.id) discColor = 'w';
+            if (room.players.b && room.players.b.socketId === socket.id) discColor = 'b';
+
+            if (discColor && !room.isGameOver) {
+                room.players[discColor].connected = false;
+                socket.to(code).emit('opponent_disconnected', { color: discColor, countdownSeconds: 30 });
+
+                room.disconnectTimers[discColor] = setTimeout(() => {
+                    if (room && !room.players[discColor].connected && !room.isGameOver) {
+                        room.isGameOver = true;
+                        const winnerColor = discColor === 'w' ? 'b' : 'w';
+                        io.to(code).emit('game_over', { winnerColor, reason: 'disconnect' });
+                    }
+                }, 30000);
+            }
+        });
     });
 });
 
@@ -428,12 +500,13 @@ function getPieceColor(pieceArr) {
 mutantIo.on('connection', (socket) => {
     socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions }) => {
         const roomCode = generateRoomCode();
+        const playerId = generatePlayerId();
         let hostColor = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
         const limitFusions = maxFusions || 3;
         const roomData = {
             players: {
-                w: hostColor === 'w' ? { id: socket.id, name: playerName, pfp, ready: false } : null,
-                b: hostColor === 'b' ? { id: socket.id, name: playerName, pfp, ready: false } : null
+                w: hostColor === 'w' ? { socketId: socket.id, playerId, name: playerName, pfp, ready: false, connected: true } : null,
+                b: hostColor === 'b' ? { socketId: socket.id, playerId, name: playerName, pfp, ready: false, connected: true } : null
             },
             board: createInitialMutantBoard(),
             turn: 'w',
@@ -442,12 +515,15 @@ mutantIo.on('connection', (socket) => {
             maxFusions: limitFusions,
             fusionsLeft: { w: limitFusions, b: limitFusions },
             lastTurnTimestamp: null,
-            hostColor
+            hostColor,
+            isGameStarted: false,
+            isGameOver: false,
+            disconnectTimers: { w: null, b: null }
         };
         mutantRooms.set(roomCode, roomData);
         socket.join(roomCode);
         socket.emit('mutant_room_created', { 
-            roomCode, playerId: socket.id, color: hostColor, playerName, pfp,
+            roomCode, playerId, color: hostColor, playerName, pfp,
             timeControl: roomData.timeControl, clocks: roomData.clocks,
             maxFusions: roomData.maxFusions, fusionsLeft: roomData.fusionsLeft
         });
@@ -459,20 +535,63 @@ mutantIo.on('connection', (socket) => {
         if (!room) return socket.emit('error_msg', 'Room not found!');
         
         let joinerColor = room.players.w ? 'b' : 'w';
-        if (room.players[joinerColor]) return socket.emit('error_msg', 'Room is full!');
+        if (room.players[joinerColor] && room.players[joinerColor].connected) return socket.emit('error_msg', 'Room is full!');
         
-        room.players[joinerColor] = { id: socket.id, name: playerName, pfp, ready: false };
+        const playerId = generatePlayerId();
+        room.players[joinerColor] = { socketId: socket.id, playerId, name: playerName, pfp, ready: false, connected: true };
         socket.join(code);
         const oppColor = joinerColor === 'w' ? 'b' : 'w';
         const opponent = room.players[oppColor];
         
         socket.emit('mutant_room_joined', {
-            roomCode: code, playerId: socket.id, color: joinerColor,
-            opponentName: opponent.name, opponentPfp: opponent.pfp,
+            roomCode: code, playerId, color: joinerColor,
+            opponentName: opponent ? opponent.name : '', opponentPfp: opponent ? opponent.pfp : '',
             timeControl: room.timeControl, clocks: room.clocks,
             maxFusions: room.maxFusions, fusionsLeft: room.fusionsLeft
         });
         socket.to(code).emit('mutant_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
+    });
+
+    socket.on('reconnect_mutant_room', ({ roomCode, playerId, playerColor }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = mutantRooms.get(code);
+        if (!room || !room.players[playerColor]) return socket.emit('error_msg', 'Room or session expired!');
+
+        const player = room.players[playerColor];
+        if (player.playerId !== playerId) return socket.emit('error_msg', 'Invalid session credentials!');
+
+        player.socketId = socket.id;
+        player.connected = true;
+
+        if (room.disconnectTimers[playerColor]) {
+            clearTimeout(room.disconnectTimers[playerColor]);
+            room.disconnectTimers[playerColor] = null;
+        }
+
+        socket.join(code);
+        const oppColor = playerColor === 'w' ? 'b' : 'w';
+        const opponent = room.players[oppColor];
+
+        socket.emit('mutant_room_reconnected', {
+            roomCode: code,
+            playerId,
+            color: playerColor,
+            board: room.board,
+            turn: room.turn,
+            clocks: room.clocks,
+            fusionsLeft: room.fusionsLeft,
+            maxFusions: room.maxFusions,
+            isGameStarted: room.isGameStarted,
+            isGameOver: room.isGameOver,
+            opponentName: opponent ? opponent.name : '',
+            opponentPfp: opponent ? opponent.pfp : '',
+            playersReady: [
+                { color: 'w', ready: room.players.w ? room.players.w.ready : false, name: room.players.w ? room.players.w.name : '' },
+                { color: 'b', ready: room.players.b ? room.players.b.ready : false, name: room.players.b ? room.players.b.name : '' }
+            ]
+        });
+
+        socket.to(code).emit('mutant_opponent_reconnected', { color: playerColor });
     });
 
     socket.on('player_ready', ({ roomCode }) => {
@@ -480,8 +599,8 @@ mutantIo.on('connection', (socket) => {
         const room = mutantRooms.get(code);
         if (!room) return;
         
-        if (room.players.w && room.players.w.id === socket.id) room.players.w.ready = true;
-        if (room.players.b && room.players.b.id === socket.id) room.players.b.ready = true;
+        if (room.players.w && room.players.w.socketId === socket.id) room.players.w.ready = true;
+        if (room.players.b && room.players.b.socketId === socket.id) room.players.b.ready = true;
         
         const playersReady = [
             { color: 'w', ready: room.players.w ? room.players.w.ready : false, name: room.players.w ? room.players.w.name : '' },
@@ -491,6 +610,7 @@ mutantIo.on('connection', (socket) => {
         
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
             room.lastTurnTimestamp = Date.now();
+            room.isGameStarted = true;
             mutantIo.to(code).emit('start_match_countdown', { clocks: room.clocks, maxFusions: room.maxFusions, fusionsLeft: room.fusionsLeft });
         }
     });
@@ -498,7 +618,7 @@ mutantIo.on('connection', (socket) => {
     socket.on('request_mutant_move', ({ roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
-        if (!room) return;
+        if (!room || room.isGameOver) return;
         const movingPiece = room.board[fromR][fromC];
         if (!movingPiece) return;
         
@@ -513,6 +633,7 @@ mutantIo.on('connection', (socket) => {
         room.lastTurnTimestamp = now;
 
         if (room.clocks[pieceColor] <= 0) {
+            room.isGameOver = true;
             mutantIo.to(code).emit('game_over', { winnerColor: pieceColor === 'w' ? 'b' : 'w', reason: 'time' });
             return;
         }
@@ -562,6 +683,7 @@ mutantIo.on('connection', (socket) => {
             room.board[toR][toC] = sortCanonically(movingPiece);
             room.board[fromR][fromC] = null;
             if (isKingCaptured) {
+                room.isGameOver = true;
                 mutantIo.to(code).emit('game_over', { winnerColor: pieceColor, reason: 'king' });
             }
         }
@@ -575,7 +697,8 @@ mutantIo.on('connection', (socket) => {
     socket.on('time_out', ({ roomCode, loserColor }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
-        if (!room) return;
+        if (!room || room.isGameOver) return;
+        room.isGameOver = true;
         const winnerColor = loserColor === 'w' ? 'b' : 'w';
         mutantIo.to(code).emit('game_over', { winnerColor, reason: 'time' });
     });
@@ -583,9 +706,10 @@ mutantIo.on('connection', (socket) => {
     socket.on('resign_game', ({ roomCode }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
-        if (!room) return;
-        const resigningColor = (room.players.w && room.players.w.id === socket.id) ? 'w' : ((room.players.b && room.players.b.id === socket.id) ? 'b' : null);
+        if (!room || room.isGameOver) return;
+        const resigningColor = (room.players.w && room.players.w.socketId === socket.id) ? 'w' : ((room.players.b && room.players.b.socketId === socket.id) ? 'b' : null);
         if (!resigningColor) return;
+        room.isGameOver = true;
         const winnerColor = resigningColor === 'w' ? 'b' : 'w';
         mutantIo.to(code).emit('game_over', { winnerColor, reason: 'resign' });
     });
@@ -597,7 +721,9 @@ mutantIo.on('connection', (socket) => {
 
     socket.on('respond_draw', ({ roomCode, accepted }) => {
         const code = roomCode ? roomCode.toUpperCase() : '';
-        if (accepted) {
+        const room = mutantRooms.get(code);
+        if (accepted && room) {
+            room.isGameOver = true;
             mutantIo.to(code).emit('game_over', { winnerColor: null, reason: 'draw' });
         } else {
             socket.to(code).emit('draw_declined');
@@ -605,240 +731,29 @@ mutantIo.on('connection', (socket) => {
     });
 
     socket.on('disconnecting', () => {
-        socket.rooms.forEach(code => { socket.to(code).emit('mutant_opponent_left'); });
+        socket.rooms.forEach(code => {
+            const room = mutantRooms.get(code);
+            if (!room) return;
+
+            let discColor = null;
+            if (room.players.w && room.players.w.socketId === socket.id) discColor = 'w';
+            if (room.players.b && room.players.b.socketId === socket.id) discColor = 'b';
+
+            if (discColor && !room.isGameOver) {
+                room.players[discColor].connected = false;
+                socket.to(code).emit('mutant_opponent_disconnected', { color: discColor, countdownSeconds: 30 });
+
+                room.disconnectTimers[discColor] = setTimeout(() => {
+                    if (room && !room.players[discColor].connected && !room.isGameOver) {
+                        room.isGameOver = true;
+                        const winnerColor = discColor === 'w' ? 'b' : 'w';
+                        mutantIo.to(code).emit('game_over', { winnerColor, reason: 'disconnect' });
+                    }
+                }, 30000);
+            }
+        });
     });
 });
-
-// =========================================================
-// 7. CHAOS CHESS (REPARIERTES VOTING + GEBALANCTE KARTEN) - CURRENTLY DISABLED
-// =========================================================
-/*
-const chaosIo = io.of('/chaos-chess');
-const chaosRooms = new Map();
-
-const CHAOS_CARDS_POOL = [
-    { id: 'bloodthirst', name: 'Blutdurst', icon: '🩸', description: 'Für 2 Züge MUSS geschlagen werden, wenn ein Schlagzug möglich ist!', turnsDuration: 2 },
-    { id: 'peace', name: 'Friedensvertrag', icon: '🕊️', description: 'Für 2 Züge kann KEINE Figur geschlagen werden!', turnsDuration: 2 },
-    { id: 'pawn_jump', name: 'Pferdeflüsterer', icon: '🐎', description: 'Für 2 Züge springen alle Bauern wie Springer!', turnsDuration: 2 },
-    { id: 'ice', name: 'Eisglätte', icon: '🧊', description: 'Damen, Türme & Läufer rutschen für 2 Züge durch bis zum Hindernis!', turnsDuration: 2 },
-    { id: 'pawn_sprint', name: 'Bauern-Sprint', icon: '🏃', description: 'Bauern dürfen für 2 Züge von überall 2 Felder vorgehen!', turnsDuration: 2 },
-    { id: 'royal_guard', name: 'Königsschutz', icon: '🛡️', description: 'Könige dürfen 2 Züge lang 2 Felder weit ziehen!', turnsDuration: 2 },
-    { id: 'fog', name: 'Nebelschleier', icon: '🌫️', description: 'Gegnerische Figuren sind für 2 Züge in Nebel gehüllt!', turnsDuration: 2 }
-];
-
-chaosIo.on('connection', (socket) => {
-    socket.on('create_chaos_room', ({ playerName, pfp, cardInterval }) => {
-        const roomCode = generateRoomCode();
-        const interval = parseInt(cardInterval) || 6;
-        const roomData = {
-            players: {
-                w: { id: socket.id, name: playerName, pfp, ready: false },
-                b: null
-            },
-            board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)),
-            turn: 'w',
-            moveCount: 0,
-            cardInterval: interval,
-            activeEffect: null,
-            hasMoved: { 'wK': false, 'wR_left': false, 'wR_right': false, 'bK': false, 'bR_left': false, 'bR_right': false },
-            enPassantTarget: null,
-            isVoting: false,
-            currentCards: [],
-            votes: [0, 0, 0],
-            votedSockets: new Set()
-        };
-        chaosRooms.set(roomCode, roomData);
-        socket.roomCode = roomCode; // FIX: Fest auf Socket speichern!
-        socket.join(roomCode);
-        socket.emit('chaos_room_created', { roomCode, playerId: socket.id, color: 'w', playerName, pfp, cardInterval: interval });
-    });
-
-    socket.on('join_chaos_room', ({ roomCode, playerName, pfp }) => {
-        const code = roomCode ? roomCode.toUpperCase() : '';
-        const room = chaosRooms.get(code);
-        if (!room) return socket.emit('error_msg', 'Room not found!');
-        if (room.players.b) return socket.emit('error_msg', 'Room is full!');
-        
-        room.players.b = { id: socket.id, name: playerName, pfp, ready: false };
-        socket.roomCode = code; // FIX: Fest auf Socket speichern!
-        socket.join(code);
-        
-        socket.emit('chaos_room_joined', {
-            roomCode: code, playerId: socket.id, color: 'b',
-            opponentName: room.players.w.name, opponentPfp: room.players.w.pfp,
-            cardInterval: room.cardInterval
-        });
-        socket.to(code).emit('chaos_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
-    });
-
-    socket.on('player_ready', ({ roomCode }) => {
-        const code = socket.roomCode || (roomCode ? roomCode.toUpperCase() : '');
-        const room = chaosRooms.get(code);
-        if (!room) return;
-        
-        if (room.players.w && room.players.w.id === socket.id) room.players.w.ready = true;
-        if (room.players.b && room.players.b.id === socket.id) room.players.b.ready = true;
-        
-        const playersReady = [
-            { color: 'w', ready: room.players.w ? room.players.w.ready : false, name: room.players.w ? room.players.w.name : '' },
-            { color: 'b', ready: room.players.b ? room.players.b.ready : false, name: room.players.b ? room.players.b.name : '' }
-        ];
-        chaosIo.to(code).emit('ready_update', { playersReady });
-        
-        if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
-            chaosIo.to(code).emit('start_match', { board: room.board });
-        }
-    });
-
-    socket.on('request_chaos_move', ({ fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
-        const code = socket.roomCode;
-        const room = chaosRooms.get(code);
-        if (!room || room.isVoting) return;
-
-        const movingPiece = room.board[fromR][fromC];
-        if (!movingPiece) return;
-        
-        const pieceColor = movingPiece === movingPiece.toUpperCase() ? 'w' : 'b';
-        if (room.turn !== pieceColor) return socket.emit('error_msg', 'Not your turn!');
-
-        const validMoves = getServerValidMoves(room.board, fromR, fromC, room.enPassantTarget, room.hasMoved, room.activeEffect);
-        const validMove = validMoves.find(m => m.r === toR && m.c === toC);
-        if (!validMove) return socket.emit('error_msg', 'Illegal move!');
-
-        // --- KARTEN-LOGIK BEIM ZUG ---
-        if (room.activeEffect && room.activeEffect.id === 'peace' && (validMove.type === 'capture' || validMove.type === 'en_passant')) {
-            return socket.emit('error_msg', '🕊️ Friedensvertrag aktiv! Schlagen verboten!');
-        }
-
-        if (room.activeEffect && room.activeEffect.id === 'bloodthirst') {
-            let hasAnyCapture = false;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const p = room.board[r][c];
-                    if (p && (p === p.toUpperCase() ? 'w' : 'b') === pieceColor) {
-                        const pMoves = getServerValidMoves(room.board, r, c, room.enPassantTarget, room.hasMoved, room.activeEffect);
-                        if (pMoves.some(m => m.type === 'capture' || m.type === 'en_passant')) {
-                            hasAnyCapture = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasAnyCapture) break;
-            }
-            if (hasAnyCapture && validMove.type !== 'capture' && validMove.type !== 'en_passant') {
-                return socket.emit('error_msg', '🩸 Blutdurst aktiv! Du MUSST schlagen!');
-            }
-        }
-
-        if (movingPiece === 'K') room.hasMoved['wK'] = true;
-        if (movingPiece === 'k') room.hasMoved['bK'] = true;
-
-        room.board[fromR][fromC] = null;
-        let finalPiece = promotedTo || movingPiece;
-
-        if (validMove.type === 'castle') {
-            const rFromC = toC === 6 ? 7 : 0;
-            const rToC = toC === 6 ? 5 : 3;
-            room.board[fromR][rToC] = room.board[fromR][rFromC];
-            room.board[fromR][rFromC] = null;
-        } else if (validMove.type === 'en_passant') {
-            const captureRow = pieceColor === 'w' ? toR + 1 : toR - 1;
-            room.board[captureRow][toC] = null;
-        }
-
-        const targetPiece = room.board[toR][toC];
-        let isGameOver = targetPiece && targetPiece.toLowerCase() === 'k';
-
-        room.board[toR][toC] = finalPiece;
-        
-        room.moveCount++;
-        room.turn = room.turn === 'w' ? 'b' : 'w';
-
-        if (room.activeEffect) {
-            room.activeEffect.turnsLeft--;
-            if (room.activeEffect.turnsLeft <= 0) {
-                room.activeEffect = null;
-            }
-        }
-
-        const triggerVoting = (room.moveCount > 0 && room.moveCount % room.cardInterval === 0 && !isGameOver);
-
-        chaosIo.to(code).emit('apply_chaos_move', {
-            board: room.board,
-            nextTurn: room.turn,
-            moveCount: room.moveCount,
-            cardInterval: room.cardInterval,
-            activeEffect: room.activeEffect,
-            isGameOver
-        });
-
-        // START VOTING
-        if (triggerVoting) {
-            room.isVoting = true;
-            room.votes = [0, 0, 0];
-            room.votedSockets.clear();
-
-            const shuffled = [...CHAOS_CARDS_POOL].sort(() => 0.5 - Math.random());
-            room.currentCards = shuffled.slice(0, 3);
-
-            chaosIo.to(code).emit('start_card_selection', {
-                cards: room.currentCards,
-                duration: 30
-            });
-
-            setTimeout(() => {
-                const activeRoom = chaosRooms.get(code);
-                if (!activeRoom || !activeRoom.isVoting) return;
-
-                let maxVotes = -1;
-                let winningIndex = 0;
-                activeRoom.votes.forEach((v, idx) => {
-                    if (v > maxVotes) {
-                        maxVotes = v;
-                        winningIndex = idx;
-                    }
-                });
-
-                const selectedCard = activeRoom.currentCards[winningIndex];
-                activeRoom.activeEffect = {
-                    id: selectedCard.id,
-                    name: selectedCard.name,
-                    description: selectedCard.description,
-                    turnsLeft: selectedCard.turnsDuration
-                };
-                activeRoom.isVoting = false;
-
-                chaosIo.to(code).emit('card_applied', {
-                    activeEffect: activeRoom.activeEffect
-                });
-            }, 30000);
-        }
-    });
-
-    // VOTING HANDLER (JETZT FÜR ALLE SPIELER PERFEKT RELIABLE)
-    socket.on('cast_vote', ({ cardIndex }) => {
-        const code = socket.roomCode;
-        if (!code) return;
-        const room = chaosRooms.get(code);
-        if (!room || !room.isVoting) return;
-        if (room.votedSockets.has(socket.id)) return;
-
-        room.votedSockets.add(socket.id);
-        room.votes[cardIndex] = (room.votes[cardIndex] || 0) + 1;
-
-        const totalVotes = room.votedSockets.size || 1;
-        const votesPct = room.votes.map(v => Math.round((v / totalVotes) * 100));
-
-        chaosIo.to(code).emit('update_votes', { votesPct });
-    });
-
-    socket.on('disconnecting', () => {
-        if (socket.roomCode) {
-            chaosIo.to(socket.roomCode).emit('chaos_opponent_left');
-        }
-    });
-});
-*/
 
 // =========================================================
 // 8. SERVER BINDING
