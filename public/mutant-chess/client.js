@@ -1,5 +1,20 @@
 const socket = io('/mutant-chess');
 
+// RULES MODAL HANDLERS
+const rulesModal = document.getElementById('rules-modal');
+const btnShowRules = document.getElementById('btn-show-rules');
+const closeRulesBtn = document.getElementById('close-rules-btn');
+
+if (btnShowRules) {
+    btnShowRules.onclick = () => rulesModal.style.display = 'flex';
+}
+if (closeRulesBtn) {
+    closeRulesBtn.onclick = () => rulesModal.style.display = 'none';
+}
+if (rulesModal) {
+    rulesModal.onclick = (e) => { if (e.target === rulesModal) rulesModal.style.display = 'none'; };
+}
+
 // STATS SPEICHERN HELPER
 function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
     fetch('/api/stats/update', {
