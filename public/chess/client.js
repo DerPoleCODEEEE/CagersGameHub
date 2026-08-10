@@ -174,16 +174,26 @@ boardEl.addEventListener('mousemove', (e) => {
     socket.emit('mouse_move', { roomCode, xPct: playerColor === 'b' ? (100 - xPct) : xPct, yPct: playerColor === 'b' ? (100 - yPct) : yPct });
 });
 
-boardEl.addEventListener('mouseleave', () => { if (roomCode) socket.emit('mouse_leave', { roomCode }); });
-
-socket.on('opponent_mouse_move', ({ xPct, yPct }) => {
-    const oppCursor = document.getElementById('opponent-cursor'); oppCursor.classList.remove('hidden');
-    oppCursor.style.left = `${playerColor === 'b' ? (100 - xPct) : xPct}%`;
-    oppCursor.style.top = `${playerColor === 'b' ? (100 - yPct) : yPct}%`;
-    document.getElementById('opponent-cursor-name').innerText = opponentName || 'Opponent';
+boardEl.addEventListener('mouseleave', () => { 
+    if (roomCode) socket.emit('mouse_leave', { roomCode }); 
 });
 
-socket.on('opponent_mouse_leave', () => document.getElementById('opponent-cursor').classList.add('hidden'));
+socket.on('opponent_mouse_move', ({ xPct, yPct }) => {
+    const oppCursor = document.getElementById('opponent-cursor'); 
+    if (oppCursor) {
+        oppCursor.classList.remove('hidden');
+        oppCursor.style.left = `${playerColor === 'b' ? (100 - xPct) : xPct}%`;
+        oppCursor.style.top = `${playerColor === 'b' ? (100 - yPct) : yPct}%`;
+    }
+    const oppNameEl = document.getElementById('opponent-cursor-name');
+    if (oppNameEl) oppNameEl.innerText = opponentName || 'Opponent';
+});
+
+socket.on('opponent_mouse_leave', () => {
+    const oppCursor = document.getElementById('opponent-cursor');
+    if (oppCursor) oppCursor.classList.add('hidden');
+});
+
 socket.on('opponent_select_square', ({ r, c }) => { opponentSelectedSquare = (r !== null) ? { r, c } : null; renderBoard(); });
 
 socket.on('room_created', (data) => {
