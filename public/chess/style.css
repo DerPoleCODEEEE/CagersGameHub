@@ -35,8 +35,36 @@ body {
 .card h1 { margin: 0 0 5px 0; font-size: 38px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 25px; font-size: 20px; }
 
-.input-group { margin-bottom: 18px; text-align: left; }
+.input-group { margin-bottom: 12px; text-align: left; }
 .input-group label { display: block; font-size: 18px; color: #333; margin-bottom: 5px; font-weight: bold; }
+
+/* SLIDER ROW STYLES */
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.slider-row .piece-icon {
+    font-size: 24px;
+    width: 25px;
+    text-align: center;
+}
+
+.slider-row label {
+    font-size: 16px;
+    font-weight: bold;
+    width: 110px;
+    margin-bottom: 0;
+    display: inline-block;
+}
+
+.slider {
+    flex-grow: 1;
+    accent-color: #f1c40f;
+    cursor: pointer;
+}
 
 /* EINGABEFELDER IM SCRIBBLE STIL */
 input[type="text"], .select-input { 
