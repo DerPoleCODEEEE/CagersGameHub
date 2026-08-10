@@ -9,7 +9,7 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <!-- Die Florks im Hintergrund (Jetzt beide angepasst und nicht mehr abgeschnitten) -->
+    <!-- Background Florks -->
     <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-left" alt="Flork HD">
     <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
     
@@ -29,10 +29,10 @@
         </div>
     </header>
 
-    <!-- NEUES LAYOUT: SPALTEN FÜR GAMES UND HALL OF FAME -->
+    <!-- NEW LAYOUT: COLUMNS FOR GAMES AND HALL OF FAME -->
     <main class="main-layout">
         
-        <!-- LINKE SEITE: DIE SPIELE -->
+        <!-- LEFT SIDE: GAMES -->
         <div class="games-wrapper scribble-box">
             <div class="game-grid">
                 
@@ -82,12 +82,12 @@
             </div>
         </div>
 
-        <!-- RECHTE SEITE: HALL OF FAME & GLOBAL CHAT -->
+        <!-- RIGHT SIDE: HALL OF FAME & GLOBAL CHAT -->
         <aside class="sidebar-wrapper">
             <div class="hall-of-fame scribble-box">
                 <h3 style="margin-top:0; border-bottom: 3px solid #000; padding-bottom:10px;">🏆 Hall of Fame</h3>
                 <div id="hof-list" class="hof-list">
-                    <div style="text-align: center; color: #666; font-style: italic;">Lade Legenden...</div>
+                    <div style="text-align: center; color: #666; font-style: italic;">Loading legends...</div>
                 </div>
             </div>
 
@@ -95,14 +95,14 @@
             <div class="hub-chat-box scribble-box" id="hub-chat-box">
                 <div class="hub-chat-header">
                     <span>💬 Hub Chat</span>
-                    <button id="hub-chat-toggle-btn" class="scribble-btn hub-chat-toggle-btn">👁️ Verbergen</button>
+                    <button id="hub-chat-toggle-btn" class="scribble-btn hub-chat-toggle-btn">👁️ Hide</button>
                 </div>
                 <div class="hub-chat-body" id="hub-chat-body">
                     <div id="hub-chat-messages" class="hub-chat-messages">
-                        <div style="text-align:center; color:#888; font-style:italic;">Lade Chat...</div>
+                        <div style="text-align:center; color:#888; font-style:italic;">Loading chat...</div>
                     </div>
                     <div id="hub-chat-input-area" class="hub-chat-input-area">
-                        <!-- Dynamisch befüllt je nach Login-Status -->
+                        <!-- Dynamically filled depending on auth state -->
                     </div>
                 </div>
             </div>
@@ -325,7 +325,7 @@
                 const medals = ['🥇', '🥈', '🥉'];
                 
                 if (users.length === 0) {
-                    hofList.innerHTML = '<p style="text-align:center; color:#555;">Noch keine Spiele gespielt!</p>';
+                    hofList.innerHTML = '<p style="text-align:center; color:#555;">No games played yet!</p>';
                     return;
                 }
 
@@ -359,17 +359,17 @@
         chatToggleBtn.addEventListener('click', () => {
             chatBox.classList.toggle('collapsed');
             if (chatBox.classList.contains('collapsed')) {
-                chatToggleBtn.innerText = '🙈 Anzeigen';
+                chatToggleBtn.innerText = '🙈 Show';
             } else {
-                chatToggleBtn.innerText = '👁️ Verbergen';
+                chatToggleBtn.innerText = '👁️ Hide';
             }
         });
 
         function updateChatInputState(user) {
             if (user) {
                 chatInputArea.innerHTML = `
-                    <input type="text" id="hub-chat-input" class="scribble-input hub-chat-input" placeholder="Nachricht schreiben..." maxlength="150">
-                    <button id="hub-chat-send-btn" class="scribble-btn hub-chat-send-btn">Senden</button>
+                    <input type="text" id="hub-chat-input" class="scribble-input hub-chat-input" placeholder="Type a message..." maxlength="150">
+                    <button id="hub-chat-send-btn" class="scribble-btn hub-chat-send-btn">Send</button>
                 `;
                 const input = document.getElementById('hub-chat-input');
                 const sendBtn = document.getElementById('hub-chat-send-btn');
@@ -395,7 +395,7 @@
             } else {
                 chatInputArea.innerHTML = `
                     <div class="hub-chat-login-notice">
-                        🔒 <a href="/auth/twitch" style="color:#9146FF; font-weight:bold; text-decoration:underline;">Logge dich mit Twitch ein</a> um zu chatten!
+                        🔒 <a href="/auth/twitch" style="color:#9146FF; font-weight:bold; text-decoration:underline;">Log in with Twitch</a> to chat!
                     </div>
                 `;
             }
@@ -424,7 +424,7 @@
         hubSocket.on('hub_chat_history', (history) => {
             chatMessages.innerHTML = '';
             if (!history || history.length === 0) {
-                chatMessages.innerHTML = '<div style="text-align:center; color:#888; font-style:italic;">Noch keine Nachrichten...</div>';
+                chatMessages.innerHTML = '<div style="text-align:center; color:#888; font-style:italic;">No messages yet...</div>';
             } else {
                 history.forEach(appendHubChatMessage);
             }
