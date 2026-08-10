@@ -35,15 +35,10 @@
                 
                 <p><b>2. Game Modes</b><br>
                 • <i>Class Lock:</i> Moving a piece puts ALL pieces of that same type (e.g. all Pawns or all Rooks) on cooldown.<br>
-                • <i>Single Piece:</i> Moving a piece puts ONLY that specific moved piece/square on cooldown.<br>
-                • <i>Blitz Single:</i> Every piece shares a flat 2.0s cooldown regardless of type.</p>
+                • <i>Single Piece:</i> Moving a piece puts ONLY that specific moved piece/square on cooldown.</p>
 
-                <p><b>3. Piece Cooldown Timers (Standard)</b><br>
-                • ♚ King: 1.0s<br>
-                • ♟ Pawn: 3.5s<br>
-                • ♞ Knight & ♝ Bishop: 6.5s<br>
-                • ♜ Rook: 10.0s<br>
-                • ♛ Queen: 14.0s</p>
+                <p><b>3. Custom Piece Cooldown Timers</b><br>
+                Room creators can customize cooldown sliders (0 to 20s) for every individual piece type before starting the match.</p>
 
                 <p><b>4. Piece Travel & Locking</b><br>
                 Pieces physically move across the board over a short duration (250ms–750ms based on distance). While a piece is traveling, its destination square is locked.</p>
@@ -62,22 +57,61 @@
     </div>
 
     <!-- MAIN MENU -->
-    <div id="menu-screen" class="card scribble-box">
+    <div id="menu-screen" class="card scribble-box" style="width: 420px;">
         <h1>Cagers Quick Chess</h1>
         <p class="subtitle">Real-Time Multiplayer Chess</p>
+        
         <div class="input-group">
             <label>Your Name</label>
             <input type="text" id="player-name" placeholder="Loading from Twitch..." maxlength="15">
         </div>
-        <div class="input-group">
-            <label>Game Mode</label>
-            <select id="game-mode" class="select-input">
-                <option value="class">Class Lock (Locks all pieces of same type)</option>
-                <option value="single">Single Piece (Locks only the moved piece)</option>
-                <option value="fast_single">⚡ Blitz Single (2s Cooldown for ALL pieces)</option>
-            </select>
+
+        <div class="input-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+            <input type="checkbox" id="class-lock-check" checked style="width: 20px; height: 20px; cursor: pointer; accent-color: #f1c40f;">
+            <label for="class-lock-check" style="margin: 0; cursor: pointer; font-size: 18px; font-weight: bold;">Class Lock (Lock same piece types)</label>
         </div>
-        <div class="button-group">
+
+        <div class="input-group" style="margin-top: 15px;">
+            <label style="font-weight: bold; margin-bottom: 10px; display: block;">Piece Cooldowns (0 - 20s):</label>
+            
+            <div class="slider-row">
+                <span class="piece-icon">♚</span>
+                <label>King: <span id="cd-k-val">1.0</span>s</label>
+                <input type="range" id="cd-k-range" min="0" max="20" step="0.5" value="1.0" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♟</span>
+                <label>Pawn: <span id="cd-p-val">3.5</span>s</label>
+                <input type="range" id="cd-p-range" min="0" max="20" step="0.5" value="3.5" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♞</span>
+                <label>Knight: <span id="cd-n-val">6.5</span>s</label>
+                <input type="range" id="cd-n-range" min="0" max="20" step="0.5" value="6.5" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♝</span>
+                <label>Bishop: <span id="cd-b-val">6.5</span>s</label>
+                <input type="range" id="cd-b-range" min="0" max="20" step="0.5" value="6.5" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♜</span>
+                <label>Rook: <span id="cd-r-val">10.0</span>s</label>
+                <input type="range" id="cd-r-range" min="0" max="20" step="0.5" value="10.0" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♛</span>
+                <label>Queen: <span id="cd-q-val">14.0</span>s</label>
+                <input type="range" id="cd-q-range" min="0" max="20" step="0.5" value="14.0" class="slider">
+            </div>
+        </div>
+
+        <div class="button-group" style="margin-top: 15px;">
             <button id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
             <div class="divider">or</div>
             <div class="join-box">
@@ -155,7 +189,8 @@
                     <div class="sidebar-title" style="margin-bottom: 10px;">Cooldowns</div>
                     <div class="legend-item" id="lg-k"><span>♚ King</span><span class="time fast" id="lg-k-val">1.0s</span></div>
                     <div class="legend-item" id="lg-p"><span>♟ Pawns</span><span class="time" id="lg-p-val">3.5s</span></div>
-                    <div class="legend-item" id="lg-n"><span>♞/♝ Knights</span><span class="time" id="lg-n-val">6.5s</span></div>
+                    <div class="legend-item" id="lg-n"><span>♞ Knights</span><span class="time" id="lg-n-val">6.5s</span></div>
+                    <div class="legend-item" id="lg-b"><span>♝ Bishops</span><span class="time" id="lg-b-val">6.5s</span></div>
                     <div class="legend-item" id="lg-r"><span>♜ Rooks</span><span class="time" id="lg-r-val">10.0s</span></div>
                     <div class="legend-item" id="lg-q"><span>♛ Queen</span><span class="time" id="lg-q-val">14.0s</span></div>
                 </div>
