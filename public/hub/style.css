@@ -311,6 +311,23 @@ header, main {
     background-color: #fafafa;
     border: 4px dashed #000; 
     border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dev-credits {
+    margin-top: 25px;
+    margin-bottom: 0;
+    text-align: center;
+    font-size: 16px;
+    color: #555;
+    line-height: 1.4;
+    border-top: 2px dashed #ccc;
+    padding-top: 12px;
+}
+
+.dev-credits b {
+    color: #000;
 }
 
 .sidebar-wrapper {
