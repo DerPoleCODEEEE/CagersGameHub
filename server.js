@@ -133,7 +133,7 @@ app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
-app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess')));
+// app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // DEAKTIVIERT FÜR STREAM TEST
 
 // =========================================================
 // 5. CAGERS QUICK CHESS LOGIK
@@ -572,8 +572,9 @@ mutantIo.on('connection', (socket) => {
 });
 
 // =========================================================
-// 7. CHAOS CHESS (REPARIERTES VOTING + GEBALANCTE KARTEN)
+// 7. CHAOS CHESS (REPARIERTES VOTING + GEBALANCTE KARTEN) - CURRENTLY DISABLED
 // =========================================================
+/*
 const chaosIo = io.of('/chaos-chess');
 const chaosRooms = new Map();
 
@@ -799,6 +800,7 @@ chaosIo.on('connection', (socket) => {
         }
     });
 });
+*/
 
 // =========================================================
 // 8. SERVER BINDING
