@@ -279,11 +279,16 @@ io.on('connection', (socket) => {
     });
 
     // --- QUICK CHESS ROOM EVENTS ---
-    socket.on('create_room', ({ playerName, mode, pfp }) => {
+    socket.on('create_room', ({ playerName, isClassLock, customCooldowns, pfp }) => {
         const roomCode = generateRoomCode();
         const playerId = generatePlayerId();
+        const defaultCd = { k: 1000, p: 3500, n: 6500, b: 6500, r: 10000, q: 14000 };
+        const cds = customCooldowns || defaultCd;
+        const classLock = isClassLock !== undefined ? isClassLock : true;
+
         rooms.set(roomCode, {
-            mode: mode || 'class',
+            isClassLock: classLock,
+            customCooldowns: cds,
             players: { w: { socketId: socket.id, playerId, name: playerName, pfp: pfp || '', ready: false, connected: true }, b: null },
             board: JSON.parse(JSON.stringify(INITIAL_CHESS_BOARD)),
             typeCooldowns: null, 
@@ -295,7 +300,7 @@ io.on('connection', (socket) => {
             disconnectTimers: { w: null, b: null }
         });
         socket.join(roomCode);
-        socket.emit('room_created', { roomCode, playerId, color: 'w', mode });
+        socket.emit('room_created', { roomCode, playerId, color: 'w', isClassLock: classLock, customCooldowns: cds });
     });
 
     socket.on('join_room', ({ roomCode, playerName, pfp }) => {
@@ -309,7 +314,7 @@ io.on('connection', (socket) => {
         socket.join(code);
         
         socket.emit('room_joined', { 
-            roomCode: code, playerId, color: 'b', mode: room.mode, 
+            roomCode: code, playerId, color: 'b', isClassLock: room.isClassLock, customCooldowns: room.customCooldowns,
             opponentName: room.players.w.name, opponentPfp: room.players.w.pfp 
         });
         socket.to(code).emit('opponent_joined', { opponentName: playerName, opponentPfp: pfp });
@@ -339,7 +344,8 @@ io.on('connection', (socket) => {
             roomCode: code,
             playerId,
             color: playerColor,
-            mode: room.mode,
+            isClassLock: room.isClassLock,
+            customCooldowns: room.customCooldowns,
             board: room.board,
             typeCooldowns: room.typeCooldowns,
             singleCooldowns: room.singleCooldowns,
@@ -370,13 +376,18 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('ready_update', { playersReady });
         
         if (room.players.w && room.players.b && room.players.w.ready && room.players.b.ready) {
-            if (room.mode === 'class') {
+            if (room.isClassLock) {
                 room.typeCooldowns = { 'w': { 'p':0,'n':0,'b':0,'r':0,'q':0,'k':0 }, 'b': { 'p':0,'n':0,'b':0,'r':0,'q':0,'k':0 } };
             } else {
                 room.singleCooldowns = Array(8).fill(null).map(() => Array(8).fill(0));
             }
             room.isGameStarted = true;
-            io.to(roomCode).emit('start_match_countdown', { typeCooldowns: room.typeCooldowns, singleCooldowns: room.singleCooldowns });
+            io.to(roomCode).emit('start_match_countdown', { 
+                typeCooldowns: room.typeCooldowns, 
+                singleCooldowns: room.singleCooldowns,
+                isClassLock: room.isClassLock,
+                customCooldowns: room.customCooldowns
+            });
         }
     });
 
@@ -398,7 +409,7 @@ io.on('connection', (socket) => {
         const now = Date.now();
         const pieceKey = piece.toLowerCase();
 
-        if (room.mode === 'class') {
+        if (room.isClassLock) {
             if (room.typeCooldowns[color][pieceKey] > now) return socket.emit('error_msg', 'Piece is on cooldown!');
         } else {
             if (room.singleCooldowns[fromR][fromC] > now) return socket.emit('error_msg', 'Square is on cooldown!');
@@ -442,16 +453,12 @@ io.on('connection', (socket) => {
 
         room.board[toR][toC] = finalPiece;
 
-        let cdDuration = 0;
-        if (room.mode === 'fast_single') cdDuration = 2000;
-        else if (pieceKey === 'p') cdDuration = 3500;
-        else if (pieceKey === 'n' || pieceKey === 'b') cdDuration = 6500;
-        else if (pieceKey === 'r') cdDuration = 10000;
-        else if (pieceKey === 'q') cdDuration = 14000;
-        else if (pieceKey === 'k') cdDuration = 1000;
+        const cdDuration = (room.customCooldowns && room.customCooldowns[pieceKey] !== undefined)
+            ? room.customCooldowns[pieceKey]
+            : 3500;
 
         const cdEndTime = now + cdDuration;
-        if (room.mode === 'class') {
+        if (room.isClassLock) {
             room.typeCooldowns[color][finalPiece.toLowerCase()] = cdEndTime;
         } else {
             room.singleCooldowns[toR][toC] = cdEndTime;
