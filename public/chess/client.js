@@ -34,10 +34,33 @@ function updateUIConnectionStatus(status) {
     }
 }
 
+function getSavedSession() {
+    try {
+        const data = sessionStorage.getItem('quick_chess_session');
+        return data ? JSON.parse(data) : null;
+    } catch(e) { return null; }
+}
+
+function saveSession() {
+    if (!roomCode || !playerId || !playerColor) return;
+    sessionStorage.setItem('quick_chess_session', JSON.stringify({
+        roomCode, playerId, playerColor, gameMode, myName, opponentName, opponentPfp
+    }));
+}
+
+function clearSession() {
+    sessionStorage.removeItem('quick_chess_session');
+}
+
 socket.on('connect', () => {
     updateUIConnectionStatus('online');
-    if (isGameStarted && roomCode) {
-        socket.emit('request_sync', { roomCode }); // Zustand nach Reconnect abrufen
+    const saved = getSavedSession();
+    if (saved && saved.roomCode && saved.playerId && saved.playerColor) {
+        socket.emit('reconnect_room', {
+            roomCode: saved.roomCode,
+            playerId: saved.playerId,
+            playerColor: saved.playerColor
+        });
     }
 });
 
@@ -125,7 +148,7 @@ btnReady.onclick = () => {
     btnReady.innerText = 'READY!'; btnReady.classList.add('is-ready'); btnReady.disabled = true;
 };
 
-function leaveGame() { location.reload(); }
+function leaveGame() { clearSession(); location.reload(); }
 function showError(msg) { errorMsg.innerText = msg; }
 
 boardEl.addEventListener('mousemove', (e) => {
@@ -150,6 +173,7 @@ socket.on('opponent_select_square', ({ r, c }) => { opponentSelectedSquare = (r 
 
 socket.on('room_created', (data) => {
     roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode;
+    saveSession();
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
 });
@@ -157,18 +181,71 @@ socket.on('room_created', (data) => {
 socket.on('room_joined', (data) => {
     roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode; 
     opponentName = data.opponentName; opponentPfp = data.opponentPfp;
+    saveSession();
     startGame();
 });
 
+socket.on('room_reconnected', (data) => {
+    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode;
+    board = data.board;
+    if (data.typeCooldowns) typeCooldowns = data.typeCooldowns;
+    if (data.singleCooldowns) singleCooldowns = data.singleCooldowns;
+    isGameStarted = data.isGameStarted;
+    isGameOver = data.isGameOver;
+    opponentName = data.opponentName || opponentName;
+    opponentPfp = data.opponentPfp || opponentPfp;
+
+    saveSession();
+    startGame();
+
+    if (data.playersReady) {
+        data.playersReady.forEach(p => {
+            const badgeEl = document.getElementById(p.color === playerColor ? 'bottom-ready-badge' : 'top-ready-badge');
+            if (p.ready && badgeEl) { badgeEl.innerText = 'READY'; badgeEl.classList.add('ready'); }
+        });
+    }
+
+    if (isGameStarted) {
+        btnReady.innerText = 'READY!'; btnReady.classList.add('is-ready'); btnReady.disabled = true;
+    }
+});
+
 socket.on('opponent_joined', (data) => { 
-    opponentName = data.opponentName; opponentPfp = data.opponentPfp; 
+    opponentName = data.opponentName; opponentPfp = data.opponentPfp;
+    saveSession();
     startGame(); 
+});
+
+socket.on('opponent_disconnected', () => {
+    statusBanner.classList.remove('hidden');
+    statusBannerText.innerText = "Opponent disconnected! Forfeit in 30s...";
+});
+
+socket.on('opponent_reconnected', () => {
+    statusBanner.classList.remove('hidden');
+    statusBannerText.innerText = "Opponent reconnected!";
+    setTimeout(() => { if (!isGameOver) statusBanner.classList.add('hidden'); }, 2000);
+});
+
+socket.on('game_over', ({ winnerColor, reason }) => {
+    isGameOver = true;
+    clearSession();
+    const isWin = (winnerColor === playerColor);
+    saveGameResult('chess', isWin ? 'win' : (winnerColor === null ? 'draw' : 'loss'));
+
+    let text = "";
+    if (winnerColor === null) text = "Draw!";
+    else if (isWin) text = reason === 'disconnect' ? "Victory! Opponent failed to reconnect!" : "Victory! Enemy King captured!";
+    else text = reason === 'disconnect' ? "Defeat by Disconnect!" : "Defeat! Your King was captured!";
+
+    document.getElementById('winner-text').innerText = text;
+    document.getElementById('game-over').style.display = 'flex';
 });
 
 socket.on('ready_update', ({ playersReady }) => {
     playersReady.forEach(p => {
         const badgeEl = document.getElementById(p.color === playerColor ? 'bottom-ready-badge' : 'top-ready-badge');
-        if (p.ready) { badgeEl.innerText = 'READY'; badgeEl.classList.add('ready'); }
+        if (p.ready && badgeEl) { badgeEl.innerText = 'READY'; badgeEl.classList.add('ready'); }
     });
 });
 
@@ -199,7 +276,6 @@ socket.on('apply_move', (moveData) => {
 socket.on('error_msg', (msg) => showError(msg));
 
 function startGame() {
-    isGameStarted = false;
     menuScreen.classList.add('hidden'); lobbyScreen.classList.add('hidden'); gameScreen.classList.remove('hidden');
     
     document.getElementById('my-role-tag').innerText = playerColor === 'w' ? 'WHITE' : 'BLACK';
@@ -387,6 +463,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, promotedTo = null, durati
         
         if (board[toR][toC] && board[toR][toC].toLowerCase() === 'k') {
             isGameOver = true; 
+            clearSession();
             
             // STATS SPEICHERN (QUICKCHESS)
             const isWin = (color === playerColor);
