@@ -40,6 +40,72 @@ if (twitchPfp) {
     pfp.classList.remove('hidden');
 }
 
+// BOT LOCAL SAVE / LOAD HELPERS
+function saveBotState() {
+    if (!gameStarted || isGameOver) return;
+    try {
+        const state = {
+            fen: chess.fen(),
+            clocks,
+            currentBotId,
+            isZenMode,
+            timeControlSeconds,
+            incrementSeconds,
+            gameStarted,
+            isGameOver,
+            chatHistory: document.getElementById('chat-messages').innerHTML
+        };
+        localStorage.setItem('cager_bot_save_state', JSON.stringify(state));
+    } catch (e) {}
+}
+
+function loadBotState() {
+    try {
+        const raw = localStorage.getItem('cager_bot_save_state');
+        if (!raw) return false;
+        const saved = JSON.parse(raw);
+        if (!saved || !saved.fen || saved.isGameOver) return false;
+
+        chess.load(saved.fen);
+        clocks = saved.clocks || clocks;
+        currentBotId = saved.currentBotId || currentBotId;
+        isZenMode = !!saved.isZenMode;
+        timeControlSeconds = saved.timeControlSeconds || 180;
+        incrementSeconds = saved.incrementSeconds || 2;
+        gameStarted = !!saved.gameStarted;
+        isGameOver = !!saved.isGameOver;
+
+        const chatBox = document.getElementById('chat-messages');
+        if (chatBox && saved.chatHistory) {
+            chatBox.innerHTML = saved.chatHistory;
+        }
+
+        const botSelect = document.getElementById('bot-select');
+        if (botSelect) botSelect.value = currentBotId;
+
+        const timeSelect = document.getElementById('time-select');
+        if (timeSelect) timeSelect.value = isZenMode ? 'zen' : timeControlSeconds.toString();
+
+        const incSelect = document.getElementById('inc-select');
+        if (incSelect) incSelect.value = incrementSeconds.toString();
+
+        updateTimeSettings();
+        renderBoard();
+        renderClocks();
+
+        if (gameStarted && !isGameOver) {
+            startClock();
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function clearBotSaveState() {
+    localStorage.removeItem('cager_bot_save_state');
+}
+
 // WISSENSCHAFTLICHE MATHEMATIK (Win%)
 function cpToWinPct(cp) {
     if (cp === undefined || cp === null) return 50.0;
@@ -239,7 +305,6 @@ function getRandomQuote(cat, context = {}) {
     return typeof chosen === 'string' ? chosen : chosen.text;
 }
 
-// 🆕 DYNAMISCHES BOT LADEN (MIT CHESS.COM AVATAR API)
 window.changeBot = function() {
     const selectEl = document.getElementById('bot-select');
     if (!selectEl) return;
@@ -247,7 +312,6 @@ window.changeBot = function() {
     currentBotId = selectEl.value;
     currentBotName = selectEl.options[selectEl.selectedIndex].text;
 
-    // Generiert einen schönen Hex-Farbcode als Fallback!
     let hash = 0;
     for (let i = 0; i < currentBotName.length; i++) {
         hash = currentBotName.charCodeAt(i) + ((hash << 5) - hash);
@@ -255,7 +319,6 @@ window.changeBot = function() {
     currentBotColor = Math.abs(hash).toString(16).substring(0, 6).padStart(6, '0');
     const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentBotName)}&background=${currentBotColor}&color=fff&bold=true`;
 
-    // UI Text aktualisieren
     const botNameEl = document.getElementById('bot-name');
     const chatWelcomeEl = document.getElementById('chat-welcome-name');
     const botAvatarEl = document.getElementById('bot-avatar');
@@ -264,7 +327,6 @@ window.changeBot = function() {
     if(chatWelcomeEl) chatWelcomeEl.innerText = `${currentBotName}:`;
     if(botAvatarEl) botAvatarEl.src = fallbackAvatar;
 
-    // CHESS.COM API ABFRAGE FÜR DAS ECHTE PROFILBILD
     const chessComUsername = currentBotName.replace(/\s+/g, '').toLowerCase();
     
     fetch(`https://api.chess.com/pub/player/${chessComUsername}`)
@@ -276,7 +338,6 @@ window.changeBot = function() {
         })
         .catch(err => console.log("Kein Chess.com Bild gefunden, nutze Fallback."));
 
-    // Hole die Bot-spezifischen JSON-Dateien
     Promise.all([
         fetch(`${currentBotId}-config.json`).then(r => r.json()).catch(() => null),
         fetch(`${currentBotId}-book.json`).then(r => r.json()).catch(() => null)
@@ -287,7 +348,6 @@ window.changeBot = function() {
             const eloEl = document.getElementById('bot-elo');
             if(eloEl) eloEl.innerText = `${elo} ELO`;
             
-            // HYBRIDE ENGINE KONFIGURATION
             if (stockfish) {
                 let skill = Math.round((elo - 1000) / (3000 - 1000) * 20);
                 skill = Math.max(0, Math.min(20, skill));
@@ -308,9 +368,10 @@ window.changeBot = function() {
             cagerBook = {};
         }
 
-        // Restart das Game, wenn wir den Bot wechseln
-        const restartBtn = document.getElementById('btn-restart');
-        if (restartBtn) restartBtn.click();
+        if (!loadBotState()) {
+            const restartBtn = document.getElementById('btn-restart');
+            if (restartBtn) restartBtn.click();
+        }
     });
 };
 
@@ -428,15 +489,17 @@ function updateTimeSettings() {
 
     if (val === 'zen') {
         isZenMode = true;
-        incLabel.style.display = 'none';
+        if (incLabel) incLabel.style.display = 'none';
         document.getElementById('bot-clock').innerText = '∞';
         document.getElementById('player-clock').innerText = '∞';
     } else {
         isZenMode = false;
-        incLabel.style.display = 'flex';
+        if (incLabel) incLabel.style.display = 'flex';
         timeControlSeconds = parseInt(val, 10);
         incrementSeconds = parseInt(document.getElementById('inc-select').value, 10);
-        clocks = { w: timeControlSeconds, b: timeControlSeconds };
+        if (!gameStarted) {
+            clocks = { w: timeControlSeconds, b: timeControlSeconds };
+        }
         renderClocks();
     }
 }
@@ -452,11 +515,13 @@ function startClock() {
         const turn = chess.turn();
         clocks[turn]--;
         renderClocks();
+        saveBotState();
 
         if (clocks[turn] <= 0) {
             clearInterval(clockTimer);
             clockTimer = null;
             isGameOver = true;
+            clearBotSaveState();
             const isPlayerLoss = (turn === 'w');
             saveGameResult('bot', isPlayerLoss ? 'loss' : 'win');
             const winner = isPlayerLoss ? `${currentBotName} (BOT)` : 'You';
@@ -522,7 +587,6 @@ function processSoftmaxDecisionMatrix() {
     const isDirectShortMate = Math.abs(bestMoveEval) >= 18000;
     const isBotWinningMassively = bestWinPct > 95.0 || isDirectShortMate;
     
-    // Komplexe Stellung = Top Züge liegen nah beieinander
     const isComplexPosition = (candidates.length >= 2 && (bestWinPct - cpToWinPct(candidates[1].stockfishEval) < 4.0)) || chess.in_check();
 
     const history = chess.history({ verbose: true });
@@ -534,7 +598,7 @@ function processSoftmaxDecisionMatrix() {
         }
     }
 
-    const evalDelta = evalBeforeBotMove - bestMoveEval; // CP basiert für Tilt-Trigger
+    const evalDelta = evalBeforeBotMove - bestMoveEval;
     const opponentFoundPunish = lastExpectedOpponentReply && (lastPlayerMoveUCI === lastExpectedOpponentReply);
 
     if (evalDelta > 150 && opponentFoundPunish) {
@@ -550,7 +614,6 @@ function processSoftmaxDecisionMatrix() {
     const tunnelVal = psycho.tunnelVisionPercent !== undefined ? psycho.tunnelVisionPercent : errorRates.blundersPercent;
     const triggerTunnelVision = isMinefield && (Math.random() * 100 < tunnelVal);
 
-    // Win% BASIERTER EVAL GUARD FILTER
     const safeCandidates = candidates.filter((cand, index) => {
         const winLoss = Math.max(0, bestWinPct - cpToWinPct(cand.stockfishEval));
 
@@ -558,10 +621,8 @@ function processSoftmaxDecisionMatrix() {
 
         if (triggerTunnelVision && index >= 2 && winLoss <= 25.0) return true; 
 
-        // Absoluter Cutoff: Züge, die > 18% WinChance kosten, werden blockiert
         if (winLoss > 18.0) return false;
 
-        // Mistake Filter (Zwischen 6% und 15% Win Verlust)
         if (winLoss > 6.0) {
             if (winLoss <= 15.0 && (Math.random() * 100 < errorRates.mistakesPercent)) {
                 return true;
@@ -583,12 +644,10 @@ function processSoftmaxDecisionMatrix() {
     const isLowClockPanic = !isZenMode && botRemainingTime < 30;
 
     const scoredMoves = candidatesWithPrinciples.map((cand, idx) => {
-        // CP wird für Score-Aufrechnung behalten, um weiche Temperatur nicht zu zerstören
         let cagerScore = cand.stockfishEval - (cand.principlePenalty || 0);
         const tempBoard = new Chess(chess.fen());
         const moveDetails = tempBoard.move({ from: cand.from, to: cand.to, promotion: cand.promotion });
         
-        // 🛑 STIL-KORRIDOR AUF BASIS VON WIN% (Toleranz: 4% Siegchance)
         const winLoss = Math.max(0, bestWinPct - cpToWinPct(cand.stockfishEval));
         const isPositionallySound = winLoss <= 4.0;
 
@@ -658,7 +717,6 @@ function processSoftmaxDecisionMatrix() {
     evalBeforeBotMove = bestMoveEval;
     lastExpectedOpponentReply = chosenMove.opponentReply || null;
 
-    // KONTEXT-SENSITIVES ZEITMANAGEMENT
     let baseThinkTime = isZenMode ? 400 : Math.max(150, Math.min(800, clocks[currentTurn] * 20));
     if (isComplexPosition && !isLowClockPanic) {
         baseThinkTime += 600; 
@@ -725,12 +783,12 @@ function makeBotMove(moveObj) {
 
     renderBoard();
     renderClocks();
+    saveBotState();
 
     if (move) {
         const toColor = getSquareColor(move.to);
         const capturedPiece = move.captured;
 
-        // Chat check
         if (move.captured) {
             addChatMessage(currentBotName, getRandomQuote('cager_capture', { color: toColor, piece: capturedPiece }));
         } else if (chess.in_check()) {
@@ -811,6 +869,7 @@ function handleSquareClick(r, c) {
             validMoves = [];
             renderBoard();
             renderClocks();
+            saveBotState();
 
             if (move.captured) addChatMessage('You', getRandomQuote('player_capture'));
             if (checkGameOver()) return;
@@ -837,12 +896,14 @@ function addChatMessage(sender, text) {
     msg.innerHTML = `<b>${sender}:</b> ${text}`;
     box.appendChild(msg);
     box.scrollTop = box.scrollHeight;
+    saveBotState();
 }
 
 function checkGameOver() {
     if (chess.in_checkmate()) {
         isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
+        clearBotSaveState();
         
         const isPlayerWin = chess.turn() === 'b';
         saveGameResult('bot', isPlayerWin ? 'win' : 'loss');
@@ -861,6 +922,7 @@ function checkGameOver() {
     if (chess.in_draw() || chess.in_stalemate() || chess.in_threefold_repetition()) {
         isGameOver = true;
         if (clockTimer) clearInterval(clockTimer);
+        clearBotSaveState();
         saveGameResult('bot', 'draw');
         addChatMessage(currentBotName, "GG! A draw. Fair enough.");
         
@@ -879,6 +941,7 @@ document.getElementById('btn-restart').onclick = () => {
     clockTimer = null;
     gameStarted = false;
     isGameOver = false;
+    clearBotSaveState();
     chess.reset();
     selectedSquare = null;
     validMoves = [];
@@ -900,6 +963,7 @@ document.getElementById('btn-undo').onclick = () => {
     chess.undo();
     renderBoard();
     renderClocks();
+    saveBotState();
 };
 
 document.getElementById('btn-resign').onclick = () => {
@@ -910,6 +974,7 @@ document.getElementById('btn-resign').onclick = () => {
             clearInterval(clockTimer);
             clockTimer = null;
         }
+        clearBotSaveState();
         saveGameResult('bot', 'loss');
         addChatMessage(currentBotName, getRandomQuote('cager_resign'));
         alert(`You resigned. ${currentBotName} (BOT) wins!`);
@@ -1053,17 +1118,17 @@ function makeTesterMove(moveStr) {
         if (!isZenMode) clocks['w'] += incrementSeconds;
         renderBoard();
         renderClocks();
+        saveBotState();
 
         if (checkGameOver()) return;
         setTimeout(triggerBotTurn, 300);
     }
 }
 
-// 🆕 INITIALISIERUNG
+// INITIALISIERUNG
+createBoardDOM();
+updateTimeSettings();
+
 setTimeout(() => {
     if(window.changeBot) window.changeBot();
 }, 200);
-
-createBoardDOM();
-updateTimeSettings();
-renderBoard();
