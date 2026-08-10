@@ -185,8 +185,6 @@ socket.on('opponent_mouse_move', ({ xPct, yPct }) => {
         oppCursor.style.left = `${playerColor === 'b' ? (100 - xPct) : xPct}%`;
         oppCursor.style.top = `${playerColor === 'b' ? (100 - yPct) : yPct}%`;
     }
-    const oppNameEl = document.getElementById('opponent-cursor-name');
-    if (oppNameEl) oppNameEl.innerText = opponentName || 'Opponent';
 });
 
 socket.on('opponent_mouse_leave', () => {
