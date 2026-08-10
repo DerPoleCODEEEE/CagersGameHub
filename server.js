@@ -522,7 +522,7 @@ function getPieceColor(pieceArr) {
 }
 
 mutantIo.on('connection', (socket) => {
-    socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions }) => {
+    socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions, allowKingFusion }) => {
         const roomCode = generateRoomCode();
         const playerId = generatePlayerId();
         let hostColor = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
@@ -538,6 +538,7 @@ mutantIo.on('connection', (socket) => {
             clocks: { w: (totalTime || 3) * 60, b: (totalTime || 3) * 60 },
             maxFusions: limitFusions,
             fusionsLeft: { w: limitFusions, b: limitFusions },
+            allowKingFusion: allowKingFusion !== undefined ? allowKingFusion : true,
             lastTurnTimestamp: null,
             hostColor,
             isGameStarted: false,
@@ -549,7 +550,8 @@ mutantIo.on('connection', (socket) => {
         socket.emit('mutant_room_created', { 
             roomCode, playerId, color: hostColor, playerName, pfp,
             timeControl: roomData.timeControl, clocks: roomData.clocks,
-            maxFusions: roomData.maxFusions, fusionsLeft: roomData.fusionsLeft
+            maxFusions: roomData.maxFusions, fusionsLeft: roomData.fusionsLeft,
+            allowKingFusion: roomData.allowKingFusion
         });
     });
 
@@ -571,7 +573,8 @@ mutantIo.on('connection', (socket) => {
             roomCode: code, playerId, color: joinerColor,
             opponentName: opponent ? opponent.name : '', opponentPfp: opponent ? opponent.pfp : '',
             timeControl: room.timeControl, clocks: room.clocks,
-            maxFusions: room.maxFusions, fusionsLeft: room.fusionsLeft
+            maxFusions: room.maxFusions, fusionsLeft: room.fusionsLeft,
+            allowKingFusion: room.allowKingFusion
         });
         socket.to(code).emit('mutant_opponent_joined', { opponentName: playerName, opponentPfp: pfp });
     });
@@ -605,6 +608,7 @@ mutantIo.on('connection', (socket) => {
             clocks: room.clocks,
             fusionsLeft: room.fusionsLeft,
             maxFusions: room.maxFusions,
+            allowKingFusion: room.allowKingFusion,
             isGameStarted: room.isGameStarted,
             isGameOver: room.isGameOver,
             opponentName: opponent ? opponent.name : '',
@@ -687,6 +691,7 @@ mutantIo.on('connection', (socket) => {
             if (combined.includes('q') && (combined.includes('b') || combined.includes('r'))) return socket.emit('error_msg', 'Queen already moves like Bishop and Rook!');
             if (combined.includes('q') && combined.includes('p')) return socket.emit('error_msg', 'Queen cannot merge with Pawn!');
             if (combined.includes('k') && combined.includes('p')) return socket.emit('error_msg', 'King cannot merge with Pawn!');
+            if (combined.includes('k') && !room.allowKingFusion) return socket.emit('error_msg', 'King fusions are disabled in this room!');
             if (room.fusionsLeft[pieceColor] <= 0) return socket.emit('error_msg', 'No fusions remaining!');
             
             if (movingPiece.length + targetPiece.length <= 2) {
