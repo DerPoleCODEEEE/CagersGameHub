@@ -22,7 +22,7 @@
             </div>
             <div style="font-size: 16px; line-height: 1.5; color: #222; text-align: left;">
                 <p><b>1. Match Format</b><br>
-                Play standard classical chess as White against a custom AI opponent modeled after real streamer playstyles and opening knowledge.</p>
+                Play standard classical chess as White or Black against a custom AI opponent modeled after real streamer playstyles and opening knowledge.</p>
 
                 <p><b>2. Bot Opponents</b><br>
                 • <i>TheCager:</i> Plays solid, strategic chess based on thousands of analyzed games.<br>
@@ -84,6 +84,18 @@
                     <select id="bot-select" class="scribble-select" onchange="changeBot()">
                         <option value="cager">TheCager</option>
                         <option value="derschachspielendepole">Derschachspielendepole</option>
+                    </select>
+                </label>
+            </div>
+
+            <!-- COLOR SELECTION -->
+            <div class="stats-section scribble-box">
+                <div class="sidebar-title">🎨 Choose Color</div>
+                <label>
+                    <select id="color-select" class="scribble-select">
+                        <option value="w" selected>White</option>
+                        <option value="b">Black</option>
+                        <option value="random">Random</option>
                     </select>
                 </label>
             </div>
