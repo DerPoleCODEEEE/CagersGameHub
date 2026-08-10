@@ -22,6 +22,10 @@ let currentBotId = 'cager';
 let currentBotName = 'TheCager';
 let currentBotColor = '9b59b6';
 
+// PLAYER & BOT COLOR STATE
+let playerColor = 'w';
+let botColor = 'b';
+
 // PSYCHOLOGY & GAME STATE
 let tiltScore = 0;
 let lastEval = 0;
@@ -55,6 +59,16 @@ if (twitchPfp) {
     pfp.classList.remove('hidden');
 }
 
+function getSelectedPlayerColor() {
+    const select = document.getElementById('color-select');
+    if (!select) return 'w';
+    const val = select.value;
+    if (val === 'random') {
+        return Math.random() < 0.5 ? 'w' : 'b';
+    }
+    return val;
+}
+
 // BOT LOCAL SAVE / LOAD HELPERS
 function saveBotState() {
     if (!gameStarted || isGameOver) return;
@@ -63,6 +77,8 @@ function saveBotState() {
             fen: chess.fen(),
             clocks,
             currentBotId,
+            playerColor,
+            botColor,
             isZenMode,
             timeControlSeconds,
             incrementSeconds,
@@ -84,11 +100,18 @@ function loadBotState() {
         chess.load(saved.fen);
         clocks = saved.clocks || clocks;
         currentBotId = saved.currentBotId || currentBotId;
+        playerColor = saved.playerColor || 'w';
+        botColor = saved.botColor || (playerColor === 'w' ? 'b' : 'w');
         isZenMode = !!saved.isZenMode;
         timeControlSeconds = saved.timeControlSeconds || 180;
         incrementSeconds = saved.incrementSeconds || 2;
         gameStarted = !!saved.gameStarted;
         isGameOver = !!saved.isGameOver;
+
+        const boardEl = document.getElementById('board');
+        if (boardEl) {
+            boardEl.classList.toggle('flipped', playerColor === 'b');
+        }
 
         const chatBox = document.getElementById('chat-messages');
         if (chatBox && saved.chatHistory) {
@@ -97,6 +120,9 @@ function loadBotState() {
 
         const botSelect = document.getElementById('bot-select');
         if (botSelect) botSelect.value = currentBotId;
+
+        const colorSelect = document.getElementById('color-select');
+        if (colorSelect) colorSelect.value = playerColor;
 
         const timeSelect = document.getElementById('time-select');
         if (timeSelect) timeSelect.value = isZenMode ? 'zen' : timeControlSeconds.toString();
@@ -184,7 +210,6 @@ function applySmartPrinciples(candidateMoves, chessObj, profile) {
         const candWinPct = cpToWinPct(cand.stockfishEval);
         const winLoss = Math.max(0, bestWinPct - candWinPct);
 
-        // Taktik bricht Prinzipien (Toleranz: ~5% Siegchance)
         if (winLoss > 5.0) {
             return { ...cand, principlePenalty: 0 };
         }
@@ -537,7 +562,7 @@ function startClock() {
             clockTimer = null;
             isGameOver = true;
             clearBotSaveState();
-            const isPlayerLoss = (turn === 'w');
+            const isPlayerLoss = (turn === playerColor);
             saveGameResult('bot', isPlayerLoss ? 'loss' : 'win');
             const winner = isPlayerLoss ? `${currentBotName} (BOT)` : 'You';
             alert(`Time's up! ${winner} won on time!`);
@@ -547,8 +572,6 @@ function startClock() {
 
 function renderClocks() {
     if (isZenMode) return;
-    const botColor = 'b';
-    const playerColor = 'w';
     const botBox = document.getElementById('bot-clock');
     const playerBox = document.getElementById('player-clock');
 
@@ -793,7 +816,7 @@ function makeBotMove(moveObj) {
     }
 
     if (!isZenMode && gameStarted) {
-        clocks['b'] += incrementSeconds;
+        clocks[botColor] += incrementSeconds;
     }
 
     renderBoard();
@@ -813,7 +836,7 @@ function makeBotMove(moveObj) {
 
     if (checkGameOver()) return;
 
-    if (autoPlayActive && chess.turn() === 'w' && isAdmin) {
+    if (autoPlayActive && chess.turn() === playerColor && isAdmin) {
         setTimeout(triggerTesterTurn, 300);
     }
 }
@@ -865,7 +888,7 @@ function renderBoard() {
 }
 
 function handleSquareClick(r, c) {
-    if (chess.turn() !== 'w' || chess.game_over() || isGameOver || autoPlayActive) return;
+    if (chess.turn() !== playerColor || chess.game_over() || isGameOver || autoPlayActive) return;
 
     const square = String.fromCharCode('a'.charCodeAt(0) + c) + (8 - r);
     const piece = chess.get(square);
@@ -878,7 +901,7 @@ function handleSquareClick(r, c) {
                 startClock();
             }
 
-            if (!isZenMode) clocks['w'] += incrementSeconds;
+            if (!isZenMode) clocks[playerColor] += incrementSeconds;
 
             selectedSquare = null;
             validMoves = [];
@@ -894,7 +917,7 @@ function handleSquareClick(r, c) {
         }
     }
 
-    if (piece && piece.color === 'w') {
+    if (piece && piece.color === playerColor) {
         selectedSquare = square;
         validMoves = chess.moves({ square, verbose: true });
     } else {
@@ -920,7 +943,7 @@ function checkGameOver() {
         if (clockTimer) clearInterval(clockTimer);
         clearBotSaveState();
         
-        const isPlayerWin = chess.turn() === 'b';
+        const isPlayerWin = (chess.turn() === botColor);
         saveGameResult('bot', isPlayerWin ? 'win' : 'loss');
         
         const winner = isPlayerWin ? 'You' : `${currentBotName} (BOT)`;
@@ -957,6 +980,15 @@ document.getElementById('btn-restart').onclick = () => {
     gameStarted = false;
     isGameOver = false;
     clearBotSaveState();
+
+    playerColor = getSelectedPlayerColor();
+    botColor = playerColor === 'w' ? 'b' : 'w';
+
+    const boardEl = document.getElementById('board');
+    if (boardEl) {
+        boardEl.classList.toggle('flipped', playerColor === 'b');
+    }
+
     chess.reset();
     selectedSquare = null;
     validMoves = [];
@@ -967,7 +999,11 @@ document.getElementById('btn-restart').onclick = () => {
     renderBoard();
     addChatMessage(currentBotName, getRandomQuote('start'));
 
-    if (autoPlayActive && isAdmin) {
+    if (playerColor === 'b') {
+        gameStarted = true;
+        startClock();
+        setTimeout(triggerBotTurn, 500);
+    } else if (autoPlayActive && isAdmin) {
         setTimeout(triggerTesterTurn, 500);
     }
 };
@@ -1005,8 +1041,8 @@ document.getElementById('btn-pgn').onclick = () => {
     chess.header('Event', `${currentBotName} Bot Match`);
     chess.header('Site', 'Chess Hub');
     chess.header('Date', new Date().toISOString().split('T')[0].replace(/-/g, '.'));
-    chess.header('White', twitchName || 'You');
-    chess.header('Black', `${currentBotName} (BOT)`);
+    chess.header('White', playerColor === 'w' ? (twitchName || 'You') : `${currentBotName} (BOT)`);
+    chess.header('Black', playerColor === 'b' ? (twitchName || 'You') : `${currentBotName} (BOT)`);
 
     let pgnContent = chess.pgn();
     if (!pgnContent) {
@@ -1015,7 +1051,7 @@ document.getElementById('btn-pgn').onclick = () => {
             if (idx % 2 === 0) moveStr += `${(idx / 2) + 1}. `;
             moveStr += `${m} `;
         });
-        pgnContent = `[Event "${currentBotName} Bot Match"]\n[White "${twitchName || 'You'}"]\n[Black "${currentBotName} (BOT)"]\n\n${moveStr.trim()}`;
+        pgnContent = `[Event "${currentBotName} Bot Match"]\n[White "${playerColor === 'w' ? (twitchName || 'You') : `${currentBotName} (BOT)`}"]\n[Black "${playerColor === 'b' ? (twitchName || 'You') : `${currentBotName} (BOT)`}"]\n\n${moveStr.trim()}`;
     }
 
     const blob = new Blob([pgnContent], { type: 'text/plain;charset=utf-8' });
@@ -1070,7 +1106,7 @@ function initAdminPanel() {
             if (msg.startsWith('bestmove')) {
                 const parts = msg.split(' ');
                 const moveStr = parts[1];
-                if (moveStr && autoPlayActive && chess.turn() === 'w' && !isGameOver) {
+                if (moveStr && autoPlayActive && chess.turn() === playerColor && !isGameOver) {
                     makeTesterMove(moveStr);
                 }
             }
@@ -1103,7 +1139,7 @@ function initAdminPanel() {
             }
 
             if (isGameOver || chess.game_over()) document.getElementById('btn-restart').click();
-            else if (chess.turn() === 'w') triggerTesterTurn();
+            else if (chess.turn() === playerColor) triggerTesterTurn();
         } else {
             btn.innerText = '▶ Auto-Play Starten';
             btn.style.background = '#27ae60';
@@ -1113,7 +1149,7 @@ function initAdminPanel() {
 }
 
 function triggerTesterTurn() {
-    if (!autoPlayActive || chess.turn() !== 'w' || isGameOver || chess.game_over()) return;
+    if (!autoPlayActive || chess.turn() !== playerColor || isGameOver || chess.game_over()) return;
     if (testerStockfish) {
         testerStockfish.postMessage(`position fen ${chess.fen()}`);
         if (testerDepth) testerStockfish.postMessage(`go depth ${testerDepth}`);
@@ -1130,7 +1166,7 @@ function makeTesterMove(moveStr) {
     const move = chess.move({ from, to, promotion });
     if (move) {
         if (!gameStarted) { gameStarted = true; startClock(); }
-        if (!isZenMode) clocks['w'] += incrementSeconds;
+        if (!isZenMode) clocks[playerColor] += incrementSeconds;
         renderBoard();
         renderClocks();
         saveBotState();
