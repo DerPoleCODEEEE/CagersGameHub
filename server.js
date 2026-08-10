@@ -127,16 +127,16 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 // =========================================================
-// 4. STATISCHE ORDNER FÜR DIE GAMES
+// 4. STATIC DIRECTORIES FOR GAMES
 // =========================================================
 app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
-// app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // DEAKTIVIERT FÜR STREAM TEST
+// app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // DISABLED FOR STREAM TEST
 
 // =========================================================
-// 5. CAGERS QUICK CHESS LOGIK & GLOBAL CHAT
+// 5. CAGERS QUICK CHESS LOGIC & GLOBAL CHAT
 // =========================================================
 const rooms = new Map();
 const hubChatHistory = [];
