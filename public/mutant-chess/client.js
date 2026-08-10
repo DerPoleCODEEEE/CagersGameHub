@@ -12,9 +12,36 @@ function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
     .catch(err => console.error('❌ Fehler beim Speichern der Stats:', err));
 }
 
+function getSavedMutantSession() {
+    try {
+        const data = sessionStorage.getItem('mutant_chess_session');
+        return data ? JSON.parse(data) : null;
+    } catch(e) { return null; }
+}
+
+function saveMutantSession() {
+    if (!roomCode || !playerColor || !playerId) return;
+    sessionStorage.setItem('mutant_chess_session', JSON.stringify({
+        roomCode, playerColor, playerId, myName, opponentName, opponentPfp
+    }));
+}
+
+function clearMutantSession() {
+    sessionStorage.removeItem('mutant_chess_session');
+}
+
 socket.on('connect', () => {
     const splash = document.getElementById('splash-screen');
     if (splash) splash.style.display = 'none';
+
+    const saved = getSavedMutantSession();
+    if (saved && saved.roomCode && saved.playerId && saved.playerColor) {
+        socket.emit('reconnect_mutant_room', {
+            roomCode: saved.roomCode,
+            playerId: saved.playerId,
+            playerColor: saved.playerColor
+        });
+    }
 });
 
 // TWITCH DATA
@@ -35,9 +62,9 @@ const timeVal = document.getElementById('time-val');
 const incVal = document.getElementById('inc-val');
 const fusionVal = document.getElementById('fusion-val');
 
-timeRange.oninput = () => timeVal.innerText = timeRange.value;
-incRange.oninput = () => incVal.innerText = incRange.value;
-fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
+if (timeRange) timeRange.oninput = () => timeVal.innerText = timeRange.value;
+if (incRange) incRange.oninput = () => incVal.innerText = incRange.value;
+if (fusionRange) fusionRange.oninput = () => fusionVal.innerText = fusionRange.value;
 
 // STANDARD CHESS PIECES (ONLINE WIKIMEDIA SVGs)
 const PIECES = {
@@ -55,7 +82,7 @@ const PIECES = {
     'k': { img: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
 };
 
-let roomCode = null, playerColor = null;
+let roomCode = null, playerColor = null, playerId = null;
 let myName = '', opponentName = '', opponentPfp = '';
 let selectedSquare = null;
 let validMoves = [], isGameOver = false, isBoardDomCreated = false;
@@ -162,30 +189,65 @@ btnReady.onclick = () => {
     btnReady.innerText = 'READY!'; btnReady.classList.add('is-ready'); btnReady.disabled = true;
 };
 
-function leaveGame() { location.reload(); }
+function leaveGame() { clearMutantSession(); location.reload(); }
 function showError(msg) { errorMsg.innerText = msg; }
 
 socket.on('mutant_room_created', (data) => {
-    roomCode = data.roomCode; playerColor = data.color;
+    roomCode = data.roomCode; playerColor = data.color; playerId = data.playerId;
     if (data.clocks) clocks = data.clocks;
     if (data.maxFusions) maxFusions = data.maxFusions;
     if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
+    saveMutantSession();
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
 });
 
 socket.on('mutant_room_joined', (data) => {
-    roomCode = data.roomCode; playerColor = data.color;
+    roomCode = data.roomCode; playerColor = data.color; playerId = data.playerId;
     opponentName = data.opponentName; opponentPfp = data.opponentPfp;
     if (data.clocks) clocks = data.clocks;
     if (data.maxFusions) maxFusions = data.maxFusions;
     if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
+    saveMutantSession();
     startGame();
+});
+
+socket.on('mutant_room_reconnected', (data) => {
+    roomCode = data.roomCode; playerColor = data.color; playerId = data.playerId;
+    board = data.board;
+    currentTurn = data.turn;
+    if (data.clocks) clocks = data.clocks;
+    if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
+    if (data.maxFusions) maxFusions = data.maxFusions;
+    isGameStarted = data.isGameStarted;
+    isGameOver = data.isGameOver;
+    opponentName = data.opponentName || opponentName;
+    opponentPfp = data.opponentPfp || opponentPfp;
+
+    saveMutantSession();
+    startGame();
+
+    if (isGameStarted) {
+        btnReady.innerText = 'READY!'; btnReady.classList.add('is-ready'); btnReady.disabled = true;
+        startClockTicker();
+    }
 });
 
 socket.on('mutant_opponent_joined', (data) => { 
     opponentName = data.opponentName; opponentPfp = data.opponentPfp; 
+    saveMutantSession();
     startGame(); 
+});
+
+socket.on('mutant_opponent_disconnected', () => {
+    statusBanner.classList.remove('hidden');
+    statusBannerText.innerText = "Opponent disconnected! Forfeit in 30s...";
+});
+
+socket.on('mutant_opponent_reconnected', () => {
+    statusBanner.classList.remove('hidden');
+    statusBannerText.innerText = "Opponent reconnected!";
+    setTimeout(() => { if (!isGameOver) statusBanner.classList.add('hidden'); }, 2000);
 });
 
 socket.on('mutant_opponent_left', () => {
@@ -244,6 +306,7 @@ socket.on('draw_declined', () => {
 socket.on('game_over', ({ winnerColor, reason }) => {
     isGameOver = true;
     clearInterval(clockTimer);
+    clearMutantSession();
     
     let result = 'draw';
     if (winnerColor === null) {
@@ -261,9 +324,9 @@ socket.on('game_over', ({ winnerColor, reason }) => {
     if (winnerColor === null) {
         text = "Draw! (Agreed Draw)";
     } else if (winnerColor === playerColor) {
-        text = reason === 'time' ? "Victory by time out!" : (reason === 'resign' ? "Opponent resigned!" : "Victory! Enemy King destroyed!");
+        text = reason === 'time' ? "Victory by time out!" : (reason === 'resign' ? "Opponent resigned!" : (reason === 'disconnect' ? "Victory! Opponent disconnected!" : "Victory! Enemy King destroyed!"));
     } else {
-        text = reason === 'time' ? "Defeat! Time ran out!" : (reason === 'resign' ? "You resigned." : "Defeat! Your King was destroyed!");
+        text = reason === 'time' ? "Defeat! Time ran out!" : (reason === 'resign' ? "You resigned." : (reason === 'disconnect' ? "Defeat by Disconnect!" : "Defeat! Your King was destroyed!"));
     }
 
     document.getElementById('winner-text').innerText = text;
