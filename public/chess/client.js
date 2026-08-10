@@ -15,6 +15,23 @@ if (rulesModal) {
     rulesModal.onclick = (e) => { if (e.target === rulesModal) rulesModal.style.display = 'none'; };
 }
 
+// SLIDER BINDINGS FOR ROOM CREATION MENU
+const cdSliders = {
+    k: { range: document.getElementById('cd-k-range'), val: document.getElementById('cd-k-val') },
+    p: { range: document.getElementById('cd-p-range'), val: document.getElementById('cd-p-val') },
+    n: { range: document.getElementById('cd-n-range'), val: document.getElementById('cd-n-val') },
+    b: { range: document.getElementById('cd-b-range'), val: document.getElementById('cd-b-val') },
+    r: { range: document.getElementById('cd-r-range'), val: document.getElementById('cd-r-val') },
+    q: { range: document.getElementById('cd-q-range'), val: document.getElementById('cd-q-val') }
+};
+
+Object.keys(cdSliders).forEach(key => {
+    const item = cdSliders[key];
+    if (item.range && item.val) {
+        item.range.oninput = () => { item.val.innerText = parseFloat(item.range.value).toFixed(1); };
+    }
+});
+
 // STATS SPEICHERN HELPER
 function saveGameResult(mode, result) { // result: 'win', 'loss', 'draw'
     fetch('/api/stats/update', {
@@ -59,7 +76,7 @@ function getSavedSession() {
 function saveSession() {
     if (!roomCode || !playerId || !playerColor) return;
     sessionStorage.setItem('quick_chess_session', JSON.stringify({
-        roomCode, playerId, playerColor, gameMode, myName, opponentName, opponentPfp
+        roomCode, playerId, playerColor, isClassLock, customCooldowns, myName, opponentName, opponentPfp
     }));
 }
 
@@ -103,7 +120,9 @@ const INITIAL_BOARD = [
     ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
 ];
 
-let roomCode = null, playerId = null, playerColor = null, gameMode = 'class';
+let roomCode = null, playerId = null, playerColor = null;
+let isClassLock = true;
+let customCooldowns = { k: 1000, p: 3500, n: 6500, b: 6500, r: 10000, q: 14000 };
 let myName = '', opponentName = '', opponentPfp = '';
 let selectedSquare = null, opponentSelectedSquare = null;
 let validMoves = [], isGameOver = false, pendingPromotion = null, enPassantTarget = null, isBoardDomCreated = false;
@@ -137,6 +156,26 @@ const boardEl = document.getElementById('board'), animationLayer = document.getE
 const btnReady = document.getElementById('btn-ready'), statusBanner = document.getElementById('status-banner');
 const statusBannerText = document.getElementById('status-banner-text');
 
+function updatePieceCooldownsFromData(cds) {
+    if (!cds) return;
+    customCooldowns = cds;
+    PIECES['P'].cd = cds.p; PIECES['p'].cd = cds.p;
+    PIECES['N'].cd = cds.n; PIECES['n'].cd = cds.n;
+    PIECES['B'].cd = cds.b; PIECES['b'].cd = cds.b;
+    PIECES['R'].cd = cds.r; PIECES['r'].cd = cds.r;
+    PIECES['Q'].cd = cds.q; PIECES['q'].cd = cds.q;
+    PIECES['K'].cd = cds.k; PIECES['k'].cd = cds.k;
+
+    const formatS = (ms) => (ms / 1000).toFixed(1) + 's';
+    const setLg = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+    setLg('lg-k-val', formatS(cds.k));
+    setLg('lg-p-val', formatS(cds.p));
+    setLg('lg-n-val', formatS(cds.n));
+    setLg('lg-b-val', formatS(cds.b));
+    setLg('lg-r-val', formatS(cds.r));
+    setLg('lg-q-val', formatS(cds.q));
+}
+
 function getVisualCoords(r, c) {
     const rect = boardEl.getBoundingClientRect();
     const squareSize = rect.width / 8;
@@ -145,7 +184,18 @@ function getVisualCoords(r, c) {
 
 document.getElementById('btn-create').onclick = () => {
     myName = document.getElementById('player-name').value.trim() || 'Player 1';
-    socket.emit('create_room', { playerName: myName, mode: document.getElementById('game-mode').value, pfp: twitchPfp });
+    const classLock = document.getElementById('class-lock-check') ? document.getElementById('class-lock-check').checked : true;
+    
+    const cds = {
+        k: parseFloat(cdSliders.k.range.value) * 1000,
+        p: parseFloat(cdSliders.p.range.value) * 1000,
+        n: parseFloat(cdSliders.n.range.value) * 1000,
+        b: parseFloat(cdSliders.b.range.value) * 1000,
+        r: parseFloat(cdSliders.r.range.value) * 1000,
+        q: parseFloat(cdSliders.q.range.value) * 1000
+    };
+
+    socket.emit('create_room', { playerName: myName, isClassLock: classLock, customCooldowns: cds, pfp: twitchPfp });
 };
 
 document.getElementById('btn-join').onclick = () => {
@@ -169,21 +219,27 @@ function showError(msg) { errorMsg.innerText = msg; }
 socket.on('opponent_select_square', ({ r, c }) => { opponentSelectedSquare = (r !== null) ? { r, c } : null; renderBoard(); });
 
 socket.on('room_created', (data) => {
-    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode;
+    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
+    isClassLock = data.isClassLock;
+    updatePieceCooldownsFromData(data.customCooldowns);
     saveSession();
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
 });
 
 socket.on('room_joined', (data) => {
-    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode; 
+    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
+    isClassLock = data.isClassLock;
+    updatePieceCooldownsFromData(data.customCooldowns);
     opponentName = data.opponentName; opponentPfp = data.opponentPfp;
     saveSession();
     startGame();
 });
 
 socket.on('room_reconnected', (data) => {
-    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color; gameMode = data.mode;
+    roomCode = data.roomCode; playerId = data.playerId; playerColor = data.color;
+    isClassLock = data.isClassLock;
+    updatePieceCooldownsFromData(data.customCooldowns);
     board = data.board;
     if (data.typeCooldowns) typeCooldowns = data.typeCooldowns;
     if (data.singleCooldowns) singleCooldowns = data.singleCooldowns;
@@ -247,7 +303,10 @@ socket.on('ready_update', ({ playersReady }) => {
 });
 
 socket.on('start_match_countdown', (data) => {
-    if (gameMode === 'class') typeCooldowns = data.typeCooldowns;
+    if (data.isClassLock !== undefined) isClassLock = data.isClassLock;
+    if (data.customCooldowns) updatePieceCooldownsFromData(data.customCooldowns);
+
+    if (isClassLock) typeCooldowns = data.typeCooldowns;
     else singleCooldowns = data.singleCooldowns;
 
     isGameStarted = false;
@@ -276,16 +335,7 @@ function startGame() {
     menuScreen.classList.add('hidden'); lobbyScreen.classList.add('hidden'); gameScreen.classList.remove('hidden');
     
     document.getElementById('my-role-tag').innerText = playerColor === 'w' ? 'WHITE' : 'BLACK';
-    let modeText = 'CLASS LOCK';
-    if (gameMode === 'single') modeText = 'SINGLE PIECE';
-    if (gameMode === 'fast_single') modeText = 'BLITZ (2S ALL)';
-    document.getElementById('mode-display-tag').innerText = modeText;
-    
-    if (gameMode === 'fast_single') {
-        ['lg-k-val', 'lg-p-val', 'lg-n-val', 'lg-r-val', 'lg-q-val'].forEach(id => {
-            const el = document.getElementById(id); if (el) { el.innerText = '2.0s'; el.className = 'time fast'; }
-        });
-    }
+    document.getElementById('mode-display-tag').innerText = isClassLock ? 'CLASS LOCK' : 'SINGLE PIECE';
     
     document.getElementById('bottom-player-name').innerText = myName + ' (You)';
     document.getElementById('top-player-name').innerText = opponentName || 'Opponent';
@@ -397,7 +447,7 @@ function handleSquareClick(r, c) {
         }
     }
     if (clickedPiece && PIECES[clickedPiece].color === playerColor) {
-        let pieceKey = clickedPiece.toLowerCase(), isOnCooldown = gameMode === 'class' ? (typeCooldowns[playerColor][pieceKey] > now) : (singleCooldowns[r][c] > now);
+        let pieceKey = clickedPiece.toLowerCase(), isOnCooldown = isClassLock ? (typeCooldowns[playerColor][pieceKey] > now) : (singleCooldowns[r][c] > now);
         if (!isOnCooldown) { selectedSquare = { r, c }; validMoves = getValidMoves(r, c); socket.emit('select_square', { roomCode, r, c }); renderBoard(); return; }
     }
     selectedSquare = null; validMoves = []; socket.emit('select_square', { roomCode, r: null, c: null }); renderBoard();
@@ -406,7 +456,7 @@ function handleSquareClick(r, c) {
 function executeMove(fromR, fromC, toR, toC, moveInfo, promotedTo = null, duration = 500) {
     let piece = board[fromR][fromC]; if (!piece) return;
     let pieceChar = promotedTo || piece, color = PIECES[piece].color, finalKey = pieceChar.toLowerCase();
-    let cdDuration = gameMode === 'fast_single' ? 2000 : PIECES[pieceChar].cd, cdEndTime = Date.now() + cdDuration;
+    let cdDuration = PIECES[pieceChar].cd, cdEndTime = Date.now() + cdDuration;
 
     if (piece === 'K') hasMoved['wK'] = true; if (piece === 'k') hasMoved['bK'] = true;
     if (piece === 'R' && fromR === 7 && fromC === 0) hasMoved['wR_left'] = true;
@@ -418,7 +468,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, promotedTo = null, durati
     else enPassantTarget = null;
     if (moveInfo && moveInfo.type === 'en_passant') { board[color === 'w' ? toR + 1 : toR - 1][toC] = null; }
 
-    if (gameMode === 'class') { typeCooldowns[color][finalKey] = cdEndTime; typeCooldownMax[color][finalKey] = cdDuration; }
+    if (isClassLock) { typeCooldowns[color][finalKey] = cdEndTime; typeCooldownMax[color][finalKey] = cdDuration; }
     else singleCooldowns[fromR][fromC] = 0;
 
     const startCoords = getVisualCoords(fromR, fromC), targetCoords = getVisualCoords(toR, toC);
@@ -438,7 +488,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, promotedTo = null, durati
     if (moveInfo && moveInfo.type === 'castle') {
         let row = fromR, rFromC = toC === 6 ? 7 : 0, rToC = toC === 6 ? 5 : 3, rookPiece = board[row][rFromC];
         if (rookPiece) {
-            board[row][rFromC] = null; if (gameMode !== 'class') singleCooldowns[row][rFromC] = 0; renderBoard();
+            board[row][rFromC] = null; if (!isClassLock) singleCooldowns[row][rFromC] = 0; renderBoard();
             const rStart = getVisualCoords(row, rFromC), rTarget = getVisualCoords(row, rToC);
             rookWrapper = document.createElement('div'); rookWrapper.className = 'animating-wrapper';
             rookWrapper.style.left = `${rStart.x}px`; rookWrapper.style.top = `${rStart.y}px`; rookWrapper.style.transitionDuration = `${duration}ms`;
@@ -456,7 +506,7 @@ function executeMove(fromR, fromC, toR, toC, moveInfo, promotedTo = null, durati
         if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
         if (rookWrapper && rookWrapper.parentNode) rookWrapper.parentNode.removeChild(rookWrapper);
         if (moveInfo && moveInfo.type === 'castle') { board[fromR][toC === 6 ? 5 : 3] = color === 'w' ? 'R' : 'r'; }
-        if (gameMode !== 'class') { singleCooldowns[toR][toC] = cdEndTime; singleCooldownMax[toR][toC] = cdDuration; }
+        if (!isClassLock) { singleCooldowns[toR][toC] = cdEndTime; singleCooldownMax[toR][toC] = cdDuration; }
         
         if (board[toR][toC] && board[toR][toC].toLowerCase() === 'k') {
             isGameOver = true; 
@@ -513,8 +563,8 @@ function updateCooldowns() {
             for (let c = 0; c < 8; c++) {
                 let squareEl = boardEl.querySelector(`.square[data-r="${r}"][data-c="${c}"]`), cdBar = document.getElementById(`cd-${r}-${c}`), piece = board[r][c];
                 if (squareEl && cdBar) {
-                    let cdEnd = gameMode === 'class' ? (piece ? typeCooldowns[PIECES[piece].color][piece.toLowerCase()] : 0) : singleCooldowns[r][c];
-                    let maxCd = gameMode === 'class' ? (piece ? typeCooldownMax[PIECES[piece].color][piece.toLowerCase()] : 1000) : singleCooldownMax[r][c];
+                    let cdEnd = isClassLock ? (piece ? typeCooldowns[PIECES[piece].color][piece.toLowerCase()] : 0) : singleCooldowns[r][c];
+                    let maxCd = isClassLock ? (piece ? typeCooldownMax[PIECES[piece].color][piece.toLowerCase()] : 1000) : singleCooldownMax[r][c];
                     if (cdEnd > now) { cdBar.style.width = `${Math.min(100, Math.max(0, ((cdEnd - now) / maxCd) * 100))}%`; squareEl.classList.add('locked'); }
                     else { cdBar.style.width = `0%`; squareEl.classList.remove('locked'); }
                 }
