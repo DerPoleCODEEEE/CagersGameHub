@@ -41,6 +41,7 @@
 
                 <p><b>4. Fusion Rules & Restrictions</b><br>
                 • <i>Fusion Pool:</i> Players have a limited number of Fusions per game (Default: 3, configurable up to 15).<br>
+                • <i>King Fusions:</i> Room creator can enable or disable King Fusions.<br>
                 • <i>Capacity:</i> A maximum of 2 pieces can occupy a single square.<br>
                 • <i>Single-Merge Limit:</i> Fused pieces cannot be merged a second time.<br>
                 • <i>No Duplicate Types:</i> You cannot merge two pieces of the same type (e.g. Knight + Knight).<br>
@@ -89,7 +90,12 @@
             <input type="range" id="fusion-range" min="1" max="15" value="3" class="slider">
         </div>
 
-        <div class="button-group">
+        <div class="input-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+            <input type="checkbox" id="allow-king-fusion" checked style="width: 20px; height: 20px; cursor: pointer; accent-color: #f1c40f;">
+            <label for="allow-king-fusion" style="margin: 0; cursor: pointer; font-size: 18px; font-weight: bold;">Allow King Fusions 👑</label>
+        </div>
+
+        <div class="button-group" style="margin-top: 15px;">
             <button id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
             <div class="divider">or</div>
             <div class="join-box">
