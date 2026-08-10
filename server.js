@@ -380,6 +380,15 @@ io.on('connection', (socket) => {
         }
     });
 
+    // MAUS-TRACKING EVENT LISTENERS (GEFIXT!)
+    socket.on('mouse_move', ({ roomCode, xPct, yPct }) => {
+        socket.to(roomCode).emit('opponent_mouse_move', { xPct, yPct });
+    });
+
+    socket.on('mouse_leave', ({ roomCode }) => {
+        socket.to(roomCode).emit('opponent_mouse_leave');
+    });
+
     socket.on('select_square', ({ roomCode, r, c }) => socket.to(roomCode).emit('opponent_select_square', { r, c }));
     
     socket.on('request_move', (moveData) => {
