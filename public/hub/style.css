@@ -257,7 +257,7 @@ header, main {
 .search-avatar { width: 30px; height: 30px; border: 2px solid #000; border-radius: 50%; object-fit: cover; }
 
 /* =======================================
-   NEUES MAIN-LAYOUT (Spiele + Sidebar)
+   MAIN LAYOUT (Games + Sidebar)
 ======================================= */
 .main-layout {
     display: flex;
@@ -318,7 +318,7 @@ header, main {
 .hof-wins { font-size: 14px; color: #555; font-weight: bold; }
 
 /* =======================================
-   DAS "NEW!" BADGE
+   "NEW!" BADGE
 ======================================= */
 .game-card { position: relative; } 
 
@@ -476,3 +476,50 @@ header, main {
     padding: 8px;
     border-radius: 8px;
 }
+
+/* =======================================
+   SOCIAL BUTTONS STYLES
+======================================= */
+.socials-box {
+    background: #fff;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.socials-title {
+    margin: 0;
+    font-size: 20px;
+    border-bottom: 3px solid #000;
+    padding-bottom: 8px;
+    font-weight: bold;
+}
+
+.socials-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #fff;
+    font-size: 20px;
+    padding: 10px;
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.9);
+    transition: transform 0.1s;
+}
+
+.social-btn:hover {
+    transform: scale(1.03) translateY(-2px);
+}
+
+.twitch-social { background-color: #9146FF; color: #fff; }
+.youtube-social { background-color: #FF0000; color: #fff; }
+.tiktok-social { background-color: #000000; color: #fff; }
+.discord-social { background-color: #5865F2; color: #fff; }
