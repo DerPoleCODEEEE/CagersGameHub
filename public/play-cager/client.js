@@ -2,6 +2,21 @@ const chess = new Chess();
 let cagerBook = null;
 let cagerConfig = null;
 
+// RULES MODAL HANDLERS
+const rulesModal = document.getElementById('rules-modal');
+const btnShowRules = document.getElementById('btn-show-rules');
+const closeRulesBtn = document.getElementById('close-rules-btn');
+
+if (btnShowRules) {
+    btnShowRules.onclick = () => rulesModal.style.display = 'flex';
+}
+if (closeRulesBtn) {
+    closeRulesBtn.onclick = () => rulesModal.style.display = 'none';
+}
+if (rulesModal) {
+    rulesModal.onclick = (e) => { if (e.target === rulesModal) rulesModal.style.display = 'none'; };
+}
+
 // DYNAMISCHES BOT-STATE
 let currentBotId = 'cager';
 let currentBotName = 'TheCager';
