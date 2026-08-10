@@ -136,10 +136,18 @@ app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager'))
 // app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // DISABLED FOR STREAM TEST
 
 // =========================================================
-// 5. CAGERS QUICK CHESS LOGIC & GLOBAL CHAT
+// 5. CAGERS QUICK CHESS LOGIC, GLOBAL CHAT & ONLINE COUNTER
 // =========================================================
 const rooms = new Map();
 const hubChatHistory = [];
+
+function broadcastOnlineCount() {
+    const count = io.engine.clientsCount;
+    io.emit('online_players_count', count);
+}
+
+// Automatic broadcast update every 30 seconds
+setInterval(broadcastOnlineCount, 30000);
 
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 function generatePlayerId() { return Math.random().toString(36).substring(2, 12); }
@@ -257,6 +265,13 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved, activeEffec
 }
 
 io.on('connection', (socket) => {
+    // Broadcast updated player count on connection
+    broadcastOnlineCount();
+
+    socket.on('disconnect', () => {
+        broadcastOnlineCount();
+    });
+
     // --- GLOBAL HUB CHAT EVENTS ---
     socket.emit('hub_chat_history', hubChatHistory);
 
