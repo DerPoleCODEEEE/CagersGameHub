@@ -113,6 +113,7 @@ let hasMoved = { wK: false, wR_left: false, wR_right: false, bK: false, bR_left:
 
 let maxFusions = 3;
 let fusionsLeft = { w: 3, b: 3 };
+let allowKingFusion = true;
 
 let board = [
     [['r'], ['n'], ['b'], ['q'], ['k'], ['b'], ['n'], ['r']],
@@ -162,9 +163,10 @@ document.getElementById('btn-create').onclick = () => {
     const totalTime = parseInt(timeRange.value, 10);
     const increment = parseInt(incRange.value, 10);
     const maxF = parseInt(fusionRange.value, 10);
+    const allowKF = document.getElementById('allow-king-fusion') ? document.getElementById('allow-king-fusion').checked : true;
 
     socket.emit('create_mutant_room', { 
-        playerName: myName, pfp: twitchPfp, colorChoice, totalTime, increment, maxFusions: maxF 
+        playerName: myName, pfp: twitchPfp, colorChoice, totalTime, increment, maxFusions: maxF, allowKingFusion: allowKF
     });
 };
 
@@ -212,6 +214,7 @@ socket.on('mutant_room_created', (data) => {
     if (data.clocks) clocks = data.clocks;
     if (data.maxFusions) maxFusions = data.maxFusions;
     if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
+    if (data.allowKingFusion !== undefined) allowKingFusion = data.allowKingFusion;
     saveMutantSession();
     menuScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden');
     document.getElementById('display-room-code').innerText = roomCode;
@@ -223,6 +226,7 @@ socket.on('mutant_room_joined', (data) => {
     if (data.clocks) clocks = data.clocks;
     if (data.maxFusions) maxFusions = data.maxFusions;
     if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
+    if (data.allowKingFusion !== undefined) allowKingFusion = data.allowKingFusion;
     saveMutantSession();
     startGame();
 });
@@ -234,6 +238,7 @@ socket.on('mutant_room_reconnected', (data) => {
     if (data.clocks) clocks = data.clocks;
     if (data.fusionsLeft) fusionsLeft = data.fusionsLeft;
     if (data.maxFusions) maxFusions = data.maxFusions;
+    if (data.allowKingFusion !== undefined) allowKingFusion = data.allowKingFusion;
     isGameStarted = data.isGameStarted;
     isGameOver = data.isGameOver;
     opponentName = data.opponentName || opponentName;
@@ -494,8 +499,9 @@ function getValidMoves(r, c) {
                                 const hasSameType = new Set(combined).size !== combined.length;
                                 const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
                                 const isKingPawn = combined.includes('k') && combined.includes('p');
+                                const isKingDisabled = combined.includes('k') && !allowKingFusion;
                                 
-                                if (!hasSameType && !isRedundantQueen && !isKingPawn) {
+                                if (!hasSameType && !isRedundantQueen && !isKingPawn && !isKingDisabled) {
                                     moves.push({ r: nr, c: nc, type: 'merge' });
                                 }
                             }
@@ -527,8 +533,9 @@ function getValidMoves(r, c) {
                                     const hasSameType = new Set(combined).size !== combined.length;
                                     const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
                                     const isKingPawn = combined.includes('k') && combined.includes('p');
+                                    const isKingDisabled = combined.includes('k') && !allowKingFusion;
 
-                                    if (!hasSameType && !isRedundantQueen && !isKingPawn) {
+                                    if (!hasSameType && !isRedundantQueen && !isKingPawn && !isKingDisabled) {
                                         moves.push({ r: targetR, c: targetC, type: 'merge' });
                                     }
                                 }
@@ -560,8 +567,9 @@ function getValidMoves(r, c) {
                                 const hasSameType = new Set(combined).size !== combined.length;
                                 const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
                                 const isKingPawn = combined.includes('k') && combined.includes('p');
+                                const isKingDisabled = combined.includes('k') && !allowKingFusion;
 
-                                if (!hasSameType && !isRedundantQueen && !isKingPawn) {
+                                if (!hasSameType && !isRedundantQueen && !isKingPawn && !isKingDisabled) {
                                     moves.push({ r: nr, c: nc, type: 'merge' });
                                 }
                             }
@@ -586,8 +594,9 @@ function getValidMoves(r, c) {
                                 const hasSameType = new Set(combined).size !== combined.length;
                                 const isRedundantQueen = combined.includes('q') && (combined.includes('b') || combined.includes('r') || combined.includes('p'));
                                 const isKingPawn = combined.includes('k') && combined.includes('p');
+                                const isKingDisabled = combined.includes('k') && !allowKingFusion;
 
-                                if (!hasSameType && !isRedundantQueen && !isKingPawn) {
+                                if (!hasSameType && !isRedundantQueen && !isKingPawn && !isKingDisabled) {
                                     moves.push({ r: nr, c: nc, type: 'merge' });
                                 }
                             }
