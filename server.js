@@ -136,9 +136,11 @@ app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager'))
 // app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // DEAKTIVIERT FÜR STREAM TEST
 
 // =========================================================
-// 5. CAGERS QUICK CHESS LOGIK
+// 5. CAGERS QUICK CHESS LOGIK & GLOBAL CHAT
 // =========================================================
 const rooms = new Map();
+const hubChatHistory = [];
+
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
 function generatePlayerId() { return Math.random().toString(36).substring(2, 12); }
 
@@ -255,6 +257,28 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved, activeEffec
 }
 
 io.on('connection', (socket) => {
+    // --- GLOBAL HUB CHAT EVENTS ---
+    socket.emit('hub_chat_history', hubChatHistory);
+
+    socket.on('send_hub_chat', ({ text, user }) => {
+        if (!text || !user || !user.name) return;
+        const cleanText = text.trim().substring(0, 150);
+        if (!cleanText) return;
+
+        const newMsg = {
+            name: user.name,
+            pfp: user.pfp || '',
+            text: cleanText,
+            timestamp: Date.now()
+        };
+
+        hubChatHistory.push(newMsg);
+        if (hubChatHistory.length > 50) hubChatHistory.shift();
+
+        io.emit('receive_hub_chat', newMsg);
+    });
+
+    // --- QUICK CHESS ROOM EVENTS ---
     socket.on('create_room', ({ playerName, mode, pfp }) => {
         const roomCode = generateRoomCode();
         const playerId = generatePlayerId();
