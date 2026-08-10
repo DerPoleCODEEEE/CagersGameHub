@@ -22,6 +22,39 @@
         </div>
     </div>
 
+    <!-- RULES MODAL OVERLAY -->
+    <div id="rules-modal" class="modal-overlay" style="display: none; position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+        <div class="scribble-box" style="padding: 25px; max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; background: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
+                <h2 style="margin: 0; font-size: 28px;">🧬 Mutant Merge Rulebook</h2>
+                <button id="close-rules-btn" class="btn btn-danger scribble-btn" style="width: auto; padding: 4px 12px;">❌</button>
+            </div>
+            <div style="font-size: 16px; line-height: 1.5; color: #222; text-align: left;">
+                <p><b>1. Piece Fusion Mechanism</b><br>
+                On your turn, instead of making a regular move, you can move one of your pieces onto a square occupied by another friendly piece to merge them into a single "Mutant" piece.</p>
+
+                <p><b>2. Mutant Movement</b><br>
+                A Mutant inherits the combined legal movement patterns of both constituent pieces. For example, a Knight + Rook Mutant can leap over pieces like a Knight OR slide in straight lines like a Rook!</p>
+
+                <p><b>3. Fused Queen Symbiosis</b><br>
+                When a Rook and a Bishop merge, they transform directly into a Fused Queen (`Q_fused`) with a unique glowing purple aura.</p>
+
+                <p><b>4. Fusion Rules & Restrictions</b><br>
+                • <i>Fusion Pool:</i> Players have a limited number of Fusions per game (Default: 3, configurable up to 15).<br>
+                • <i>Capacity:</i> A maximum of 2 pieces can occupy a single square.<br>
+                • <i>Single-Merge Limit:</i> Fused pieces cannot be merged a second time.<br>
+                • <i>No Duplicate Types:</i> You cannot merge two pieces of the same type (e.g. Knight + Knight).<br>
+                • <i>Forbidden Unions:</i> Queens cannot merge with Rooks, Bishops, or Pawns. Kings cannot merge with Pawns.</p>
+
+                <p><b>5. Pawn Promotions</b><br>
+                Only pure, non-fused Pawns reaching the 8th rank can promote. Fused Pawns cannot be promoted.</p>
+
+                <p><b>6. Instant Victory</b><br>
+                Capturing the opponent's King (or any Mutant containing the enemy King) results in an immediate victory!</p>
+            </div>
+        </div>
+    </div>
+
     <!-- Menu Screen -->
     <div id="menu-screen" class="card scribble-box">
         <h1>Mutant Merge Chess</h1>
@@ -85,7 +118,7 @@
                     <span id="status-banner-text">Prepare for Battle!</span>
                 </div>
 
-                <!-- Opponent Bar with Clock & Fusion Dots -->
+                <!-- Opponent Bar -->
                 <div class="player-bar top">
                     <div class="player-info">
                         <img id="top-pfp" class="chess-avatar hidden" src="">
@@ -103,7 +136,7 @@
                     </div>
                 </div>
 
-                <!-- Player Bar with Clock & Fusion Dots -->
+                <!-- Player Bar -->
                 <div class="player-bar bottom">
                     <div class="player-info">
                         <img id="bottom-pfp" class="chess-avatar hidden" src="">
@@ -147,6 +180,8 @@
 
                 <button id="btn-ready" class="btn btn-ready scribble-btn">I AM READY!</button>
 
+                <button id="btn-show-rules" class="btn scribble-btn" style="background: #f1c40f; margin-bottom: 15px;">📜 Full Rules</button>
+
                 <!-- Move History -->
                 <div class="history-section scribble-box">
                     <div class="sidebar-title" style="margin-bottom: 5px;">Move History</div>
@@ -157,15 +192,6 @@
                 <div id="game-actions" class="actions-row">
                     <button id="btn-offer-draw" class="btn btn-secondary scribble-btn">Draw</button>
                     <button id="btn-resign" class="btn btn-danger scribble-btn">Resign</button>
-                </div>
-
-                <div class="rules-section">
-                    <div class="sidebar-title" style="margin-bottom: 8px;">Mutant Rules</div>
-                    <ul class="rules-list">
-                        <li>🧬 <b>Fusion:</b> Merge 2 different friendly pieces! (No Pawns with Queen/King, no Q+B/R).</li>
-                        <li>♟️ <b>Promotions:</b> Only <i>pure pawns</i> can promote — fused pawns cannot.</li>
-                        <li>👑 <b>King Survival:</b> Capture the enemy King to win instantly!</li>
-                    </ul>
                 </div>
 
                 <button id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn">Leave Game</button>
