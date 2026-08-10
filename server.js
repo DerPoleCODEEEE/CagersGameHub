@@ -511,6 +511,12 @@ mutantIo.on('connection', (socket) => {
             room.clocks[pieceColor] = Math.max(0, room.clocks[pieceColor] - elapsedSeconds + room.timeControl.increment);
         }
         room.lastTurnTimestamp = now;
+
+        if (room.clocks[pieceColor] <= 0) {
+            mutantIo.to(code).emit('game_over', { winnerColor: pieceColor === 'w' ? 'b' : 'w', reason: 'time' });
+            return;
+        }
+
         const targetPiece = room.board[toR][toC];
         
         if (moveInfo && moveInfo.type === 'castle') {
@@ -564,6 +570,38 @@ mutantIo.on('connection', (socket) => {
             fromR, fromC, toR, toC, moveInfo, board: room.board, nextTurn: room.turn,
             clocks: room.clocks, fusionsLeft: room.fusionsLeft
         });
+    });
+
+    socket.on('time_out', ({ roomCode, loserColor }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = mutantRooms.get(code);
+        if (!room) return;
+        const winnerColor = loserColor === 'w' ? 'b' : 'w';
+        mutantIo.to(code).emit('game_over', { winnerColor, reason: 'time' });
+    });
+
+    socket.on('resign_game', ({ roomCode }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        const room = mutantRooms.get(code);
+        if (!room) return;
+        const resigningColor = (room.players.w && room.players.w.id === socket.id) ? 'w' : ((room.players.b && room.players.b.id === socket.id) ? 'b' : null);
+        if (!resigningColor) return;
+        const winnerColor = resigningColor === 'w' ? 'b' : 'w';
+        mutantIo.to(code).emit('game_over', { winnerColor, reason: 'resign' });
+    });
+
+    socket.on('offer_draw', ({ roomCode }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        socket.to(code).emit('draw_offered');
+    });
+
+    socket.on('respond_draw', ({ roomCode, accepted }) => {
+        const code = roomCode ? roomCode.toUpperCase() : '';
+        if (accepted) {
+            mutantIo.to(code).emit('game_over', { winnerColor: null, reason: 'draw' });
+        } else {
+            socket.to(code).emit('draw_declined');
+        }
     });
 
     socket.on('disconnecting', () => {
