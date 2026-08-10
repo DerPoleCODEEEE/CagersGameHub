@@ -14,8 +14,14 @@
     <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
     
     <header class="scribble-box header-box">
-        <div class="logo">
-            <h1>Cagers Game Hub</h1>
+        <div class="header-left">
+            <div id="online-counter" class="online-counter-badge scribble-box">
+                <span class="online-dot"></span>
+                <span id="online-count">1</span> Online
+            </div>
+            <div class="logo">
+                <h1>Cagers Game Hub</h1>
+            </div>
         </div>
         
         <div style="display:flex; align-items:center; gap:25px; flex-wrap: wrap; justify-content: flex-end;">
@@ -114,7 +120,7 @@
                     <a href="https://www.youtube.com/channel/UCYNSMm_gntnzU7e_1RAasCQ/videos" target="_blank" rel="noopener noreferrer" class="btn scribble-btn social-btn youtube-social">
                         ▶ YouTube
                     </a>
-                    <a href="https://tiktok.com/@the_cager" target="_blank" rel="noopener noreferrer" class="btn scribble-btn social-btn tiktok-social">
+                    <a href="https://tiktok.com/the_cager" target="_blank" rel="noopener noreferrer" class="btn scribble-btn social-btn tiktok-social">
                         🎵 TikTok
                     </a>
                     <a href="https://discord.com/invite/SAqkJJzRvh" target="_blank" rel="noopener noreferrer" class="btn scribble-btn social-btn discord-social">
@@ -364,13 +370,18 @@
             .catch(err => console.error("Leaderboard Error:", err));
 
         // ==========================================
-        // GLOBAL HUB CHAT SYSTEM
+        // GLOBAL HUB CHAT SYSTEM & ONLINE COUNTER
         // ==========================================
         const hubSocket = io();
         const chatBox = document.getElementById('hub-chat-box');
         const chatToggleBtn = document.getElementById('hub-chat-toggle-btn');
         const chatMessages = document.getElementById('hub-chat-messages');
         const chatInputArea = document.getElementById('hub-chat-input-area');
+
+        hubSocket.on('online_players_count', (count) => {
+            const countEl = document.getElementById('online-count');
+            if (countEl) countEl.innerText = count || 1;
+        });
 
         chatToggleBtn.addEventListener('click', () => {
             chatBox.classList.toggle('collapsed');
