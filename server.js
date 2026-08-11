@@ -28,12 +28,20 @@ if (process.env.MONGODB_URI) {
 // =========================================================
 // 2. SESSION & TWITCH LOGIN
 // =========================================================
-app.use(session({
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'thecager_geheim_123',
-    resave: false, saveUninitialized: false
-}));
+    resave: false, 
+    saveUninitialized: false
+});
+
+app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Share session with Socket.IO
+io.engine.use(sessionMiddleware);
+io.engine.use(passport.initialize());
+io.engine.use(passport.session());
 
 if (process.env.TWITCH_CLIENT_ID) {
     passport.use(new TwitchStrategy({
@@ -133,7 +141,6 @@ app.use(express.static(path.join(__dirname, 'public/hub')));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess')));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess')));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager')));
-// app.use('/chaos-chess', express.static(path.join(__dirname, 'public/chaos-chess'))); // DISABLED FOR STREAM TEST
 
 // =========================================================
 // 5. CAGERS QUICK CHESS LOGIC, GLOBAL CHAT & ONLINE COUNTER
@@ -146,7 +153,6 @@ function broadcastOnlineCount() {
     io.emit('online_players_count', count);
 }
 
-// Automatic broadcast update every 30 seconds
 setInterval(broadcastOnlineCount, 30000);
 
 function generateRoomCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
@@ -264,25 +270,49 @@ function getServerValidMoves(board, r, c, enPassantTarget, hasMoved, activeEffec
     return moves;
 }
 
+// RATE LIMITER MAP
+const socketRateLimits = new Map();
+
+function checkRateLimit(socketId) {
+    const now = Date.now();
+    const userLimit = socketRateLimits.get(socketId) || { count: 0, resetTime: now + 1000 };
+
+    if (now > userLimit.resetTime) {
+        userLimit.count = 1;
+        userLimit.resetTime = now + 1000;
+    } else {
+        userLimit.count++;
+    }
+
+    socketRateLimits.set(socketId, userLimit);
+    return userLimit.count <= 12; // Max 10-12 events per second
+}
+
 io.on('connection', (socket) => {
-    // Broadcast updated player count on connection
     broadcastOnlineCount();
 
     socket.on('disconnect', () => {
+        socketRateLimits.delete(socket.id);
         broadcastOnlineCount();
     });
 
-    // --- GLOBAL HUB CHAT EVENTS ---
     socket.emit('hub_chat_history', hubChatHistory);
 
-    socket.on('send_hub_chat', ({ text, user }) => {
-        if (!text || !user || !user.name) return;
+    socket.on('send_hub_chat', ({ text }) => {
+        if (!checkRateLimit(socket.id)) return;
+
+        // Secure Chat User via Passport Session
+        const reqUser = socket.request.user;
+        const senderName = reqUser ? reqUser.displayName : 'Guest';
+        const senderPfp = reqUser ? reqUser.profileImageUrl : '';
+
+        if (!text) return;
         const cleanText = text.trim().substring(0, 150);
         if (!cleanText) return;
 
         const newMsg = {
-            name: user.name,
-            pfp: user.pfp || '',
+            name: senderName,
+            pfp: senderPfp,
             text: cleanText,
             timestamp: Date.now()
         };
@@ -293,8 +323,8 @@ io.on('connection', (socket) => {
         io.emit('receive_hub_chat', newMsg);
     });
 
-    // --- QUICK CHESS ROOM EVENTS ---
     socket.on('create_room', ({ playerName, isClassLock, customCooldowns, pfp }) => {
+        if (!checkRateLimit(socket.id)) return;
         const roomCode = generateRoomCode();
         const playerId = generatePlayerId();
         const defaultCd = { k: 1000, p: 3500, n: 6500, b: 6500, r: 10000, q: 14000 };
@@ -319,6 +349,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('join_room', ({ roomCode, playerName, pfp }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = rooms.get(code);
         if (!room) return socket.emit('error_msg', 'Room not found!');
@@ -336,6 +367,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('reconnect_room', ({ roomCode, playerId, playerColor }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = rooms.get(code);
         if (!room || !room.players[playerColor]) return socket.emit('error_msg', 'Room or session expired!');
@@ -378,6 +410,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('player_ready', ({ roomCode, playerId }) => {
+        if (!checkRateLimit(socket.id)) return;
         const room = rooms.get(roomCode);
         if (!room) return;
         if (room.players.w && room.players.w.playerId === playerId) room.players.w.ready = true;
@@ -409,6 +442,7 @@ io.on('connection', (socket) => {
     socket.on('select_square', ({ roomCode, r, c }) => socket.to(roomCode).emit('opponent_select_square', { r, c }));
     
     socket.on('request_move', (moveData) => {
+        if (!checkRateLimit(socket.id)) return;
         const room = rooms.get(moveData.roomCode);
         if (!room || !room.board || room.isGameOver) return;
 
@@ -510,7 +544,7 @@ io.on('connection', (socket) => {
 });
 
 // =========================================================
-// 6. MUTANT MERGE CHESS
+// 6. MUTANT MERGE CHESS (SECURED)
 // =========================================================
 const mutantIo = io.of('/mutant-chess');
 const mutantRooms = new Map();
@@ -544,7 +578,9 @@ function getPieceColor(pieceArr) {
 }
 
 mutantIo.on('connection', (socket) => {
+
     socket.on('create_mutant_room', ({ playerName, pfp, colorChoice, totalTime, increment, maxFusions, allowKingFusion }) => {
+        if (!checkRateLimit(socket.id)) return;
         const roomCode = generateRoomCode();
         const playerId = generatePlayerId();
         let hostColor = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
@@ -578,6 +614,7 @@ mutantIo.on('connection', (socket) => {
     });
 
     socket.on('join_mutant_room', ({ roomCode, playerName, pfp }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room) return socket.emit('error_msg', 'Room not found!');
@@ -602,6 +639,7 @@ mutantIo.on('connection', (socket) => {
     });
 
     socket.on('reconnect_mutant_room', ({ roomCode, playerId, playerColor }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room || !room.players[playerColor]) return socket.emit('error_msg', 'Room or session expired!');
@@ -645,6 +683,7 @@ mutantIo.on('connection', (socket) => {
     });
 
     socket.on('player_ready', ({ roomCode }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room) return;
@@ -666,14 +705,20 @@ mutantIo.on('connection', (socket) => {
     });
 
     socket.on('request_mutant_move', ({ roomCode, fromR, fromC, toR, toC, moveInfo, promotedTo }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room || room.isGameOver) return;
+
+        // STRICT SOCKET IDENTITY CHECK: Verify socket belongs to the active turn color
+        const senderColor = (room.players.w && room.players.w.socketId === socket.id) ? 'w' : ((room.players.b && room.players.b.socketId === socket.id) ? 'b' : null);
+        if (!senderColor || senderColor !== room.turn) return socket.emit('error_msg', 'Not your turn!');
+
         const movingPiece = room.board[fromR][fromC];
-        if (!movingPiece) return;
+        if (!movingPiece) return socket.emit('error_msg', 'No piece at source square!');
         
         const pieceColor = getPieceColor(movingPiece);
-        if (room.turn !== pieceColor) return;
+        if (pieceColor !== senderColor) return socket.emit('error_msg', 'Not your piece!');
         
         const now = Date.now();
         if (room.lastTurnTimestamp) {
@@ -745,16 +790,26 @@ mutantIo.on('connection', (socket) => {
         });
     });
 
-    socket.on('time_out', ({ roomCode, loserColor }) => {
+    socket.on('time_out', ({ roomCode }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room || room.isGameOver) return;
-        room.isGameOver = true;
-        const winnerColor = loserColor === 'w' ? 'b' : 'w';
-        mutantIo.to(code).emit('game_over', { winnerColor, reason: 'time' });
+
+        const senderColor = (room.players.w && room.players.w.socketId === socket.id) ? 'w' : ((room.players.b && room.players.b.socketId === socket.id) ? 'b' : null);
+        if (!senderColor) return;
+
+        // Verify clock genuinely ran out
+        if (room.clocks[senderColor] <= 0 || room.clocks[senderColor === 'w' ? 'b' : 'w'] <= 0) {
+            room.isGameOver = true;
+            const loserColor = room.clocks['w'] <= 0 ? 'w' : 'b';
+            const winnerColor = loserColor === 'w' ? 'b' : 'w';
+            mutantIo.to(code).emit('game_over', { winnerColor, reason: 'time' });
+        }
     });
 
     socket.on('resign_game', ({ roomCode }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
         if (!room || room.isGameOver) return;
@@ -766,14 +821,21 @@ mutantIo.on('connection', (socket) => {
     });
 
     socket.on('offer_draw', ({ roomCode }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         socket.to(code).emit('draw_offered');
     });
 
     socket.on('respond_draw', ({ roomCode, accepted }) => {
+        if (!checkRateLimit(socket.id)) return;
         const code = roomCode ? roomCode.toUpperCase() : '';
         const room = mutantRooms.get(code);
-        if (accepted && room) {
+        if (!room) return;
+
+        const senderColor = (room.players.w && room.players.w.socketId === socket.id) ? 'w' : ((room.players.b && room.players.b.socketId === socket.id) ? 'b' : null);
+        if (!senderColor) return;
+
+        if (accepted && !room.isGameOver) {
             room.isGameOver = true;
             mutantIo.to(code).emit('game_over', { winnerColor: null, reason: 'draw' });
         } else {
@@ -807,7 +869,7 @@ mutantIo.on('connection', (socket) => {
 });
 
 // =========================================================
-// 8. SERVER BINDING
+// 7. SERVER BINDING
 // =========================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
