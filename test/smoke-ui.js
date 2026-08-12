@@ -172,6 +172,9 @@ function isInternalError(text) {
     await a.keyboard.press('Enter');
     await a.waitForTimeout(200);
     log(await a.locator('#board .square.selected').count() === 1, 'Auswahl per Tastatur funktioniert');
+    // Quick Chess bleibt bewusst ohne Zeichenpfeile — dort zaehlt jede Millisekunde.
+    log(await a.evaluate(() => typeof window.BoardArrows === 'undefined'),
+        'Quick Chess hat bewusst keine Zeichenpfeile');
     await a.keyboard.press('Escape');
 
     // Reconnect: Rochade-Rechte müssen erhalten bleiben
@@ -195,6 +198,7 @@ function isInternalError(text) {
     await m.click('#btn-create');
     await m.waitForSelector('#lobby-screen:not(.hidden)', { timeout: 5000 });
     log(true, 'Mutant-Lobby erreichbar');
+    log(await m.evaluate(() => typeof window.BoardArrows === 'object'), 'board-arrows.js in Mutant geladen');
 
     // =====================================================================
     console.log('\n— VS Cager Bot —');
