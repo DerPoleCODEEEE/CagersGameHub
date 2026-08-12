@@ -11,6 +11,11 @@
 
 (function () {
 
+    // Damit man in der Konsole sofort sieht, welche Fassung geladen ist.
+    const CLIENT_VERSION = '2026-08-12c';
+    window.PREDICTION_VERSION = CLIENT_VERSION;
+    console.info('Prediction Chess Client ' + CLIENT_VERSION);
+
     /**
      * Fehlende oder veraltete gemeinsame Dateien duerfen nicht in einer stumm
      * toten Seite enden. Vorher war das Symptom: Tipps liessen sich zeichnen,
@@ -28,8 +33,10 @@
         h.textContent = 'Prediction Chess cannot start.';
         h.style.cssText = 'display:block;font-size:20px;margin-bottom:6px';
         const p = document.createElement('div');
-        p.textContent = 'These files are missing or out of date on the server: ' +
-            missing.join(', ') + '. Upload the current version and reload.';
+        p.textContent = 'These files are missing or out of date: ' + missing.join(', ') +
+            '. If you just deployed, this is usually a stale browser cache — ' +
+            'reload with Ctrl+Shift+R (Cmd+Shift+R on Mac). Otherwise upload the ' +
+            'current version of the file.';
         box.appendChild(h); box.appendChild(p);
         document.body.appendChild(box);
         console.error('Prediction Chess: veraltete/fehlende Dateien:', missing.join(', '));
