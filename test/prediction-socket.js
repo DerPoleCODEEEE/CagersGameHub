@@ -186,6 +186,67 @@ async function play(sock, otherSock, code, from, to, prediction, extra) {
     g.w.close(); g.b.close();
 
     // =================================================================
+    console.log('\n— Zug-Items —');
+    g = await newGame();
+
+    // Rekrut ohne Tipp: abgelehnt, weil er den Zug verbraucht
+    err = once(g.w, 'error_msg', 2500);
+    g.w.emit('buy_item', { roomCode: g.code, itemId: 'recruit', targets: [{ r: 5, c: 3 }] });
+    log(/call your opponent/i.test(await err), 'Zug-Item ohne Tipp wird abgelehnt');
+
+    // Mit Tipp: Bauer erscheint UND das Zugrecht wechselt
+    let bought2 = once(g.w, 'item_purchased', 3000);
+    g.w.emit('buy_item', { roomCode: g.code, itemId: 'recruit', targets: [{ r: 5, c: 3 }],
+                           prediction: mv('e7', 'e5') });
+    let ist = await bought2;
+    log(ist.board[5][3] === 'P', 'Rekrut setzt den Bauern');
+    log(ist.turn === 'b', 'Zug-Item verbraucht den Zug');
+    log(ist.wasMove === true, 'Der Kauf wird als Zug gemeldet');
+
+    // Schwarz zieht wie vorhergesagt -> Weiß bekommt seine Münze
+    st = await play(g.b, g.w, g.code, 'e7', 'e5', ['a2', 'a3']);
+    log(st.coins.w === 18, `Tipp beim Zug-Item zählt normal (${st.coins.w})`);
+    log(st.streak.w === 1, 'Treffer nach Zug-Item baut die Serie auf');
+
+    // Weiß tauscht Figuren -> Schwarz hat falsch getippt, behält aber die Serie
+    st = await play(g.w, g.b, g.code, 'a2', 'a3', ['h7', 'h6']);
+    st = await play(g.b, g.w, g.code, 'h7', 'h6', ['b1', 'c3']);
+    log(st.streak.b === 1, 'Schwarz hat eine Serie von 1');
+    bought2 = once(g.b, 'item_purchased', 3000);
+    g.w.emit('buy_item', { roomCode: g.code, itemId: 'swap', targets: [{ r: 7, c: 1 }, { r: 7, c: 2 }],
+                           prediction: mv('a7', 'a6') });
+    ist = await bought2;
+    log(ist.board[7][1] === 'B' && ist.board[7][2] === 'N', 'Swap tauscht die Figuren');
+    log(ist.streak.b === 1, 'Falscher Tipp auf ein Zug-Item reißt die Serie NICHT');
+    log(ist.predictionResult && ist.predictionResult.protected === true,
+        'Der Schutz wird als solcher gemeldet');
+
+    g.w.close(); g.b.close();
+
+    // =================================================================
+    console.log('\n— Ökonomie —');
+    g = await newGame();
+    // Toll nimmt dem Gegner zwei Münzen
+    bought2 = once(g.w, 'item_purchased', 3000);
+    g.w.emit('buy_item', { roomCode: g.code, itemId: 'toll', targets: [] });
+    ist = await bought2;
+    log(ist.coins.w === 20 && ist.coins.b === 18,
+        `Toll kostet 2 und nimmt 2 (w:${ist.coins.w} b:${ist.coins.b})`);
+
+    // Long Shot: Treffer zahlt flach 3
+    await play(g.w, g.b, g.code, 'e2', 'e4', ['e7', 'e5']);
+    st = await play(g.b, g.w, g.code, 'e7', 'e5', ['d2', 'd4']);
+    log(st.coins.w === 21, 'Normaler Treffer bringt 1');
+    bought2 = once(g.w, 'item_purchased', 3000);
+    g.w.emit('buy_item', { roomCode: g.code, itemId: 'long_shot', targets: [] });
+    await bought2;
+    await play(g.w, g.b, g.code, 'd2', 'd4', ['d7', 'd5']);
+    st = await play(g.b, g.w, g.code, 'd7', 'd5', ['g1', 'f3']);
+    log(st.coins.w === 22, `Long Shot zahlt flach 3 (${st.coins.w} nach Kauf für 2)`);
+
+    g.w.close(); g.b.close();
+
+    // =================================================================
     console.log('\n— Doppelzug —');
     g = await newGame();
     // Erst eine schlagbare Figur aufs Brett bringen: e4 kann später d5 nehmen.
