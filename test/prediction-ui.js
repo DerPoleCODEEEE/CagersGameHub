@@ -67,6 +67,7 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         await page.click(sel(to[0], to[1]));
         await page.waitForTimeout(200);
         await dragArrow(page, call ? call[0] : [7, 7], call ? call[1] : [6, 7]);
+        await page.click('#btn-send-turn');     // Tipp muss bestätigt werden
         await page.waitForTimeout(450);
     }
 
@@ -224,6 +225,8 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     log(await w.locator('#board .square.pending-move').count() === 2, 'Start- und Zielfeld sind markiert');
     log(/ready — now call their reply/i.test(await w.textContent('#predict-text')),
         'Die Leiste fordert jetzt den Tipp');
+    log(await w.locator('#btn-send-turn.is-hidden').count() === 1,
+        'Ohne Pfeil gibt es nichts zu bestätigen');
     log(await w.locator('#shop-lock:not(.hidden)').count() === 1, 'Der Shop ist bei offenem Zug gesperrt');
 
     await w.click('#btn-clear-arrow');
@@ -239,16 +242,28 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     const boxBefore = await w.locator('#board-wrapper').boundingBox();
     await w.click(sel(6, 4)); await w.waitForTimeout(120);
     await w.click(sel(4, 4)); await w.waitForTimeout(200);
-    await dragArrow(w, [1, 4], [3, 4]);   // Tipp: e7–e5 — schickt e2–e4 mit ab
-    await w.waitForTimeout(400);
+    await dragArrow(w, [1, 4], [3, 4]);   // Tipp: e7–e5
+    await w.waitForTimeout(200);
     const boxAfter = await w.locator('#board-wrapper').boundingBox();
     log(boxBefore.x === boxAfter.x && boxBefore.y === boxAfter.y &&
         boxBefore.width === boxAfter.width,
         'Brett bleibt beim Zeichnen exakt stehen',
         `dx=${boxAfter.x - boxBefore.x} dy=${boxAfter.y - boxBefore.y}`);
     await trackBoard('Tipp gezeichnet');
+    log(await w.locator('#btn-send-turn:not(.is-hidden)').count() === 1,
+        'Mit Pfeil erscheint der Bestätigen-Knopf');
+    log(await b.evaluate(() => document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
+        'Der gezeichnete Pfeil schickt noch nichts ab');
+
+    // Pfeil neu ziehen — der Tipp darf sich bis zur Bestätigung ändern
+    await dragArrow(w, [1, 3], [3, 3]);
+    log(/calling d7→d5/i.test(await w.textContent('#predict-text')), 'Der Tipp lässt sich korrigieren');
+    await dragArrow(w, [1, 4], [3, 4]);
+
+    await w.click('#btn-send-turn');
+    await w.waitForTimeout(500);
     log(await b.evaluate(() => !document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
-        'Mit dem Pfeil geht der Zug raus');
+        'Erst die Bestätigung schickt den Zug raus');
 
     log(await w.evaluate(() => !document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
         'Zug kommt auf dem eigenen Brett an');
@@ -323,6 +338,33 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         return img.classList.contains('hidden');
     }), 'Gegnerischer Turm a8 ist nicht gerendert');
     log(await w.evaluate(() => !window.__leak), 'Kein Leak-Flag gesetzt');
+
+    // =================================================================
+    console.log('\n— Hilfspfeile zum Rechnen —');
+    const helpers = (page) => page.locator('.annot-layer .annot-arrow:not(.outline)').count();
+    // Am Zug gehoert der Rechtsklick dem Tipp, nicht der Rechnerei.
+    await dragArrow(w, [6, 0], [4, 0]);
+    log(await helpers(w) === 0, 'Am Zug entsteht kein Hilfspfeil');
+    // Der Wartende darf rechnen.
+    await dragArrow(b, [1, 0], [3, 0]);
+    log(await helpers(b) === 1, 'Wer wartet, darf zeichnen');
+    await dragArrow(b, [1, 0], [3, 0]);
+    log(await helpers(b) === 0, 'Derselbe Pfeil nochmal entfernt ihn');
+    await dragArrow(b, [1, 0], [3, 0]);
+    await move(w, [7, 1], [5, 2]);
+    log(await helpers(b) === 0, 'Nach dem Zug sind die Hilfspfeile weg');
+
+    // =================================================================
+    console.log('\n— Raum-Chat —');
+    await w.fill('#chat-input', 'gg <img src=x onerror="window.__pwned=1">');
+    await w.click('#chat-send');
+    await w.waitForTimeout(500);
+    log((await b.textContent('#chat-log')).includes('gg'), 'Nachricht kommt beim Gegner an');
+    log(await b.evaluate(() => document.querySelectorAll('#chat-log img').length === 0 && !window.__pwned),
+        'Markup im Chat wird nicht ausgeführt');
+    log((await b.textContent('#chat-log')).includes('Alice'), 'Der Absendername kommt vom Server');
+    log(await w.evaluate(() => document.getElementById('chat-input').value === ''),
+        'Eingabefeld wird nach dem Senden geleert');
 
     // =================================================================
     console.log('\n— Layout-Stabilität —');
