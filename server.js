@@ -184,7 +184,7 @@ function escapeRegex(str) {
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const VALID_MODES = ['chess', 'mutant', 'bot'];
+const VALID_MODES = ['chess', 'mutant', 'bot', 'prediction'];
 const VALID_RESULTS = ['win', 'loss', 'draw'];
 
 /**
@@ -436,6 +436,7 @@ app.use('/shared', express.static(path.join(__dirname, 'public/shared'), { maxAg
 app.use(express.static(path.join(__dirname, 'public/hub'), staticOpts));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess'), staticOpts));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess'), staticOpts));
+app.use('/prediction-chess', express.static(path.join(__dirname, 'public/prediction-chess'), staticOpts));
 app.use('/play-cager', express.static(path.join(__dirname, 'public/play-cager'), staticOpts));
 
 
@@ -1351,13 +1352,25 @@ function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
+// =========================================================
+// 10. PREDICTION CHESS
+// Eigene Datei, weil dieser Modus deutlich mehr Zustand hat
+// (Muenzen, Effekte, Sichtfeld) als die uebrigen.
+// =========================================================
+const prediction = require('./prediction-chess.js')({
+    io, safeHandler, sanitizeName, sanitizePfp, sanitizeRoomCode,
+    generateRoomCode, generatePlayerId, socketUser, checkRateLimit,
+    recordRoomResult, scheduleRoomCleanup, sweepRooms, touch,
+    socketRateLimits, DISCONNECT_FORFEIT_MS, ROOM_SWEEP_MS
+});
+
 app.get('/healthz', (req, res) => res.json({
     ok: true,
     db: dbReady,
     uptime: process.uptime(),
     online: io.engine.clientsCount,
     // Diese Zahlen wuchsen vorher monoton — Räume wurden nie gelöscht.
-    rooms: { chess: rooms.size, mutant: mutantRooms.size }
+    rooms: { chess: rooms.size, mutant: mutantRooms.size, prediction: prediction.rooms.size }
 }));
 
 server.listen(PORT, '0.0.0.0', () => console.log(`Server läuft auf Port ${PORT}`));
