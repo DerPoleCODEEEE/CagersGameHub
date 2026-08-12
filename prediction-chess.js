@@ -33,6 +33,7 @@ module.exports = function attachPredictionChess(deps) {
     const rooms = new Map();
 
     const other = (c) => (c === 'w' ? 'b' : 'w');
+    const foeOf = other;
 
     // =================================================================
     // Zustand
@@ -202,22 +203,13 @@ module.exports = function attachPredictionChess(deps) {
     // Zustands-Pakete für die Clients
     // =================================================================
 
-    /** Effekte, wie der Empfänger sie sehen darf (Cloak blendet Namen aus). */
-    function effectsFor(room, viewer) {
-        return room.effects.map(e => {
-            const mine = e.owner === viewer;
-            const hide = e.hidden && !mine;
-            return {
-                uid: e.uid,
-                id: hide ? null : e.id,
-                owner: e.owner,
-                hidden: hide,
-                target: hide ? null : e.target,
-                squares: hide ? null : e.squares,
-                pliesLeft: e.pliesLeft,
-                chargesLeft: e.chargesLeft
-            };
-        });
+    /** Effekte für die Anzeige. Beide Seiten sehen alles. */
+    function effectsFor(room) {
+        return room.effects.map(e => ({
+            uid: e.uid, id: e.id, owner: e.owner,
+            target: e.target, squares: e.squares,
+            pliesLeft: e.pliesLeft, chargesLeft: e.chargesLeft
+        }));
     }
 
     function stateFor(room, color) {
@@ -230,7 +222,7 @@ module.exports = function attachPredictionChess(deps) {
             captured: room.captured,
             coins: room.coins,
             streak: room.streak,
-            effects: effectsFor(room, color),
+            effects: effectsFor(room),
             castlingBanned: room.castlingBanned,
             boughtThisTurn: room.boughtThisTurn[color],
             doubleSecond: room.doubleSecond[color],
@@ -319,23 +311,31 @@ module.exports = function attachPredictionChess(deps) {
      * Löst den offenen Tipp von `predictor` gegen den tatsächlichen Zug auf.
      * Wird aufgerufen, BEVOR der Ziehende seinen neuen Tipp ablegt.
      */
-    function resolvePrediction(room, predictor, actual) {
+    function resolvePrediction(room, predictor, actualMoves, opts) {
+        opts = opts || {};
         const pend = room.pending[predictor];
         room.pending[predictor] = null;
 
         const shield = findEffect(room, predictor, 'streak_shield');
-        const result = { arrows: pend ? pend.arrows : [], hit: false, skipped: !pend, coins: 0, shielded: false };
+        const result = { arrows: pend ? pend.arrows : [], hit: false, skipped: !pend,
+                         coins: 0, shielded: false, protected: false };
 
         if (!pend) {
             // Kein Tipp abgegeben: die Serie reißt — sonst könnte man eine
             // hohe Streak einfach "parken", indem man aufhört zu tippen.
-            if (shield) { consumeCharge(room, shield); result.shielded = true; }
+            if (opts.protectStreak) result.protected = true;
+            else if (shield) { consumeCharge(room, shield); result.shielded = true; }
             else room.streak[predictor] = 0;
             return result;
         }
 
         room.guesses[predictor] += 1;
-        result.hit = pend.arrows.some(a => sameMove(a, actual));
+        const candidates = Array.isArray(actualMoves) ? actualMoves : [actualMoves];
+        result.hit = pend.arrows.some(a => candidates.some(m => sameMove(a, m)));
+
+        const dbl = findEffect(room, predictor, 'double_coins');
+        const shot = findEffect(room, predictor, 'long_shot');
+        const mods = { doubled: !!dbl, longShot: !!shot };
 
         if (result.hit) {
             room.streak[predictor] += 1;
@@ -343,16 +343,29 @@ module.exports = function attachPredictionChess(deps) {
             if (room.streak[predictor] > room.bestStreak[predictor]) {
                 room.bestStreak[predictor] = room.streak[predictor];
             }
-            const dbl = findEffect(room, predictor, 'double_coins');
-            const coins = Items.coinsForHit(room.streak[predictor], !!dbl);
+            const coins = Items.coinsForHit(room.streak[predictor], mods);
             room.coins[predictor] += coins;
             result.coins = coins;
-            if (dbl) consumeCharge(room, dbl);
-        } else if (shield) {
-            consumeCharge(room, shield);
-            result.shielded = true;
+            if (shot) consumeCharge(room, shot);
+            else if (dbl) consumeCharge(room, dbl);
         } else {
-            room.streak[predictor] = 0;
+            // Long Shot kostet auch dann, wenn der Zug gar nicht vorhersehbar war.
+            const penalty = Items.coinsForMiss(mods);
+            if (penalty) {
+                room.coins[predictor] = Math.max(0, room.coins[predictor] - penalty);
+                result.coins = -penalty;
+            }
+            if (shot) consumeCharge(room, shot);
+
+            if (opts.protectStreak) {
+                // Ein Item-Zug ist nicht vorhersehbar — er darf keine Serie reissen.
+                result.protected = true;
+            } else if (shield) {
+                consumeCharge(room, shield);
+                result.shielded = true;
+            } else {
+                room.streak[predictor] = 0;
+            }
         }
         return result;
     }
@@ -382,28 +395,32 @@ module.exports = function attachPredictionChess(deps) {
      * Führt einen Kauf aus. Gibt {ok, reason?, label?} zurück.
      * Alle Prüfungen laufen hier — der Client darf nichts davon voraussetzen.
      */
-    function applyPurchase(room, color, itemId, targets, choice) {
+    /**
+     * Alles, was sich ohne Brettänderung prüfen lässt: Münzen, Zugrecht,
+     * Schach, Zielfelder. Läuft VOR der Tipp-Pflicht, damit ein falsch
+     * gewähltes Ziel auch als solches gemeldet wird und nicht von
+     * "erst tippen" verdeckt wird.
+     */
+    function preflight(room, color, itemId, targets) {
         const item = Items.getItem(itemId);
         if (!item) return { ok: false, reason: 'No such item.' };
-
         const foe = other(color);
-        const myOpts = movementOpts(room, color);
 
         const ctx = {
             myTurn: room.turn === color,
-            inCheck: MoveGen.isInCheck(room.board, color, myOpts),
+            inCheck: MoveGen.isInCheck(room.board, color, movementOpts(room, color)),
             enemyInCheck: MoveGen.isInCheck(room.board, foe, movementOpts(room, foe)),
             boughtThisTurn: room.boughtThisTurn[color],
             coins: room.coins[color],
             captured: room.captured[color],
             enemyEffectCount: effectsOf(room, foe).length,
+            enemyCoins: room.coins[foe],
             enemyCanStillCastle: !room.castlingBanned[foe],
             activeIds: effectsOf(room, color).map(e => e.id)
         };
         const gate = Items.canBuy(itemId, ctx);
         if (!gate.ok) return gate;
 
-        // Ziele formal prüfen (identische Regeln wie im Client)
         const slots = item.targets || [];
         const given = Array.isArray(targets) ? targets : [];
         if (given.length !== slots.length) return { ok: false, reason: 'Wrong number of targets.' };
@@ -411,8 +428,24 @@ module.exports = function attachPredictionChess(deps) {
             const v = Items.isValidTarget(slots[i], room.board, color, given[i], room.captured[color]);
             if (!v.ok) return v;
         }
+        return { ok: true };
+    }
 
+    function applyPurchase(room, color, itemId, targets, choice) {
+        const item = Items.getItem(itemId);
+        if (!item) return { ok: false, reason: 'No such item.' };
+
+        const foe = other(color);
+        const myOpts = movementOpts(room, color);
+
+        const pre = preflight(room, color, itemId, targets);
+        if (!pre.ok) return pre;
+
+        const given = Array.isArray(targets) ? targets : [];
         let label = item.name;
+        // Zug-Items melden, welche Brettbewegung sie ausgeloest haben — daran
+        // wird der Tipp des Gegners gemessen.
+        let itemMoves = [];
 
         switch (itemId) {
 
@@ -432,7 +465,16 @@ module.exports = function attachPredictionChess(deps) {
                 if (MoveGen.isInCheck(next, color, myOpts)) {
                     return { ok: false, reason: 'That swap would leave you in check.' };
                 }
+                // Zug-Items duerfen kein Schach geben — sonst waere ein nicht
+                // vorhersehbarer Zug auch noch ein Angriff.
+                if (MoveGen.isInCheck(next, foe, movementOpts(room, foe))) {
+                    return { ok: false, reason: 'A swap may not give check.' };
+                }
                 room.board = next;
+                itemMoves = [
+                    { fromR: a.r, fromC: a.c, toR: b.r, toC: b.c },
+                    { fromR: b.r, fromC: b.c, toR: a.r, toC: a.c }
+                ];
                 // Getauschte Könige und Türme gelten als bewegt.
                 [[pa, b], [pb, a]].forEach(([p]) => {
                     if (!p) return;
@@ -501,10 +543,8 @@ module.exports = function attachPredictionChess(deps) {
                 const t = given[0];
                 const next = room.board.map(row => row.slice());
                 next[t.r][t.c] = color === 'w' ? 'P' : 'p';
-                // Ein geschenkter Bauer darf keine Partie sofort beenden.
-                const foeOpts = movementOpts(room, foe);
-                if (MoveGen.isInCheck(next, foe, foeOpts) && !MoveGen.hasAnyLegalMove(next, foe, foeOpts)) {
-                    return { ok: false, reason: 'A recruit may not deliver checkmate.' };
+                if (MoveGen.isInCheck(next, foe, movementOpts(room, foe))) {
+                    return { ok: false, reason: 'A recruit may not give check.' };
                 }
                 room.board = next;
                 break;
@@ -545,15 +585,20 @@ module.exports = function attachPredictionChess(deps) {
                 break;
             }
 
-            case 'second_guess':
+            case 'long_shot':
             case 'streak_shield':
             case 'double_coins':
                 addEffect(room, color, itemId);
                 break;
 
-            case 'cloak':
-                addEffect(room, color, 'cloak');
+            case 'toll': {
+                const taken = Math.min(2, room.coins[foe]);
+                if (taken <= 0) return { ok: false, reason: 'Your opponent has no coins to take.' };
+                room.coins[foe] -= taken;
+                room.coins[color] += taken;   // der Preis wird unten abgezogen
+                label = item.name + ' (+' + taken + ')';
                 break;
+            }
 
             case 'fog':
                 addEffect(room, color, 'fog');
@@ -563,20 +608,9 @@ module.exports = function attachPredictionChess(deps) {
                 return { ok: false, reason: 'No such item.' };
         }
 
-        // Cloak wirkt auf den NÄCHSTEN Kauf, nicht auf sich selbst.
-        const cloak = itemId === 'cloak' ? null : findEffect(room, color, 'cloak');
-        let hidden = false;
-        if (cloak) {
-            hidden = true;
-            consumeCharge(room, cloak);
-            const justAdded = room.effects.filter(e => e.owner === color && e.id === itemId);
-            const last = justAdded[justAdded.length - 1];
-            if (last) last.hidden = true;
-        }
-
         room.coins[color] -= item.price;
         room.boughtThisTurn[color] = true;
-        return { ok: true, label, hidden };
+        return { ok: true, label, itemMoves };
     }
 
     // =================================================================
@@ -702,15 +736,11 @@ module.exports = function attachPredictionChess(deps) {
             // Tippen ist Pflicht — geprueft NACH der Zuglegalitaet, damit ein
             // illegaler Zug auch als solcher gemeldet wird. Ausnahme: der zweite
             // Zug eines Double Move, dort laeuft der Tipp aus dem ersten noch.
-            const arrows = [];
             const a1 = readArrow(data.prediction);
-            if (a1) arrows.push(a1);
-            const sg = findEffect(room, color, 'second_guess');
-            const a2 = readArrow(data.prediction2);
-            if (a2 && sg && !sameMove(a1, a2)) arrows.push(a2);
-            if (!isSecond && !arrows.length) {
+            if (!isSecond && !a1) {
                 return socket.emit('error_msg', "Call your opponent's next move first.");
             }
+            const arrows = a1 ? [a1] : [];
 
             // --- Zug ausführen ---------------------------------------
             const res = MoveGen.applyClassicMove(room.board, {
@@ -736,10 +766,9 @@ module.exports = function attachPredictionChess(deps) {
 
             // --- Tipp des Gegners auflösen, DANN eigenen ablegen ------
             const foe = other(color);
-            const resolved = resolvePrediction(room, foe, actual);
+            const resolved = resolvePrediction(room, foe, [actual]);
             room.lastResult[foe] = resolved;
 
-            if (arrows.length > 1 && sg) consumeCharge(room, sg);
             if (arrows.length) room.pending[color] = { arrows };
 
             // --- Effekte, Zugrecht, Uhr ------------------------------
@@ -783,31 +812,60 @@ module.exports = function attachPredictionChess(deps) {
             if (!color) return;
 
             const targets = Array.isArray(data.targets) ? data.targets.slice(0, 2) : [];
+            const item = Items.getItem(data.itemId);
+            if (!item) return socket.emit('error_msg', 'No such item.');
+
+            // Erst alles prüfen, was am Kauf selbst falsch sein kann …
+            const pre = preflight(room, color, data.itemId, targets);
+            if (!pre.ok) return socket.emit('error_msg', pre.reason || 'Purchase refused.');
+
+            // … dann erst die Tipp-Pflicht. Zug-Items verbrauchen den Zug.
+            const arrow = readArrow(data.prediction);
+            if (item && item.isMove && !arrow) {
+                return socket.emit('error_msg', "Call your opponent's next move first.");
+            }
+
             const out = applyPurchase(room, color, data.itemId, targets, data.choice);
             if (!out.ok) return socket.emit('error_msg', out.reason || 'Purchase refused.');
 
             touch(room);
-            const item = Items.getItem(data.itemId);
+
+            // Ein Zug-Item beendet den Zug wie ein normaler Zug.
+            let itemMoveResult = null;
+            if (item.isMove) {
+                itemMoveResult = resolvePrediction(room, foeOf(color), out.itemMoves, { protectStreak: true });
+                room.pending[color] = { arrows: [arrow] };
+                tickEffects(room, color);
+                room.boughtThisTurn[color] = false;
+                room.turn = foeOf(color);
+                armMoveTimer(room);
+            }
 
             ['w', 'b'].forEach(col => {
                 const p = room.players[col];
                 if (!p || !p.socketId) return;
                 const sock = nsp.sockets.get(p.socketId);
                 if (!sock) return;
-                const conceal = out.hidden && col !== color;
                 sock.emit('item_purchased', Object.assign({
                     by: color,
-                    itemId: conceal ? null : data.itemId,
-                    icon: conceal ? '❓' : item.icon,
-                    label: conceal ? 'Item used' : item.name,
-                    targets: conceal ? [] : targets,
-                    hidden: conceal
+                    itemId: data.itemId,
+                    icon: item.icon,
+                    label: out.label || item.name,
+                    targets,
+                    wasMove: !!item.isMove,
+                    itemMoves: out.itemMoves || [],
+                    predictionResult: itemMoveResult ? {
+                        by: foeOf(color), arrows: itemMoveResult.arrows, hit: itemMoveResult.hit,
+                        skipped: itemMoveResult.skipped, coins: itemMoveResult.coins,
+                        shielded: itemMoveResult.shielded, protected: itemMoveResult.protected
+                    } : null
                 }, stateFor(room, col), { you: col }));
             });
 
             // Ein Item kann den Gegner mattsetzen (z. B. Upgrade zur Dame).
             const status = MoveGen.gameStatus(room.board, room.turn, movementOpts(room, room.turn));
-            if (status === 'stalemate') endGame(code, null, 'stalemate');
+            if (status === 'checkmate') endGame(code, foeOf(room.turn), 'checkmate');
+            else if (status === 'stalemate') endGame(code, null, 'stalemate');
         }));
 
         // ---- Aufgeben / Remis --------------------------------------------
