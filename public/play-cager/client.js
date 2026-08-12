@@ -1486,3 +1486,10 @@
     }
     changeBot({ restoreState: true });
 })();
+
+// =========================================================================
+// Zeichenpfeile zum Rechnen (rein lokal — der Gegner sieht nichts davon).
+// Rechtsklick ziehen setzt einen orangenen Pfeil, derselbe Pfeil nochmal
+// entfernt ihn, ein Linksklick aufs Brett loescht alle.
+// =========================================================================
+if (typeof BoardArrows === 'object') BoardArrows.attach({ board: '#board' });
