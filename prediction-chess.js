@@ -73,6 +73,8 @@ module.exports = function attachPredictionChess(deps) {
             pendingDouble: { w: false, b: false },  // gekauft, erster Zug steht aus
             doubleSecond: { w: false, b: false },   // zweiter Zug läuft gerade
 
+            chat: [],
+
             moveDeadline: 0,
             disconnectTimers: { w: null, b: null },
             cleanupTimer: null
@@ -687,6 +689,7 @@ module.exports = function attachPredictionChess(deps) {
                 playerId: room.players[free].playerId
             }, stateFor(room, free)));
 
+            socket.emit('room_chat_history', room.chat);
             nsp.to(code).emit('opponent_info', {
                 w: room.players.w ? { name: room.players.w.name, pfp: room.players.w.pfp } : null,
                 b: room.players.b ? { name: room.players.b.name, pfp: room.players.b.pfp } : null
@@ -868,6 +871,27 @@ module.exports = function attachPredictionChess(deps) {
             else if (status === 'stalemate') endGame(code, null, 'stalemate');
         }));
 
+        // ---- Raum-Chat ---------------------------------------------------
+        socket.on('room_chat', safeHandler(socket, 'room_chat', (data) => {
+            if (!checkRateLimit(socket.id)) return;
+            const code = sanitizeRoomCode(data.roomCode);
+            const room = code && rooms.get(code);
+            if (!room) return;
+            const col = seatOf(room, socket);
+            if (!col) return;
+
+            const text = String(data.text == null ? '' : data.text).trim().slice(0, 200);
+            if (!text) return;
+
+            // Der Absender kommt ausschliesslich aus dem Raum-Zustand, nie aus
+            // der Nutzlast — sonst kann sich jeder als der andere ausgeben.
+            const msg = { color: col, name: room.players[col].name, text, ts: Date.now() };
+            room.chat.push(msg);
+            if (room.chat.length > 50) room.chat.shift();
+            touch(room);
+            nsp.to(code).emit('room_chat', msg);
+        }));
+
         // ---- Aufgeben / Remis --------------------------------------------
         socket.on('resign', safeHandler(socket, 'resign', (data) => {
             const code = sanitizeRoomCode(data.roomCode);
@@ -939,6 +963,7 @@ module.exports = function attachPredictionChess(deps) {
             seat.connected = true;
             seat.socketId = socket.id;
             socket.join(code);
+            socket.emit('room_chat_history', room.chat);
             socket.emit('prediction_room_reconnected', Object.assign({
                 roomCode: code, color: col, playerId: seat.playerId
             }, stateFor(room, col)));
