@@ -114,11 +114,35 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     log(await w.locator('#shop-lock.hidden').count() === 1, 'Weiß darf am Zug kaufen');
 
     // =================================================================
+    console.log('\n— Ziehen ohne Tipp —');
+    // Der Tipp ist freiwillig. Dieser Pfad war lange ungetestet, obwohl es
+    // der erste ist, den jeder Spieler nimmt.
+    await w.click(sel(7, 1));
+    await w.waitForTimeout(200);
+    log(await w.locator('#board .square.selected').count() === 1, 'Figur lässt sich ohne Tipp auswählen');
+    log(await w.locator('#board .square.valid-move').count() === 2, 'Zugvorschläge erscheinen ohne Tipp');
+    await w.keyboard.press('Escape');
+
+    // =================================================================
     console.log('\n— Tipp zeichnen —');
+    // Das Brett darf sich beim Zeichnen nicht bewegen: sonst klickt man
+    // danach auf die Stelle, wo die Figur eben noch war.
+    const boxBefore = await w.locator('#board-wrapper').boundingBox();
     await dragArrow(w, [1, 4], [3, 4]);   // Tipp: e7–e5
+    const boxAfter = await w.locator('#board-wrapper').boundingBox();
+    log(boxBefore.x === boxAfter.x && boxBefore.y === boxAfter.y &&
+        boxBefore.width === boxAfter.width,
+        'Brett bleibt beim Zeichnen exakt stehen',
+        `dx=${boxAfter.x - boxBefore.x} dy=${boxAfter.y - boxBefore.y}`);
     log(await w.locator('#arrow-layer path').count() >= 2, 'Pfeil wird gezeichnet');
     log(/calling e7→e5/i.test(await w.textContent('#predict-text')), 'Tipp steht in der Leiste');
     log(await b.locator('#arrow-layer path').count() === 0, 'Der Gegner sieht den offenen Tipp nicht');
+
+    // Nach dem Zeichnen muss die Auswahl weiterhin funktionieren.
+    await w.click(sel(6, 4));
+    await w.waitForTimeout(200);
+    log(await w.locator('#board .square.selected').count() === 1, 'Auswählen funktioniert auch nach dem Tipp');
+    await w.keyboard.press('Escape');
 
     await move(w, [6, 4], [4, 4]);        // e2–e4
     log(await w.evaluate(() => !document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
