@@ -235,6 +235,34 @@ async function play(sock, otherSock, code, from, to, prediction, extra) {
 
     g.w.close(); g.b.close();
 
+    // =====================================================================
+    console.log('\n— Auslieferung & Cache —');
+    // Ein langer Cache auf shared/*.js hat nach einem Deploy dafuer gesorgt,
+    // dass der Browser eine alte Bibliothek mit neuem Client mischte.
+    for (const path of ['/shared/move-gen.js', '/shared/items.js',
+                        '/prediction-chess/client.js', '/prediction-chess/index.html']) {
+        const res = await fetch(URL + path);
+        const cc = res.headers.get('cache-control') || '';
+        log(res.ok && /no-cache/.test(cc), `${path} wird immer revalidiert`, cc || 'kein Header');
+    }
+    {
+        // Bewusst node:http statt fetch: Node's fetch haengt von sich aus
+        // "cache-control: no-cache" an die Anfrage und erzwingt damit immer
+        // einen Vollabruf — damit liesse sich die Revalidierung nicht messen.
+        const http = require('http');
+        // Achtung: die Konstante URL oben verdeckt den globalen URL-Konstruktor.
+        const { URL: Url } = require('url');
+        const u = new Url(URL + '/shared/move-gen.js');
+        const head = (headers) => new Promise((resolve) => {
+            http.get({ host: u.hostname, port: u.port, path: u.pathname, headers },
+                (res) => { res.resume(); resolve(res); });
+        });
+        const first = await head({});
+        const again = await head({ 'If-None-Match': first.headers.etag });
+        log(again.statusCode === 304,
+            `Unveraendert liefert 304 statt Vollabruf (${again.statusCode})`);
+    }
+
     console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen\n`);
     process.exit(failed === 0 ? 0 : 1);
 })().catch(err => {
