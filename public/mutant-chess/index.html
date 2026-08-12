@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mutant Merge Chess | Cager Game Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/shared.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/move-gen.js"></script>
+    <script src="/shared/piece-assets.js"></script>
+    <script src="/shared/dom-utils.js"></script>
+    <script src="/shared/sounds.js"></script>
+</head>
+<body>
+
+    <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
+    <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
+
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <div class="scribble-box splash-box">
+            <div class="loader"></div>
+            <h2>Connecting to server...</h2>
+            <p>This may take a moment on cold start.</p>
+        </div>
+    </div>
+
+    <!-- RULES MODAL OVERLAY -->
+    <div id="rules-modal" class="modal-overlay" style="display: none; position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+        <div class="scribble-box" style="padding: 25px; max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; background: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
+                <h2 style="margin: 0; font-size: 28px;">🧬 Mutant Merge Rulebook</h2>
+                <button type="button" id="close-rules-btn" class="btn btn-danger scribble-btn" style="width: auto; padding: 4px 12px;">❌</button>
+            </div>
+            <div style="font-size: 16px; line-height: 1.5; color: #222; text-align: left;">
+                <p><b>1. Piece Fusion Mechanism</b><br>
+                On your turn, instead of making a regular move, you can move one of your pieces onto a square occupied by another friendly piece to merge them into a single "Mutant" piece.</p>
+
+                <p><b>2. Mutant Movement</b><br>
+                A Mutant inherits the combined legal movement patterns of both constituent pieces. For example, a Knight + Rook Mutant can leap over pieces like a Knight OR slide in straight lines like a Rook!</p>
+
+                <p><b>3. Fused Queen Symbiosis</b><br>
+                When a Rook and a Bishop merge, they transform directly into a Fused Queen (`Q_fused`) with a unique glowing purple aura.</p>
+
+                <p><b>4. Fusion Rules & Restrictions</b><br>
+                • <i>Fusion Pool:</i> Players have a limited number of Fusions per game (Default: 3, configurable up to 15).<br>
+                • <i>King Fusions:</i> Room creator can enable or disable King Fusions.<br>
+                • <i>Capacity:</i> A maximum of 2 pieces can occupy a single square.<br>
+                • <i>Single-Merge Limit:</i> Fused pieces cannot be merged a second time.<br>
+                • <i>No Duplicate Types:</i> You cannot merge two pieces of the same type (e.g. Knight + Knight).<br>
+                • <i>Forbidden Unions:</i> Queens cannot merge with Rooks, Bishops, or Pawns. Kings cannot merge with Pawns.</p>
+
+                <p><b>5. Pawn Promotions</b><br>
+                Only pure, non-fused Pawns reaching the 8th rank can promote. Fused Pawns cannot be promoted.</p>
+
+                <p><b>6. Instant Victory</b><br>
+                Capturing the opponent's King (or any Mutant containing the enemy King) results in an immediate victory!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Screen -->
+    <div id="menu-screen" class="card scribble-box">
+        <h1>Mutant Merge Chess</h1>
+        <p class="subtitle">Piece Fusion Multiplayer Chess</p>
+        
+        <div class="input-group">
+            <label>Your Name</label>
+            <input type="text" id="player-name" placeholder="Enter name..." maxlength="15">
+        </div>
+
+        <div class="input-group">
+            <label>Select Color</label>
+            <select id="color-choice" class="select-input scribble-input">
+                <option value="w">White</option>
+                <option value="b">Black</option>
+                <option value="random">Random</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Total Time: <span id="time-val">3</span> Min.</label>
+            <input type="range" id="time-range" min="1" max="10" value="3" class="slider">
+        </div>
+
+        <div class="input-group">
+            <label>Increment: <span id="inc-val">2</span> Sec.</label>
+            <input type="range" id="inc-range" min="0" max="10" value="2" class="slider">
+        </div>
+
+        <div class="input-group">
+            <label>Max Fusions: <span id="fusion-val">3</span></label>
+            <input type="range" id="fusion-range" min="1" max="15" value="3" class="slider">
+        </div>
+
+        <div class="input-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+            <input type="checkbox" id="allow-king-fusion" checked style="width: 20px; height: 20px; cursor: pointer; accent-color: #f1c40f;">
+            <label for="allow-king-fusion" style="margin: 0; cursor: pointer; font-size: 18px; font-weight: bold;">Allow King Fusions 👑</label>
+        </div>
+
+        <div class="button-group" style="margin-top: 15px;">
+            <button type="button" id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
+            <div class="divider">or</div>
+            <div class="join-box">
+                <input type="text" id="room-code-input" placeholder="CODE" maxlength="6">
+                <button type="button" id="btn-join" class="btn btn-secondary scribble-btn">Join Room</button>
+            </div>
+            <div class="divider"></div>
+            <a href="/" class="btn scribble-btn btn-back-center">Back to Hub</a>
+        </div>
+        <div id="error-msg" class="error-msg"></div>
+    </div>
+
+    <!-- Lobby Screen -->
+    <div id="lobby-screen" class="card scribble-box hidden">
+        <h2>Waiting for Opponent</h2>
+        <p>Share this room code with a friend:</p>
+        <div class="code-display" id="display-room-code">------</div>
+        <button type="button" id="btn-leave-lobby" class="btn btn-danger scribble-btn">Leave Lobby</button>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="hidden">
+        <div class="layout">
+            <div id="game-container">
+                <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite">
+                    <span id="status-banner-text">Prepare for Battle!</span>
+                </div>
+
+                <!-- Opponent Bar -->
+                <div class="player-bar top">
+                    <div class="player-info">
+                        <img id="top-pfp" class="chess-avatar hidden" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Avatar des Gegners">
+                        <span id="top-player-name">Opponent</span>
+                        <div id="top-fusion-dots" class="fusion-dots"></div>
+                    </div>
+                    <div id="top-clock" class="clock-box scribble-box">03:00</div>
+                </div>
+
+                <!-- Board -->
+                <div id="board-wrapper">
+                    <div id="board"></div>
+                    <div id="promotion-modal" style="display: none;">
+                        <div class="promotion-box scribble-box" id="promo-options"></div>
+                    </div>
+                </div>
+
+                <!-- Player Bar -->
+                <div class="player-bar bottom">
+                    <div class="player-info">
+                        <img id="bottom-pfp" class="chess-avatar hidden" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Dein Avatar">
+                        <span id="bottom-player-name">You</span>
+                        <div id="bottom-fusion-dots" class="fusion-dots"></div>
+                    </div>
+                    <div id="bottom-clock" class="clock-box scribble-box">03:00</div>
+                </div>
+
+                <!-- Game Over Modal -->
+                <div id="game-over" style="display: none;">
+                    <div class="scribble-box" style="padding: 30px; text-align: center; background: white;">
+                        <span id="winner-text" style="font-size: 32px; display: block; margin-bottom: 20px;">White Wins!</span>
+                        <button type="button" id="btn-back-to-menu" class="btn btn-primary scribble-btn">Back to Menu</button>
+                    </div>
+                </div>
+
+                <!-- Draw Offer Modal -->
+                <div id="draw-modal" style="display: none;">
+                    <div class="scribble-box" style="padding: 25px; text-align: center; background: white;">
+                        <span style="font-size: 24px; display: block; margin-bottom: 15px;">Opponent offers a draw!</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" id="btn-accept-draw" class="btn btn-primary scribble-btn">Accept</button>
+                            <button type="button" id="btn-decline-draw" class="btn btn-danger scribble-btn">Decline</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Panel -->
+            <div class="sidebar scribble-box">
+                <div class="logo-area">
+                    <h2 style="margin:0; font-size: 26px;">Mutant Chess</h2>
+                    <span class="tag" id="my-role-tag">WHITE</span>
+                </div>
+                
+                <div class="mode-badge-box">
+                    <span class="sidebar-title">TURN:</span>
+                    <span id="turn-display-tag" class="mode-tag">WHITE'S TURN</span>
+                </div>
+
+                <button type="button" id="btn-ready" class="btn btn-ready scribble-btn">I AM READY!</button>
+
+                <button type="button" id="btn-show-rules" class="btn scribble-btn" style="background: #f1c40f; margin-bottom: 15px;">📜 Full Rules</button>
+
+                <!-- Move History -->
+                <div class="history-section scribble-box">
+                    <div class="sidebar-title" style="margin-bottom: 5px;">Move History</div>
+                    <div id="history-list" class="history-list"></div>
+                </div>
+
+                <!-- Ingame Actions -->
+                <div id="game-actions" class="actions-row">
+                    <button type="button" id="btn-offer-draw" class="btn btn-secondary scribble-btn">Draw</button>
+                    <button type="button" id="btn-resign" class="btn btn-danger scribble-btn">Resign</button>
+                </div>
+
+                <button type="button" id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn">Leave Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+</html>
