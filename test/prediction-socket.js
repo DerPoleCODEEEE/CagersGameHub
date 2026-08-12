@@ -48,14 +48,16 @@ async function newGame(name) {
     return { w, b, code: created.roomCode };
 }
 
-/** Zieht und wartet auf die Bestätigung beim Gegner. */
+/**
+ * Zieht und wartet auf die Bestätigung beim Gegner.
+ * Tippen ist Pflicht, deshalb geht ohne Angabe ein neutraler Pfeil mit.
+ */
 async function play(sock, otherSock, code, from, to, prediction, extra) {
     const applied = once(otherSock, 'apply_prediction_move', 5000);
     const mine = once(sock, 'apply_prediction_move', 5000);
+    const arrow = prediction ? mv(prediction[0], prediction[1]) : mv('h7', 'h6');
     sock.emit('request_prediction_move', Object.assign(
-        { roomCode: code }, mv(from, to),
-        { prediction: prediction ? mv(prediction[0], prediction[1]) : null },
-        extra || {}
+        { roomCode: code }, mv(from, to), { prediction: arrow }, extra || {}
     ));
     const [res] = await Promise.all([mine, applied]);
     return res;
@@ -89,9 +91,16 @@ async function play(sock, otherSock, code, from, to, prediction, extra) {
     log(st.coins.w === 21, 'Fehlschuss bringt keine Münze');
     log(st.streak.w === 0, 'Fehlschuss setzt die Streak zurück');
 
-    // Kein Tipp abgegeben → Streak bleibt bei 0, kein Absturz
-    st = await play(g.w, g.b, g.code, 'f1', 'c4', null);
-    log(st.turn === 'b', 'Zug ohne Tipp funktioniert');
+    // Tippen ist Pflicht
+    let noTip = once(g.w, 'error_msg', 2500);
+    g.w.emit('request_prediction_move', Object.assign({ roomCode: g.code }, mv('f1', 'c4'), { prediction: null }));
+    log(/call your opponent/i.test(await noTip), 'Zug ohne Tipp wird abgelehnt');
+    noTip = once(g.w, 'error_msg', 2500);
+    g.w.emit('request_prediction_move', Object.assign({ roomCode: g.code }, mv('f1', 'c4'),
+        { prediction: { fromR: 1, fromC: 1, toR: 1, toC: 1 } }));
+    log(/call your opponent/i.test(await noTip), 'Pfeil auf dasselbe Feld zählt nicht als Tipp');
+    st = await play(g.w, g.b, g.code, 'f1', 'c4', ['a7', 'a6']);
+    log(st.turn === 'b', 'Mit Tipp geht der Zug durch');
 
     // =================================================================
     console.log('\n— Regelverstöße —');
@@ -196,8 +205,10 @@ async function play(sock, otherSock, code, from, to, prediction, extra) {
     g.w.emit('request_prediction_move', Object.assign({ roomCode: g.code }, mv('e4', 'd5')));
     log(/illegal/i.test(await err), 'Zweiter Zug darf nicht schlagen');
 
-    st = await play(g.w, g.b, g.code, 'd2', 'd4', null);
-    log(st.turn === 'b', 'Nach dem zweiten (stillen) Zug ist Schwarz dran');
+    const second = once(g.w, 'apply_prediction_move', 4000);
+    g.w.emit('request_prediction_move', Object.assign({ roomCode: g.code }, mv('d2', 'd4'), { prediction: null }));
+    st = await second;
+    log(st.turn === 'b', 'Zweiter Zug des Doppelzugs braucht keinen neuen Tipp');
     log(st.board[3][3] === 'p', 'Der schwarze Bauer auf d5 steht unangetastet');
 
     // Und danach greift die Beschränkung nicht mehr.
@@ -215,7 +226,8 @@ async function play(sock, otherSock, code, from, to, prediction, extra) {
     await play(g.b, g.w, g.code, 'e7', 'e5', null);
     await play(g.w, g.b, g.code, 'g2', 'g4', null);
     const over = once(g.w, 'game_over', 4000);
-    g.b.emit('request_prediction_move', Object.assign({ roomCode: g.code }, mv('d8', 'h4')));
+    g.b.emit('request_prediction_move', Object.assign({ roomCode: g.code }, mv('d8', 'h4'),
+        { prediction: mv('a2', 'a3') }));
     const result = await over;
     log(result.winnerColor === 'b' && result.reason === 'checkmate', 'Narrenmatt wird erkannt');
     log(!!result.summary && typeof result.summary.hits === 'object', 'Abschlussstatistik wird mitgeschickt');
