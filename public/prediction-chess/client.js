@@ -11,6 +11,38 @@
 
 (function () {
 
+    /**
+     * Fehlende oder veraltete gemeinsame Dateien duerfen nicht in einer stumm
+     * toten Seite enden. Vorher war das Symptom: Tipps liessen sich zeichnen,
+     * aber keine Figur anklicken — der Fehler stand nur in der Konsole.
+     */
+    function startupFailure(missing) {
+        try { document.getElementById('splash-screen').style.display = 'none'; } catch (e) { /* egal */ }
+        const box = document.createElement('div');
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'position:fixed;inset:20px auto auto 50%;transform:translateX(-50%);' +
+            'z-index:99999;max-width:640px;background:#e74c3c;color:#fff;border:4px solid #000;' +
+            'box-shadow:6px 6px 0 rgba(0,0,0,.9);padding:16px 20px;font-family:sans-serif;' +
+            'font-size:16px;line-height:1.5;border-radius:15px 5px 20px 10px/5px 20px 10px 15px';
+        const h = document.createElement('b');
+        h.textContent = 'Prediction Chess cannot start.';
+        h.style.cssText = 'display:block;font-size:20px;margin-bottom:6px';
+        const p = document.createElement('div');
+        p.textContent = 'These files are missing or out of date on the server: ' +
+            missing.join(', ') + '. Upload the current version and reload.';
+        box.appendChild(h); box.appendChild(p);
+        document.body.appendChild(box);
+        console.error('Prediction Chess: veraltete/fehlende Dateien:', missing.join(', '));
+    }
+
+    const MISSING = [];
+    if (typeof MoveGen !== 'object' || !MoveGen || typeof MoveGen.legalMoves !== 'function') {
+        MISSING.push('/shared/move-gen.js');
+    }
+    if (typeof Items !== 'object' || !Items || !Items.ITEMS) MISSING.push('/shared/items.js');
+    if (typeof DomUtils !== 'object' || !DomUtils) MISSING.push('/shared/dom-utils.js');
+    if (MISSING.length) { startupFailure(MISSING); return; }
+
     const $ = (id) => document.getElementById(id);
     const el = DomUtils.el;
     const clear = DomUtils.clear;
@@ -194,6 +226,15 @@
     // Klicks
     // =================================================================
     function onSquareClick(r, c) {
+        try { onSquareClickInner(r, c); }
+        catch (err) {
+            // Lieber eine sichtbare Meldung als ein Brett, das auf nichts reagiert.
+            console.error('Klick auf ' + sqName(r, c) + ' fehlgeschlagen:', err);
+            flashError('Something broke on this click — see the browser console.');
+        }
+    }
+
+    function onSquareClickInner(r, c) {
         if (S.targeting) return pickTarget(r, c);
         if (!isMyTurn() || S.pendingPromotion) return;
 
@@ -844,6 +885,7 @@
 
     socket.on('game_over', (d) => {
         S.over = true;
+        try { sessionStorage.removeItem('pred_seat'); } catch (e) { /* egal */ }
         $('game-over').style.display = 'flex';
         const won = d.winnerColor === S.color;
         $('winner-text').textContent = d.winnerColor === null
@@ -910,9 +952,26 @@
         $('draw-modal').style.display = 'none';
         socket.emit('respond_draw', { roomCode: S.roomCode, accepted: false });
     });
-    $('btn-leave-lobby').addEventListener('click', () => location.reload());
-    $('btn-leave-game').addEventListener('click', () => location.reload());
-    $('btn-back-to-menu').addEventListener('click', () => location.reload());
+    /**
+     * Zurueck ins Menue. Wichtig: den gespeicherten Platz loeschen, sonst
+     * meldet uns `tryReconnect` nach dem Neuladen sofort wieder in derselben
+     * Partie an — und es sieht aus, als haette der Knopf nichts getan.
+     * Eine laufende Partie wird dabei aufgegeben, damit der Gegner nicht
+     * 30 Sekunden auf den Forfeit-Timer warten muss.
+     */
+    function leaveToMenu(askFirst) {
+        const running = S.started && !S.over && S.roomCode;
+        if (running && askFirst &&
+            !confirm('Leave the game? This counts as a resignation.')) return;
+        if (running) socket.emit('resign', { roomCode: S.roomCode });
+        try { sessionStorage.removeItem('pred_seat'); } catch (e) { /* egal */ }
+        // Kurz warten, damit das resign den Server noch erreicht.
+        setTimeout(() => location.reload(), running ? 180 : 0);
+    }
+
+    $('btn-leave-lobby').addEventListener('click', () => leaveToMenu(false));
+    $('btn-leave-game').addEventListener('click', () => leaveToMenu(true));
+    $('btn-back-to-menu').addEventListener('click', () => leaveToMenu(false));
 
     const rulesModal = DomUtils.makeAccessibleModal
         ? DomUtils.makeAccessibleModal($('rules-modal'))
