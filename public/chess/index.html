@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cagers Quick Chess</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/shared.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/move-gen.js"></script>
+    <script src="/shared/piece-assets.js"></script>
+    <script src="/shared/dom-utils.js"></script>
+    <script src="/shared/sounds.js"></script>
+</head>
+<body>
+    <!-- Background Florks -->
+    <img src="https://www.pngmart.com/files/23/Flork-PNG-Transparent.png" class="flork-bg flork-left" alt="Flork">
+    <img src="https://preview.redd.it/i-decided-to-hdify-some-beloved-florks-and-some-props-out-v0-mcngsmlz6jta1.png?width=256&format=png&auto=webp&s=ec5657c67496580498f1dbd27923602123976fa2" class="flork-bg flork-right" alt="Flork HD">
+
+    <!-- Splash Screen for Cold Starts -->
+    <div id="splash-screen">
+        <div class="scribble-box splash-box">
+            <div class="loader"></div>
+            <h2>Connecting to server...</h2>
+            <p>This may take a moment on initial load.</p>
+        </div>
+    </div>
+
+    <!-- RULES MODAL OVERLAY -->
+    <div id="rules-modal" class="modal-overlay" style="display: none; position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+        <div class="scribble-box" style="padding: 25px; max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; background: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
+                <h2 style="margin: 0; font-size: 28px;">⚡ Quick Chess Rulebook</h2>
+                <button type="button" id="close-rules-btn" class="btn btn-danger scribble-btn" style="width: auto; padding: 4px 12px;">❌</button>
+            </div>
+            <div style="font-size: 16px; line-height: 1.5; color: #222; text-align: left;">
+                <p><b>1. Real-Time Gameplay (No Turns)</b><br>
+                Quick Chess discards traditional turn-based play. Both players move their pieces simultaneously in real time as soon as individual piece cooldowns expire.</p>
+                
+                <p><b>2. Game Modes</b><br>
+                • <i>Class Lock:</i> Moving a piece puts ALL pieces of that same type (e.g. all Pawns or all Rooks) on cooldown.<br>
+                • <i>Single Piece:</i> Moving a piece puts ONLY that specific moved piece/square on cooldown.</p>
+
+                <p><b>3. Custom Piece Cooldown Timers</b><br>
+                Room creators can customize cooldown sliders (0 to 20s) for every individual piece type before starting the match.</p>
+
+                <p><b>4. Piece Travel & Locking</b><br>
+                Pieces physically move across the board over a short duration (250ms–750ms based on distance). While a piece is traveling, its destination square is locked.</p>
+
+                <p><b>5. Victory Condition (King Capture)</b><br>
+                There is NO Check or Checkmate! The sole objective is to physically capture the enemy King. First player to take the opponent's King wins instantly.</p>
+
+                <p><b>6. Special Moves</b><br>
+                • <i>Castling:</i> Permitted if King and Rook have not moved and path is empty.<br>
+                • <i>En Passant:</i> Valid immediately after an opponent pawn advances two squares.</p>
+
+                <p><b>7. Disconnect & Forfeit</b><br>
+                If a player disconnects mid-match, a 30-second forfeit timer starts. Reconnecting within 30 seconds resumes the match seamlessly.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN MENU -->
+    <div id="menu-screen" class="card scribble-box" style="width: 420px;">
+        <h1>Cagers Quick Chess</h1>
+        <p class="subtitle">Real-Time Multiplayer Chess</p>
+        
+        <div class="input-group">
+            <label for="player-name">Your Name</label>
+            <input type="text" id="player-name" placeholder="Loading from Twitch..." maxlength="15">
+        </div>
+
+        <div class="input-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+            <input type="checkbox" id="class-lock-check" checked style="width: 20px; height: 20px; cursor: pointer; accent-color: #f1c40f;">
+            <label for="class-lock-check" style="margin: 0; cursor: pointer; font-size: 18px; font-weight: bold;">Class Lock (Lock same piece types)</label>
+        </div>
+
+        <div class="input-group" style="margin-top: 15px;">
+            <label style="font-weight: bold; margin-bottom: 10px; display: block;">Piece Cooldowns (0 - 20s):</label>
+            
+            <div class="slider-row">
+                <span class="piece-icon">♚</span>
+                <label for="cd-k-range">King: <span id="cd-k-val">1.0</span>s</label>
+                <input type="range" id="cd-k-range" min="0" max="20" step="0.5" value="1.0" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♟</span>
+                <label for="cd-p-range">Pawn: <span id="cd-p-val">3.5</span>s</label>
+                <input type="range" id="cd-p-range" min="0" max="20" step="0.5" value="3.5" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♞</span>
+                <label for="cd-n-range">Knight: <span id="cd-n-val">6.5</span>s</label>
+                <input type="range" id="cd-n-range" min="0" max="20" step="0.5" value="6.5" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♝</span>
+                <label for="cd-b-range">Bishop: <span id="cd-b-val">6.5</span>s</label>
+                <input type="range" id="cd-b-range" min="0" max="20" step="0.5" value="6.5" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♜</span>
+                <label for="cd-r-range">Rook: <span id="cd-r-val">10.0</span>s</label>
+                <input type="range" id="cd-r-range" min="0" max="20" step="0.5" value="10.0" class="slider">
+            </div>
+
+            <div class="slider-row">
+                <span class="piece-icon">♛</span>
+                <label for="cd-q-range">Queen: <span id="cd-q-val">14.0</span>s</label>
+                <input type="range" id="cd-q-range" min="0" max="20" step="0.5" value="14.0" class="slider">
+            </div>
+        </div>
+
+        <div class="button-group" style="margin-top: 15px;">
+            <button type="button" id="btn-create" class="btn btn-primary scribble-btn">Create Room</button>
+            <div class="divider">or</div>
+            <div class="join-box">
+                <label for="room-code-input" class="sr-only">Raumcode</label>
+                <input type="text" id="room-code-input" placeholder="CODE" maxlength="6" autocomplete="off">
+                <button type="button" id="btn-join" class="btn btn-secondary scribble-btn">Join Room</button>
+            </div>
+            <div class="divider"></div>
+            <a href="/" class="btn scribble-btn" style="background:#ddd; color:#000; text-decoration:none; display:block;">Back to Hub</a>
+        </div>
+        <div id="error-msg" class="error-msg"></div>
+    </div>
+
+    <!-- LOBBY SCREEN -->
+    <div id="lobby-screen" class="card scribble-box hidden">
+        <h2>Waiting for Opponent</h2>
+        <p>Share this room code with a friend:</p>
+        <div class="code-display" id="display-room-code">------</div>
+        <button type="button" id="btn-leave-lobby" class="btn btn-danger scribble-btn">Leave Lobby</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen" class="hidden">
+        <div class="layout">
+            <div id="game-container">
+                <!-- Status Indicator -->
+                <div id="status-indicator" class="status-offline scribble-box" style="position: absolute; top: 10px; right: 10px; z-index: 200;">Connecting...</div>
+
+                <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite">
+                    <span id="status-banner-text">Prepare for Battle!</span>
+                </div>
+                <div class="player-bar top">
+                    <div class="player-info">
+                        <img id="top-pfp" class="chess-avatar hidden" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Avatar des Gegners">
+                        <span id="top-player-name">Opponent</span>
+                    </div>
+                    <span id="top-ready-badge" class="badge">Not Ready</span>
+                </div>
+                <div id="board-wrapper">
+                    <div id="board"></div>
+                    <div id="animation-layer"></div>
+                </div>
+                <div class="player-bar bottom">
+                    <div class="player-info">
+                        <img id="bottom-pfp" class="chess-avatar hidden" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Dein Avatar">
+                        <span id="bottom-player-name">You</span>
+                    </div>
+                    <span id="bottom-ready-badge" class="badge">Not Ready</span>
+                </div>
+                <div id="promotion-modal" role="dialog" aria-modal="true" aria-label="Bauernumwandlung">
+                    <div class="promotion-box scribble-box" id="promo-options"></div>
+                </div>
+                <div id="game-over" role="dialog" aria-modal="true" aria-live="assertive" aria-label="Spielende">
+                    <div class="scribble-box" style="padding: 30px; text-align: center; background: white;">
+                        <span id="winner-text" style="font-size: 32px; display: block; margin-bottom: 20px;">White Wins!</span>
+                        <button type="button" id="btn-back-to-menu" class="btn btn-primary scribble-btn">Back to Menu</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SIDEBAR -->
+            <div class="sidebar scribble-box">
+                <div class="logo-area">
+                    <h2 style="margin:0; font-size: 26px;">Quick Chess</h2>
+                    <span class="tag" id="my-role-tag">WHITE</span>
+                </div>
+                <div class="mode-badge-box">
+                    <span class="sidebar-title">MODE:</span>
+                    <span id="mode-display-tag" class="mode-tag">CLASS LOCK</span>
+                </div>
+                <button type="button" id="btn-ready" class="btn btn-ready scribble-btn">I AM READY!</button>
+                
+                <button type="button" id="btn-show-rules" class="btn scribble-btn" style="background: #f1c40f; margin-bottom: 15px;">📜 Full Rules</button>
+
+                <div class="legend" id="legend-box">
+                    <div class="sidebar-title" style="margin-bottom: 10px;">Cooldowns</div>
+                    <div class="legend-item" id="lg-k"><span>♚ King</span><span class="time fast" id="lg-k-val">1.0s</span></div>
+                    <div class="legend-item" id="lg-p"><span>♟ Pawns</span><span class="time" id="lg-p-val">3.5s</span></div>
+                    <div class="legend-item" id="lg-n"><span>♞ Knights</span><span class="time" id="lg-n-val">6.5s</span></div>
+                    <div class="legend-item" id="lg-b"><span>♝ Bishops</span><span class="time" id="lg-b-val">6.5s</span></div>
+                    <div class="legend-item" id="lg-r"><span>♜ Rooks</span><span class="time" id="lg-r-val">10.0s</span></div>
+                    <div class="legend-item" id="lg-q"><span>♛ Queen</span><span class="time" id="lg-q-val">14.0s</span></div>
+                </div>
+                <button type="button" id="btn-leave-game" class="btn btn-danger btn-leave scribble-btn" style="margin-top: 15px;">Leave Game</button>
+            </div>
+        </div>
+    </div>
+    <script src="client.js"></script>
+</body>
+</html>
