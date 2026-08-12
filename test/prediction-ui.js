@@ -64,7 +64,31 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     }
 
     // =================================================================
-    console.log('— Aufbau —');
+    console.log('— Veraltete gemeinsame Dateien —');
+    // Genau dieser Fall hat einmal eine stumm tote Seite erzeugt: Tipps liessen
+    // sich zeichnen, aber keine Figur anklicken.
+    {
+        const stale = await newPage('stale');
+        await stale.route('**/shared/move-gen.js', async route => {
+            const res = await route.fetch();
+            const body = (await res.text()).replace(
+                /findKing, isSquareAttacked, isInCheck, applyClassicMove,[\s\S]*?visibleSquares,/, '');
+            await route.fulfill({ status: 200, contentType: 'application/javascript', body });
+        });
+        await stale.goto(BASE + '/prediction-chess/', { waitUntil: 'domcontentloaded' });
+        await stale.waitForTimeout(700);
+        const banner = stale.locator('[role="alert"]').filter({ hasText: 'cannot start' });
+        log(await banner.count() === 1, 'Veraltete move-gen.js zeigt eine sichtbare Warnung');
+        log(/move-gen\.js/.test(await banner.textContent()), 'Die Warnung nennt die betroffene Datei');
+        log(await stale.evaluate(() =>
+            getComputedStyle(document.getElementById('splash-screen')).display === 'none'),
+            'Der Ladebildschirm bleibt nicht hängen');
+        await stale.close();
+        errors.length = 0;   // die erwartete Konsolenmeldung nicht mitzählen
+    }
+
+    // =================================================================
+    console.log('\n— Aufbau —');
     const w = await newPage('white');
     const b = await newPage('black');
     await w.goto(BASE + '/prediction-chess/', { waitUntil: 'domcontentloaded' });
@@ -90,6 +114,15 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     await b.waitForSelector('#game-screen:not(.hidden)', { timeout: 5000 });
     await w.waitForSelector('#game-screen:not(.hidden)', { timeout: 5000 });
     log(await w.locator('#board .square').count() === 64, 'Brett hat 64 Felder');
+    // Leisten und Balken muessen exakt buendig mit dem Brett abschliessen.
+    const widths = await w.evaluate(() => {
+        const board = document.getElementById('board-wrapper').getBoundingClientRect();
+        const timer = document.getElementById('bottom-timer').parentElement.getBoundingClientRect();
+        return { bx: board.x, bw: board.width, tx: timer.x, tw: timer.width };
+    });
+    log(widths.bx === widths.tx && widths.bw === widths.tw,
+        'Zeitbalken liegt exakt auf der Brettbreite',
+        `Brett ${widths.bx}/${widths.bw} vs Balken ${widths.tx}/${widths.tw}`);
     log(await w.evaluate(() => {
         const s = document.querySelector('#board .square');
         return s.getAttribute('tabindex') === '0' && s.getAttribute('role') === 'gridcell';
@@ -204,6 +237,27 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         return img.classList.contains('hidden');
     }), 'Gegnerischer Turm a8 ist nicht gerendert');
     log(await w.evaluate(() => !window.__leak), 'Kein Leak-Flag gesetzt');
+
+    // =================================================================
+    console.log('\n— Leave Game —');
+    // Vorher hat der Knopf nur neu geladen; die Reconnect-Logik setzte einen
+    // sofort zurueck in dieselbe Partie, also passierte scheinbar nichts.
+    w.on('dialog', d => d.accept());
+    const opponentSeesEnd = b.waitForFunction(
+        () => document.getElementById('game-over').style.display === 'flex',
+        null, { timeout: 6000 }).then(() => true).catch(() => false);
+
+    await w.click('#btn-leave-game');
+    await w.waitForTimeout(1500);
+    log(await w.locator('#menu-screen:not(.hidden)').count() === 1, 'Leave Game landet im Menü');
+    log(await w.locator('#game-screen.hidden').count() === 1, 'Spielbildschirm ist wirklich weg');
+    log(await w.evaluate(() => !sessionStorage.getItem('pred_seat')), 'Gespeicherter Platz ist gelöscht');
+    log(await opponentSeesEnd, 'Gegner bekommt sofort das Spielende (kein 30-Sekunden-Warten)');
+
+    await w.reload({ waitUntil: 'domcontentloaded' });
+    await w.waitForTimeout(1200);
+    log(await w.locator('#menu-screen:not(.hidden)').count() === 1,
+        'Auch nach erneutem Laden bleibt man im Menü');
 
     // =================================================================
     console.log('\n— Konsolenfehler —');
