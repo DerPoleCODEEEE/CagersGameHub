@@ -56,7 +56,15 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         await page.waitForTimeout(150);
     }
 
+    /**
+     * Zieht. Tippen ist Pflicht, deshalb wird vorher ein neutraler Pfeil
+     * gezeichnet, falls noch keiner steht (h1–h2: als Tipp erlaubt, trifft aber
+     * garantiert nicht und verfaelscht so keine Muenzzaehlung).
+     */
     async function move(page, from, to) {
+        if (await page.locator('#predict-bar.required').count()) {
+            await dragArrow(page, [7, 7], [6, 7]);
+        }
         await page.click(sel(from[0], from[1]));
         await page.waitForTimeout(120);
         await page.click(sel(to[0], to[1]));
@@ -142,18 +150,65 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         null, { timeout: 15000 });
     log(true, 'Countdown beendet, Partie läuft');
 
+    // Ab hier wird die Brettposition bei jedem Schritt mitgeschrieben. Ein
+    // wanderndes Brett heisst: man klickt daneben.
+    const boardPos = async () => w.evaluate(() => {
+        // Dokumentkoordinaten: ein Seitenscroll ist kein Layoutsprung.
+        const r = document.getElementById('board-wrapper').getBoundingClientRect();
+        return `${r.x + scrollX}/${r.y + scrollY}/${r.width}`;
+    });
+    const positions = [['Partie gestartet', await boardPos()]];
+    const trackBoard = async (label) => positions.push([label, await boardPos()]);
+
+    // Der Zeitbalken darf nicht hinter dem Schatten des Bretts verschwinden.
+    const timerOnTop = await w.evaluate(() => {
+        const bar = document.getElementById('bottom-timer').parentElement.getBoundingClientRect();
+        const hit = document.elementFromPoint(bar.x + bar.width / 2, bar.y + bar.height / 2);
+        return !!hit && (hit.id === 'bottom-timer' || hit.classList.contains('timer-track'));
+    });
+    log(timerOnTop, 'Zeitbalken liegt vor dem Brett, nicht dahinter');
+
+    const fits = await w.evaluate(() => {
+        const layout = document.querySelector('.layout').getBoundingClientRect();
+        const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
+        const container = document.getElementById('game-container').getBoundingClientRect();
+        return { layout: layout.height, sidebar: sidebar.height, container: container.height };
+    });
+    log(fits.sidebar <= fits.container + 40,
+        'Seitenleiste ist nicht höher als das Spielfeld (sonst scrollt die Seite)',
+        `Leiste ${Math.round(fits.sidebar)} vs Spielfeld ${Math.round(fits.container)}`);
+    log(await w.locator('.shop-card').count() === 16 &&
+        await w.evaluate(() => {
+            const g = document.getElementById('shop-grid');
+            // Kein Scrollbalken. Die paar Pixel Toleranz sind die Schlagschatten
+            // der Karten, die ueber das Raster hinausragen.
+            const scrolls = getComputedStyle(g).overflowY !== 'visible' ||
+                            g.scrollHeight > g.clientHeight + 8;
+            const cards = Array.from(g.querySelectorAll('.shop-card'));
+            const box = g.getBoundingClientRect();
+            const clipped = cards.some(c => c.getBoundingClientRect().bottom > box.bottom + 8);
+            return !scrolls && !clipped && cards.length === 16;
+        }), 'Alle 16 Items sind ohne Scrollen sichtbar');
+
     log(await b.locator('#shop-lock:not(.hidden)').count() === 1, 'Schwarz kann nicht kaufen, solange Weiß am Zug ist');
     log(/not your turn/i.test(await b.textContent('#shop-lock-reason')), 'Sperrgrund bei Schwarz stimmt');
     log(await w.locator('#shop-lock.hidden').count() === 1, 'Weiß darf am Zug kaufen');
 
     // =================================================================
-    console.log('\n— Ziehen ohne Tipp —');
-    // Der Tipp ist freiwillig. Dieser Pfad war lange ungetestet, obwohl es
-    // der erste ist, den jeder Spieler nimmt.
+    console.log('\n— Tipp ist Pflicht —');
+    // Anschauen darf man alles, ziehen erst nach dem Tipp.
     await w.click(sel(7, 1));
     await w.waitForTimeout(200);
-    log(await w.locator('#board .square.selected').count() === 1, 'Figur lässt sich ohne Tipp auswählen');
-    log(await w.locator('#board .square.valid-move').count() === 2, 'Zugvorschläge erscheinen ohne Tipp');
+    log(await w.locator('#board .square.selected').count() === 1, 'Figur lässt sich vorher auswählen');
+    log(await w.locator('#board .square.valid-move').count() === 2, 'Zugvorschläge erscheinen vorher');
+    await w.click(sel(5, 2));
+    await w.waitForTimeout(500);
+    log(await w.evaluate(() =>
+        document.querySelector('#board .square[data-r="5"][data-c="2"] .piece-img').classList.contains('hidden')),
+        'Ohne Tipp wird der Zug nicht ausgeführt');
+    log(/call their reply first/i.test(await w.textContent('#predict-text')) ||
+        /call your opponent/i.test(await w.textContent('#predict-text')),
+        'Die Leiste sagt, dass der Tipp fehlt');
     await w.keyboard.press('Escape');
 
     // =================================================================
@@ -167,6 +222,7 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         boxBefore.width === boxAfter.width,
         'Brett bleibt beim Zeichnen exakt stehen',
         `dx=${boxAfter.x - boxBefore.x} dy=${boxAfter.y - boxBefore.y}`);
+    await trackBoard('Tipp gezeichnet');
     log(await w.locator('#arrow-layer path').count() >= 2, 'Pfeil wird gezeichnet');
     log(/calling e7→e5/i.test(await w.textContent('#predict-text')), 'Tipp steht in der Leiste');
     log(await b.locator('#arrow-layer path').count() === 0, 'Der Gegner sieht den offenen Tipp nicht');
@@ -197,6 +253,7 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     await w.click('.shop-card[data-item="freeze"]');
     await w.waitForTimeout(250);
     log(await w.locator('#target-banner:not(.hidden)').count() === 1, 'Zielmodus wird geöffnet');
+    await trackBoard('Zielmodus offen');
     log(await w.locator('.square.target-ok').count() > 0, 'Gültige Ziele leuchten');
     log(await w.evaluate(() => document.getElementById('board-wrapper').classList.contains('targeting')),
         'Brett wird im Zielmodus abgedunkelt');
@@ -204,6 +261,7 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     await w.keyboard.press('Escape');
     await w.waitForTimeout(200);
     log(await w.locator('#target-banner.hidden').count() === 1, 'Esc bricht den Zielmodus ab');
+    await trackBoard('Zielmodus abgebrochen');
     log(await w.textContent('#bottom-coins .coin-num') === '21', 'Abbruch kostet keine Münzen');
 
     await w.click('.shop-card[data-item="freeze"]');
@@ -211,6 +269,7 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     await w.click(sel(0, 1));             // Springer b8 fesseln
     await w.waitForTimeout(400);
     log(await w.textContent('#bottom-coins .coin-num') === '18', 'Fesselung kostet 3 Münzen');
+    await trackBoard('Item gekauft');
     log(await w.locator('#effects-mine .effect-chip').count() === 1, 'Eigener Effekt erscheint in der Leiste');
     log(await b.locator('#effects-theirs .effect-chip').count() === 1, 'Gegner sieht den Effekt ebenfalls');
     log(/shackle/i.test(await b.textContent('#effects-theirs')), 'Gegner sieht den Namen des Items');
@@ -237,6 +296,14 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
         return img.classList.contains('hidden');
     }), 'Gegnerischer Turm a8 ist nicht gerendert');
     log(await w.evaluate(() => !window.__leak), 'Kein Leak-Flag gesetzt');
+
+    // =================================================================
+    console.log('\n— Layout-Stabilität —');
+    await trackBoard('Ende der Partie');
+    const first = positions[0][1];
+    const wanderer = positions.filter(([, v]) => v !== first);
+    log(wanderer.length === 0, 'Brett steht über die gesamte Partie exakt still',
+        wanderer.map(([l, v]) => `${l}: ${v} statt ${first}`).join(' | '));
 
     // =================================================================
     console.log('\n— Leave Game —');
