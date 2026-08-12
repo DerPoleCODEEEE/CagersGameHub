@@ -287,8 +287,8 @@
             tick: null,
             charges: 1,
             short: 'Your next miss does not reset your streak.',
-            rules: 'One wrong prediction does not cost you your run — it simply carries on. Also ' +
-                   'covers a turn where you skip the prediction entirely.'
+            rules: 'One wrong prediction does not cost you your run — it simply carries on. ' +
+                   'Worth buying exactly when a long streak is on the line.'
         },
 
         double_coins: {
