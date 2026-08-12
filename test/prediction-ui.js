@@ -57,17 +57,16 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     }
 
     /**
-     * Zieht. Tippen ist Pflicht, deshalb wird vorher ein neutraler Pfeil
-     * gezeichnet, falls noch keiner steht (h1–h2: als Tipp erlaubt, trifft aber
-     * garantiert nicht und verfaelscht so keine Muenzzaehlung).
+     * Erst ziehen, dann tippen — der Pfeil schickt beides ab. Ohne eigenen
+     * Tipp geht ein neutraler mit (h1–h2 trifft garantiert nicht und
+     * verfaelscht damit keine Muenzzaehlung).
      */
-    async function move(page, from, to) {
-        if (await page.locator('#predict-bar.required').count()) {
-            await dragArrow(page, [7, 7], [6, 7]);
-        }
+    async function move(page, from, to, call) {
         await page.click(sel(from[0], from[1]));
         await page.waitForTimeout(120);
         await page.click(sel(to[0], to[1]));
+        await page.waitForTimeout(200);
+        await dragArrow(page, call ? call[0] : [7, 7], call ? call[1] : [6, 7]);
         await page.waitForTimeout(450);
     }
 
@@ -109,6 +108,19 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     log(await w.locator('script:not([src])').count() === 0, 'Kein Inline-Script (CSP-tauglich)');
     log(await w.locator('.shop-card').count() === 16, 'Shop zeigt alle 16 Karten');
     log(await w.locator('.item-row').count() === 16, 'Regelbuch listet alle Items');
+    log(await w.evaluate(() => {
+        const prices = Array.from(document.querySelectorAll('.shop-card .pr'))
+            .map(n => parseInt(n.textContent.replace(/\D/g, ''), 10));
+        return prices.every((p, i) => i === 0 || prices[i - 1] <= p);
+    }), 'Shop ist nach Preis sortiert (billig zuerst)');
+    log(await w.evaluate(() => !window.Items.getItem('second_guess') && !window.Items.getItem('cloak')),
+        'Second Guess und Cloak sind entfernt');
+    log(await w.evaluate(() => !!window.Items.getItem('long_shot') && !!window.Items.getItem('toll')),
+        'Long Shot und Toll sind da');
+    log(await w.evaluate(() => window.Items.coinsForHit(3) === 2 && window.Items.coinsForHit(5) === 3 &&
+                               window.Items.coinsForHit(8) === 4), 'Streak zahlt ×2 / ×3 / ×4');
+    log(await w.evaluate(() => window.Items.coinsForHit(8, { doubled: true }) === 2),
+        'Double Coins ignoriert die Serie');
 
     await w.fill('#player-name', 'Alice');
     await w.click('#btn-create');
@@ -195,45 +207,49 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     log(await w.locator('#shop-lock.hidden').count() === 1, 'Weiß darf am Zug kaufen');
 
     // =================================================================
-    console.log('\n— Tipp ist Pflicht —');
-    // Anschauen darf man alles, ziehen erst nach dem Tipp.
+    console.log('\n— Erst ziehen, dann tippen —');
     await w.click(sel(7, 1));
     await w.waitForTimeout(200);
-    log(await w.locator('#board .square.selected').count() === 1, 'Figur lässt sich vorher auswählen');
-    log(await w.locator('#board .square.valid-move').count() === 2, 'Zugvorschläge erscheinen vorher');
+    log(await w.locator('#board .square.selected').count() === 1, 'Figur lässt sich auswählen');
+    log(await w.locator('#board .square.valid-move').count() === 2, 'Zugvorschläge erscheinen');
+
     await w.click(sel(5, 2));
-    await w.waitForTimeout(500);
+    await w.waitForTimeout(350);
+    log(await w.evaluate(() =>
+        !document.querySelector('#board .square[data-r="5"][data-c="2"] .piece-img').classList.contains('hidden')),
+        'Der Zug erscheint sofort auf dem eigenen Brett');
+    log(await b.evaluate(() =>
+        document.querySelector('#board .square[data-r="5"][data-c="2"] .piece-img').classList.contains('hidden')),
+        'Der Gegner sieht davon noch nichts');
+    log(await w.locator('#board .square.pending-move').count() === 2, 'Start- und Zielfeld sind markiert');
+    log(/ready — now call their reply/i.test(await w.textContent('#predict-text')),
+        'Die Leiste fordert jetzt den Tipp');
+    log(await w.locator('#shop-lock:not(.hidden)').count() === 1, 'Der Shop ist bei offenem Zug gesperrt');
+
+    await w.click('#btn-clear-arrow');
+    await w.waitForTimeout(300);
     log(await w.evaluate(() =>
         document.querySelector('#board .square[data-r="5"][data-c="2"] .piece-img').classList.contains('hidden')),
-        'Ohne Tipp wird der Zug nicht ausgeführt');
-    log(/call their reply first/i.test(await w.textContent('#predict-text')) ||
-        /call your opponent/i.test(await w.textContent('#predict-text')),
-        'Die Leiste sagt, dass der Tipp fehlt');
-    await w.keyboard.press('Escape');
+        'Take back nimmt den Zug zurück');
 
     // =================================================================
     console.log('\n— Tipp zeichnen —');
     // Das Brett darf sich beim Zeichnen nicht bewegen: sonst klickt man
     // danach auf die Stelle, wo die Figur eben noch war.
     const boxBefore = await w.locator('#board-wrapper').boundingBox();
-    await dragArrow(w, [1, 4], [3, 4]);   // Tipp: e7–e5
+    await w.click(sel(6, 4)); await w.waitForTimeout(120);
+    await w.click(sel(4, 4)); await w.waitForTimeout(200);
+    await dragArrow(w, [1, 4], [3, 4]);   // Tipp: e7–e5 — schickt e2–e4 mit ab
+    await w.waitForTimeout(400);
     const boxAfter = await w.locator('#board-wrapper').boundingBox();
     log(boxBefore.x === boxAfter.x && boxBefore.y === boxAfter.y &&
         boxBefore.width === boxAfter.width,
         'Brett bleibt beim Zeichnen exakt stehen',
         `dx=${boxAfter.x - boxBefore.x} dy=${boxAfter.y - boxBefore.y}`);
     await trackBoard('Tipp gezeichnet');
-    log(await w.locator('#arrow-layer path').count() >= 2, 'Pfeil wird gezeichnet');
-    log(/calling e7→e5/i.test(await w.textContent('#predict-text')), 'Tipp steht in der Leiste');
-    log(await b.locator('#arrow-layer path').count() === 0, 'Der Gegner sieht den offenen Tipp nicht');
+    log(await b.evaluate(() => !document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
+        'Mit dem Pfeil geht der Zug raus');
 
-    // Nach dem Zeichnen muss die Auswahl weiterhin funktionieren.
-    await w.click(sel(6, 4));
-    await w.waitForTimeout(200);
-    log(await w.locator('#board .square.selected').count() === 1, 'Auswählen funktioniert auch nach dem Tipp');
-    await w.keyboard.press('Escape');
-
-    await move(w, [6, 4], [4, 4]);        // e2–e4
     log(await w.evaluate(() => !document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
         'Zug kommt auf dem eigenen Brett an');
     log(await b.evaluate(() => !document.querySelector('#board .square[data-r="4"][data-c="4"] .piece-img').classList.contains('hidden')),
@@ -255,8 +271,10 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     log(await w.locator('#target-banner:not(.hidden)').count() === 1, 'Zielmodus wird geöffnet');
     await trackBoard('Zielmodus offen');
     log(await w.locator('.square.target-ok').count() > 0, 'Gültige Ziele leuchten');
-    log(await w.evaluate(() => document.getElementById('board-wrapper').classList.contains('targeting')),
-        'Brett wird im Zielmodus abgedunkelt');
+    log(await w.evaluate(() => {
+        const f = getComputedStyle(document.getElementById('board-wrapper')).filter;
+        return f === 'none' || !/brightness/.test(f);
+    }), 'Brett bleibt im Zielmodus normal hell');
 
     await w.keyboard.press('Escape');
     await w.waitForTimeout(200);
@@ -273,6 +291,15 @@ const sel = (r, c) => `#board .square[data-r="${r}"][data-c="${c}"]`;
     log(await w.locator('#effects-mine .effect-chip').count() === 1, 'Eigener Effekt erscheint in der Leiste');
     log(await b.locator('#effects-theirs .effect-chip').count() === 1, 'Gegner sieht den Effekt ebenfalls');
     log(/shackle/i.test(await b.textContent('#effects-theirs')), 'Gegner sieht den Namen des Items');
+    // Der Effekt muss auch auf dem Brett zu sehen sein, nicht nur in der Leiste.
+    log(await w.evaluate(() => {
+        const m = document.querySelector('#board .square[data-r="0"][data-c="1"] .sq-marker');
+        return m && m.classList.contains('shackled') && m.textContent === '🔗';
+    }), 'Gefesselte Figur ist auf dem Brett markiert');
+    log(await b.evaluate(() => {
+        const m = document.querySelector('#board .square[data-r="0"][data-c="1"] .sq-marker');
+        return m && m.classList.contains('shackled');
+    }), 'Der Gegner sieht die Markierung ebenfalls');
     log(await w.locator('#shop-lock:not(.hidden)').count() === 1, 'Nach dem Kauf ist der Shop für diesen Zug zu');
     log(/one item per turn/i.test(await w.textContent('#shop-lock-reason')), 'Sperrgrund nach dem Kauf stimmt');
 
