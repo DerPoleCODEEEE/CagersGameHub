@@ -431,8 +431,36 @@ app.get('/api/leaderboard',
 // =========================================================
 // 6. STATISCHE VERZEICHNISSE
 // =========================================================
-const staticOpts = { maxAge: IS_PROD ? '1h' : 0, etag: true };
-app.use('/shared', express.static(path.join(__dirname, 'public/shared'), { maxAge: IS_PROD ? '7d' : 0 }));
+/**
+ * Cache-Strategie.
+ *
+ * Vorher galt in Produktion pauschal `max-age=1h` — auch fuer HTML und JS.
+ * Nach einem Deploy holte der Browser eine Stunde lang gar nichts Neues und
+ * mischte alte mit neuen Dateien. Das Symptom war z.B. eine veraltete
+ * `shared/move-gen.js` neben einer neuen `client.js`:
+ * "MoveGen.legalMoves is not a function", ohne dass irgendwer einen Fehler
+ * gemacht haette.
+ *
+ * Code und Markup werden deshalb immer revalidiert. Dank ETag antwortet der
+ * Server dabei fast immer mit 304 (kein Body), das kostet praktisch nichts.
+ * Bilder und Sounds aendern sich nie und duerfen lange liegenbleiben.
+ */
+const staticOpts = {
+    etag: true,
+    maxAge: 0,
+    setHeaders(res, filePath) {
+        if (/\.(html|js|css|json)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'no-cache');
+        } else if (IS_PROD) {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+    }
+};
+// Ausgerechnet /shared lag vorher 7 Tage im Browser-Cache — also genau die
+// Dateien, die alle Modi gemeinsam benutzen (move-gen.js, items.js, ...).
+// Nach einem Deploy lief der Client dadurch gegen eine veraltete Bibliothek.
+// Jetzt gilt auch hier: Code revalidieren, Sounds duerfen liegenbleiben.
+app.use('/shared', express.static(path.join(__dirname, 'public/shared'), staticOpts));
 app.use(express.static(path.join(__dirname, 'public/hub'), staticOpts));
 app.use('/chess', express.static(path.join(__dirname, 'public/chess'), staticOpts));
 app.use('/mutant-chess', express.static(path.join(__dirname, 'public/mutant-chess'), staticOpts));
