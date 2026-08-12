@@ -693,10 +693,24 @@ module.exports = function attachPredictionChess(deps) {
 
             // Der zweite Zug eines Double Move darf weder schlagen noch Schach geben.
             const isSecond = room.doubleSecond[color];
+
             const opts = movementOpts(room, color, isSecond ? { noCapture: true, noCheck: true } : null);
             const legal = MoveGen.legalMoves(room.board, fromR, fromC, opts);
             const chosen = legal.find(m => m.r === toR && m.c === toC);
             if (!chosen) return socket.emit('error_msg', 'Illegal move.');
+
+            // Tippen ist Pflicht — geprueft NACH der Zuglegalitaet, damit ein
+            // illegaler Zug auch als solcher gemeldet wird. Ausnahme: der zweite
+            // Zug eines Double Move, dort laeuft der Tipp aus dem ersten noch.
+            const arrows = [];
+            const a1 = readArrow(data.prediction);
+            if (a1) arrows.push(a1);
+            const sg = findEffect(room, color, 'second_guess');
+            const a2 = readArrow(data.prediction2);
+            if (a2 && sg && !sameMove(a1, a2)) arrows.push(a2);
+            if (!isSecond && !arrows.length) {
+                return socket.emit('error_msg', "Call your opponent's next move first.");
+            }
 
             // --- Zug ausführen ---------------------------------------
             const res = MoveGen.applyClassicMove(room.board, {
@@ -725,13 +739,8 @@ module.exports = function attachPredictionChess(deps) {
             const resolved = resolvePrediction(room, foe, actual);
             room.lastResult[foe] = resolved;
 
-            const arrows = [];
-            const a1 = readArrow(data.prediction);
-            if (a1) arrows.push(a1);
-            const sg = findEffect(room, color, 'second_guess');
-            const a2 = readArrow(data.prediction2);
-            if (a2 && sg && !sameMove(a1, a2)) { arrows.push(a2); consumeCharge(room, sg); }
-            room.pending[color] = arrows.length ? { arrows } : null;
+            if (arrows.length > 1 && sg) consumeCharge(room, sg);
+            if (arrows.length) room.pending[color] = { arrows };
 
             // --- Effekte, Zugrecht, Uhr ------------------------------
             tickEffects(room, color);
