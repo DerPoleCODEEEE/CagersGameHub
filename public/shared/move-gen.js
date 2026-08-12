@@ -18,6 +18,13 @@
 
     const inBounds = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
+    /** Steht {r,c} in einer Feldliste? Toleriert null/undefined. */
+    function squareInList(list, r, c) {
+        if (!Array.isArray(list)) return false;
+        for (const s of list) if (s && s.r === r && s.c === c) return true;
+        return false;
+    }
+
     /** Prüft, ob ein Wert ein gültiger Brett-Index ist (gegen manipulierte Clients). */
     function isValidIndex(v) {
         return Number.isInteger(v) && v >= 0 && v <= 7;
@@ -69,6 +76,13 @@
      * @param {object} [opts.enPassantTarget] {r,c,color}
      * @param {object} [opts.hasMoved]        {wK,wR_left,wR_right,bK,bR_left,bR_right}
      * @param {object} [opts.activeEffect]    {id} — Chaos-Modus-Effekte (optional)
+     *
+     * Prediction-Chess-Items (alle optional, Standard = aus):
+     * @param {Array}  [opts.frozen]          [{r,c}] Figuren, die nicht ziehen dürfen (Shackle)
+     * @param {Array}  [opts.blockedTargets]  [{r,c}] gesperrte Zielfelder (Minefield)
+     * @param {object} [opts.extraPattern]    {r,c,type:'knight'} zusätzliche Gangart (Cavalry)
+     * @param {boolean}[opts.pawnDoubleAnywhere] Bauern-Doppelschritt von jeder Reihe (Pawn Storm)
+     * @param {boolean}[opts.noCapture]       keine Schlagzüge (zweiter Zug des Double Move)
      */
     function classicMoves(board, r, c, opts) {
         opts = opts || {};
@@ -76,6 +90,10 @@
 
         const piece = board[r][c];
         if (!piece) return [];
+
+        // Shackle: gefesselte Figur hat keine Züge. Sie deckt weiterhin Felder —
+        // Angriffskarten werden davon bewusst nicht beeinflusst.
+        if (squareInList(opts.frozen, r, c)) return [];
 
         const enPassantTarget = opts.enPassantTarget || null;
         const hasMoved = opts.hasMoved || null;
@@ -124,7 +142,8 @@
                 if (activeEffect && activeEffect.id === 'pawn_jump') {
                     addLeaper(KNIGHT);
                 } else {
-                    const canSprint = !!(activeEffect && activeEffect.id === 'pawn_sprint');
+                    const canSprint = !!(activeEffect && activeEffect.id === 'pawn_sprint') ||
+                                      !!opts.pawnDoubleAnywhere;
                     if (inBounds(r + dir, c) && !board[r + dir][c]) {
                         moves.push({ r: r + dir, c, type: 'normal' });
                         if ((r === startRow || canSprint) && inBounds(r + dir * 2, c) && !board[r + dir * 2][c]) {
@@ -178,7 +197,39 @@
                 break;
             }
         }
-        return moves;
+
+        // --- Prediction-Chess-Items ---------------------------------------
+
+        // Cavalry: gewählte Figur zieht zusätzlich wie ein Springer.
+        const ep = opts.extraPattern;
+        if (ep && ep.r === r && ep.c === c && ep.type === 'knight') {
+            addLeaper(KNIGHT);
+        }
+
+        let out = moves;
+
+        // Doppelte Ziele entfernen (Cavalry auf einem Springer o. Ä.).
+        if (ep && ep.r === r && ep.c === c) {
+            const seen = Object.create(null);
+            out = out.filter(m => {
+                const key = m.r + ',' + m.c;
+                if (seen[key]) return false;
+                seen[key] = true;
+                return true;
+            });
+        }
+
+        // Minefield: gesperrte Zielfelder herausfiltern.
+        if (Array.isArray(opts.blockedTargets) && opts.blockedTargets.length) {
+            out = out.filter(m => !squareInList(opts.blockedTargets, m.r, m.c));
+        }
+
+        // Double Move, zweiter Zug: nichts schlagen.
+        if (opts.noCapture) {
+            out = out.filter(m => m.type !== 'capture' && m.type !== 'en_passant');
+        }
+
+        return out;
     }
 
     /** Aktualisiert die Rochade-Rechte nach einem Zug (mutiert `hasMoved`). */
@@ -414,12 +465,295 @@
         return hasMoved;
     }
 
+    // =====================================================================
+    // KLASSISCHE REGELN MIT SCHACH — für Prediction Chess
+    //
+    // Quick Chess kennt kein Schach (dort gewinnt, wer den König schlägt),
+    // deshalb filtert `classicMoves` nicht auf Königssicherheit. Prediction
+    // Chess ist normales Schach, also liegt die komplette Legalitätsprüfung
+    // hier — und zwar isomorph, damit Server und Client dasselbe rechnen.
+    // =====================================================================
+
+    const KNIGHT_DELTAS = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+    const ROOK_DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const BISHOP_DIRS = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+    /** Findet den König einer Farbe. */
+    function findKing(board, color) {
+        const target = color === 'w' ? 'K' : 'k';
+        for (let r = 0; r < 8; r++) {
+            if (!board[r]) continue;
+            for (let c = 0; c < 8; c++) {
+                if (board[r][c] === target) return { r, c };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Wird ein Feld von `byColor` angegriffen?
+     *
+     * Bewusst eigenständig statt über `classicMoves`: ein Bauer schlägt nur
+     * diagonal, zieht aber gerade. Shackle und Minefield werden hier absichtlich
+     * NICHT berücksichtigt — eine gefesselte Figur gibt weiterhin Schach, und ein
+     * vermintes Feld schützt den König nicht. Das hält die Regeln vorhersehbar.
+     *
+     * @param {object} [opts.extraPattern] {r,c,type:'knight'} — Cavalry greift mit
+     */
+    function isSquareAttacked(board, r, c, byColor, opts) {
+        opts = opts || {};
+        if (!validCoords(r, c) || !board) return false;
+        const ep = opts.extraPattern;
+        const hasExtraKnight = (pr, pc) => !!(ep && ep.type === 'knight' && ep.r === pr && ep.c === pc);
+
+        // Springer (inkl. Cavalry-Trägern)
+        for (const [dr, dc] of KNIGHT_DELTAS) {
+            const nr = r + dr, nc = c + dc;
+            if (!inBounds(nr, nc)) continue;
+            const p = board[nr][nc];
+            if (!p || colorOf(p) !== byColor) continue;
+            if (p.toLowerCase() === 'n' || hasExtraKnight(nr, nc)) return true;
+        }
+
+        // Bauern — nur diagonal, und zwar aus Sicht des Angreifers
+        const pawnDir = byColor === 'w' ? 1 : -1; // von (r,c) aus rückwärts gedacht
+        for (const dc of [-1, 1]) {
+            const nr = r + pawnDir, nc = c + dc;
+            if (!inBounds(nr, nc)) continue;
+            const p = board[nr][nc];
+            if (p && colorOf(p) === byColor && p.toLowerCase() === 'p') return true;
+        }
+
+        // König
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (!dr && !dc) continue;
+                const nr = r + dr, nc = c + dc;
+                if (!inBounds(nr, nc)) continue;
+                const p = board[nr][nc];
+                if (p && colorOf(p) === byColor && p.toLowerCase() === 'k') return true;
+            }
+        }
+
+        // Turm/Dame und Läufer/Dame
+        const rays = [
+            { dirs: ROOK_DIRS, chars: ['r', 'q'] },
+            { dirs: BISHOP_DIRS, chars: ['b', 'q'] }
+        ];
+        for (const ray of rays) {
+            for (const [dr, dc] of ray.dirs) {
+                let nr = r + dr, nc = c + dc;
+                while (inBounds(nr, nc)) {
+                    const p = board[nr][nc];
+                    if (p) {
+                        if (colorOf(p) === byColor && ray.chars.indexOf(p.toLowerCase()) !== -1) return true;
+                        break;
+                    }
+                    nr += dr; nc += dc;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Steht die Farbe im Schach? */
+    function isInCheck(board, color, opts) {
+        const k = findKing(board, color);
+        if (!k) return false;
+        return isSquareAttacked(board, k.r, k.c, color === 'w' ? 'b' : 'w', opts);
+    }
+
+    /**
+     * Führt einen Zug auf einer Kopie des Bretts aus.
+     * Kennt Rochade, En Passant und Umwandlung.
+     *
+     * @returns {{board, captured: string|null, enPassantTarget: object|null,
+     *            type: string, promotedTo: string|null, rook: object|null}}
+     */
+    function applyClassicMove(board, move, opts) {
+        opts = opts || {};
+        const next = board.map(row => row.slice());
+        const { fromR, fromC, toR, toC } = move;
+        const piece = next[fromR][fromC];
+        const color = colorOf(piece);
+        const lower = piece ? piece.toLowerCase() : '';
+        const epT = opts.enPassantTarget || null;
+
+        let type = move.type || 'normal';
+        if (!move.type) {
+            if (lower === 'k' && Math.abs(toC - fromC) === 2) type = 'castle';
+            else if (lower === 'p' && toC !== fromC && !next[toR][toC] &&
+                     epT && epT.r === toR && epT.c === toC && epT.color !== color) type = 'en_passant';
+            else if (next[toR][toC]) type = 'capture';
+        }
+
+        let captured = null;
+        let rook = null;
+
+        if (type === 'en_passant') {
+            const capR = color === 'w' ? toR + 1 : toR - 1;
+            captured = next[capR][toC];
+            next[capR][toC] = null;
+        } else if (next[toR][toC]) {
+            captured = next[toR][toC];
+        }
+
+        next[toR][toC] = piece;
+        next[fromR][fromC] = null;
+
+        if (type === 'castle') {
+            const row = fromR;
+            if (toC === 6) {           // kurz
+                rook = { fromR: row, fromC: 7, toR: row, toC: 5 };
+                next[row][5] = next[row][7];
+                next[row][7] = null;
+            } else if (toC === 2) {    // lang
+                rook = { fromR: row, fromC: 0, toR: row, toC: 3 };
+                next[row][3] = next[row][0];
+                next[row][0] = null;
+            }
+        }
+
+        // Umwandlung — der Server setzt promotedTo, nie der Client.
+        let promotedTo = null;
+        if (lower === 'p' && (toR === 0 || toR === 7)) {
+            const want = typeof move.promotedTo === 'string' ? move.promotedTo.toLowerCase() : 'q';
+            const safe = ['q', 'r', 'n', 'b'].indexOf(want) !== -1 ? want : 'q';
+            promotedTo = color === 'w' ? safe.toUpperCase() : safe;
+            next[toR][toC] = promotedTo;
+        }
+
+        // Neues En-Passant-Ziel nur nach einem Doppelschritt.
+        let enPassantTarget = null;
+        if (lower === 'p' && Math.abs(toR - fromR) === 2 && !opts.suppressEnPassant) {
+            enPassantTarget = { r: (fromR + toR) / 2, c: fromC, color };
+        }
+
+        return { board: next, captured, enPassantTarget, type, promotedTo, rook };
+    }
+
+    /**
+     * Legale Züge einer Figur: pseudo-legale Züge, gefiltert auf Königssicherheit.
+     * Nimmt dieselben Item-`opts` wie `classicMoves` und zusätzlich:
+     * @param {boolean} [opts.noCheck] der Zug darf kein Schach geben
+     *                                 (zweiter Zug des Double Move)
+     */
+    function legalMoves(board, r, c, opts) {
+        opts = opts || {};
+        const piece = board && board[r] ? board[r][c] : null;
+        if (!piece) return [];
+        const color = colorOf(piece);
+        const enemy = color === 'w' ? 'b' : 'w';
+        const pseudo = classicMoves(board, r, c, opts);
+        if (!pseudo.length) return [];
+
+        const inCheckNow = isInCheck(board, color, opts);
+
+        return pseudo.filter(m => {
+            // Den König schlägt man nicht — in einer legalen Stellung kann das
+            // ohnehin nie vorkommen, aber ein manipuliertes Brett soll hier
+            // nicht plötzlich einen "Sieg-Zug" erzeugen.
+            const victim = board[m.r] ? board[m.r][m.c] : null;
+            if (victim && victim.toLowerCase() === 'k') return false;
+
+            if (m.type === 'castle') {
+                // Aus dem Schach heraus und durch ein bedrohtes Feld gibt es keine Rochade.
+                if (inCheckNow) return false;
+                const transit = m.c === 6 ? 5 : 3;
+                if (isSquareAttacked(board, r, transit, enemy, opts)) return false;
+            }
+            const sim = applyClassicMove(board, {
+                fromR: r, fromC: c, toR: m.r, toC: m.c, type: m.type
+            }, opts);
+            if (isInCheck(sim.board, color, opts)) return false;
+            if (opts.noCheck && isInCheck(sim.board, enemy, opts)) return false;
+            return true;
+        });
+    }
+
+    /** Alle legalen Züge einer Farbe: [{fromR,fromC,toR,toC,type}]. */
+    function allLegalMoves(board, color, opts) {
+        const out = [];
+        for (let r = 0; r < 8; r++) {
+            if (!board[r]) continue;
+            for (let c = 0; c < 8; c++) {
+                const p = board[r][c];
+                if (!p || colorOf(p) !== color) continue;
+                for (const m of legalMoves(board, r, c, opts)) {
+                    out.push({ fromR: r, fromC: c, toR: m.r, toC: m.c, type: m.type });
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Gibt es überhaupt einen legalen Zug? Bricht beim ersten Treffer ab. */
+    function hasAnyLegalMove(board, color, opts) {
+        for (let r = 0; r < 8; r++) {
+            if (!board[r]) continue;
+            for (let c = 0; c < 8; c++) {
+                const p = board[r][c];
+                if (!p || colorOf(p) !== color) continue;
+                if (legalMoves(board, r, c, opts).length) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Status für die Seite, die am Zug ist.
+     * @returns {'checkmate'|'stalemate'|'check'|'normal'}
+     */
+    function gameStatus(board, color, opts) {
+        const check = isInCheck(board, color, opts);
+        const canMove = hasAnyLegalMove(board, color, opts);
+        if (!canMove) return check ? 'checkmate' : 'stalemate';
+        return check ? 'check' : 'normal';
+    }
+
+    /**
+     * Sichtfeld einer Farbe für Fog of War: eigene Felder plus alles, was die
+     * eigenen Figuren erreichen oder angreifen. Bauern sehen zusätzlich ihre
+     * Schlagdiagonalen, auch wenn dort gerade nichts steht.
+     *
+     * @returns {Array<{r:number,c:number}>}
+     */
+    function visibleSquares(board, color, opts) {
+        opts = opts || {};
+        const seen = Object.create(null);
+        const mark = (r, c) => { if (inBounds(r, c)) seen[r + ',' + c] = true; };
+
+        for (let r = 0; r < 8; r++) {
+            if (!board[r]) continue;
+            for (let c = 0; c < 8; c++) {
+                const p = board[r][c];
+                if (!p || colorOf(p) !== color) continue;
+                mark(r, c);
+                // Gefesselte Figuren sehen trotzdem — Shackle nimmt Züge, nicht Augen.
+                const moveOpts = Object.assign({}, opts, { frozen: null, blockedTargets: null, noCapture: false });
+                for (const m of classicMoves(board, r, c, moveOpts)) mark(m.r, m.c);
+                if (p.toLowerCase() === 'p') {
+                    const dir = color === 'w' ? -1 : 1;
+                    mark(r + dir, c - 1);
+                    mark(r + dir, c + 1);
+                }
+            }
+        }
+        return Object.keys(seen).map(k => {
+            const parts = k.split(',');
+            return { r: parseInt(parts[0], 10), c: parseInt(parts[1], 10) };
+        });
+    }
+
     return {
         // Allgemein
-        inBounds, isValidIndex, validCoords, createHasMoved,
+        inBounds, isValidIndex, validCoords, createHasMoved, squareInList,
         // Klassisch
         INITIAL_CHESS_BOARD, createInitialBoard, colorOf, isEnemy,
         classicMoves, updateCastlingRights,
+        // Klassisch mit Schachregeln (Prediction Chess)
+        findKing, isSquareAttacked, isInCheck, applyClassicMove,
+        legalMoves, allLegalMoves, hasAnyLegalMove, gameStatus, visibleSquares,
         // Mutant
         PIECE_RANK, createInitialMutantBoard, getPieceColor, baseChar,
         sortCanonically, checkMergeLegality, mutantMoves, updateMutantCastlingRights
