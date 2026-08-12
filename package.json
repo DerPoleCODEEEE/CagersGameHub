@@ -7,10 +7,12 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "lint": "npx --yes eslint . || echo \"eslint nicht installiert — npm i -D eslint\"",
-    "check": "node --check server.js && node --check public/shared/move-gen.js && node --check public/chess/client.js && node --check public/mutant-chess/client.js && node --check public/play-cager/client.js && node --check public/hub/app.js",
+    "check": "node --check server.js && node --check prediction-chess.js && node --check public/shared/move-gen.js && node --check public/shared/items.js && node --check public/chess/client.js && node --check public/mutant-chess/client.js && node --check public/play-cager/client.js && node --check public/prediction-chess/client.js && node --check public/hub/app.js",
     "test": "node test/move-gen.test.js",
     "test:smoke": "node test/smoke-socket.js",
-    "test:ui": "node test/smoke-ui.js"
+    "test:ui": "node test/smoke-ui.js",
+    "test:prediction": "node test/prediction-socket.js",
+    "test:prediction:ui": "node test/prediction-ui.js"
   },
   "dependencies": {
     "connect-mongo": "^5.0.0",
