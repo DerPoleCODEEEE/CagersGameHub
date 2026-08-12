@@ -93,6 +93,7 @@
 
         swap: {
             id: 'swap',
+            isMove: true,
             icon: '♻️',
             name: 'Swap Places',
             price: 3,
@@ -212,6 +213,7 @@
         // ---- C — Material -------------------------------------------------
         recruit: {
             id: 'recruit',
+            isMove: true,
             icon: '🪖',
             name: 'Recruit',
             price: 3,
@@ -228,6 +230,7 @@
 
         resurrect: {
             id: 'resurrect',
+            isMove: true,
             icon: '🕯️',
             name: 'Revival',
             price: 5,
@@ -263,18 +266,34 @@
         },
 
         // ---- E — Prediction & Meta ----------------------------------------
-        second_guess: {
-            id: 'second_guess',
-            icon: '🎯',
-            name: 'Second Guess',
-            price: 1,
+        long_shot: {
+            id: 'long_shot',
+            icon: '🎲',
+            name: 'Long Shot',
+            price: 2,
             category: 'meta',
             targets: [],
             tick: null,
             charges: 1,
-            short: 'Draw two arrows on your next prediction.',
-            rules: 'For exactly one prediction you may name two different moves. If either one ' +
-                   'lands, it counts as a hit and your streak keeps growing.'
+            short: 'Next hit pays 3 coins. A miss costs you 1.',
+            rules: 'Your next call is a gamble: land it and it pays a flat 3 coins instead of the ' +
+                   'usual amount, miss it and you lose a coin. The streak multiplier does not apply ' +
+                   'while it is active, so it is at its best early in a run.'
+        },
+
+        toll: {
+            id: 'toll',
+            icon: '💰',
+            name: 'Toll',
+            price: 2,
+            category: 'meta',
+            targets: [],
+            tick: null,
+            duration: 0,
+            short: 'Take 2 coins from your opponent.',
+            rules: 'Two coins move straight from their purse into yours. Costs 2 and takes 2, so it ' +
+                   'never makes you richer on its own — it stops them buying something expensive. ' +
+                   'Refused if they have nothing to take.'
         },
 
         streak_shield: {
@@ -287,37 +306,23 @@
             tick: null,
             charges: 1,
             short: 'Your next miss does not reset your streak.',
-            rules: 'One wrong prediction does not cost you your run — it simply carries on. ' +
+            rules: 'One wrong call does not cost you your run — it simply carries on. ' +
                    'Worth buying exactly when a long streak is on the line.'
         },
 
         double_coins: {
             id: 'double_coins',
-            icon: '💰',
+            icon: '🪙',
             name: 'Double Coins',
             price: 2,
             category: 'meta',
             targets: [],
             tick: null,
             charges: 4,
-            short: 'Your next 4 hits pay double.',
-            rules: 'Each of your next 4 correct predictions pays twice as much, applied after the ' +
-                   'streak multiplier. It pays for itself from the second hit onwards.'
-        },
-
-        cloak: {
-            id: 'cloak',
-            icon: '🌫️',
-            name: 'Cloak',
-            price: 2,
-            category: 'meta',
-            targets: [],
-            tick: null,
-            charges: 1,
-            short: 'Your next purchase stays nameless to your opponent.',
-            rules: 'Your opponent only sees "item used" instead of the name, and the effect bar ' +
-                   'shows a question mark. The effect itself still happens — they just do not ' +
-                   'know which one yet.'
+            short: 'Your next 4 hits pay a flat 2 coins each.',
+            rules: 'Each of your next 4 correct calls pays exactly 2 coins. The streak multiplier ' +
+                   'is ignored while this runs, so it is strong early and a bad buy once your ' +
+                   'streak is paying 3 or more on its own.'
         },
 
         // ---- F — Vision ----------------------------------------------------
@@ -349,11 +354,12 @@
         vision: 'Vision'
     };
 
-    /** Reihenfolge im Shop: nach Kategorie, dann nach Preis. */
+    /** Reihenfolge im Shop: billig zuerst, bei gleichem Preis nach Kategorie. */
     const CATEGORY_ORDER = ['tempo', 'disrupt', 'material', 'meta', 'vision'];
     const SHOP_ORDER = ITEM_LIST.slice().sort((a, b) => {
+        if (a.price !== b.price) return a.price - b.price;
         const ci = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
-        return ci !== 0 ? ci : a.price - b.price;
+        return ci !== 0 ? ci : a.name.localeCompare(b.name);
     }).map(i => i.id);
 
     function getItem(id) {
@@ -366,9 +372,9 @@
     // =====================================================================
 
     const STREAK_TIERS = [
-        { at: 8, mult: 3 },
-        { at: 5, mult: 2 },
-        { at: 3, mult: 1.5 }
+        { at: 8, mult: 4 },
+        { at: 5, mult: 3 },
+        { at: 3, mult: 2 }
     ];
 
     /** Multiplikator für eine Streak-Länge (Länge NACH dem Treffer). */
@@ -379,12 +385,25 @@
 
     /**
      * Münzen für einen Treffer.
-     * @param {number} streak    Serienlänge nach diesem Treffer
-     * @param {boolean} doubled  Double Coins aktiv
+     *
+     * Double Coins und Long Shot zahlen bewusst FLACH und ignorieren die Serie:
+     * mit der Serie multipliziert kämen sonst zweistellige Beträge zusammen.
+     * Dadurch sind beide früh in einer Serie stark und später eine schlechte
+     * Wahl — der Kauf bleibt eine echte Entscheidung.
+     *
+     * @param {number} streak       Serienlänge nach diesem Treffer
+     * @param {object} [modifiers]  {doubled, longShot}
      */
-    function coinsForHit(streak, doubled) {
-        const base = Math.floor(1 * streakMultiplier(streak));
-        return doubled ? base * 2 : base;
+    function coinsForHit(streak, modifiers) {
+        const m = modifiers || {};
+        if (m.longShot) return 3;
+        if (m.doubled) return 2;
+        return Math.floor(1 * streakMultiplier(streak));
+    }
+
+    /** Strafe für einen Fehlschuss (nur mit Long Shot). */
+    function coinsForMiss(modifiers) {
+        return (modifiers && modifiers.longShot) ? 1 : 0;
     }
 
     // =====================================================================
@@ -499,6 +518,9 @@
         if (item.id === 'dispel' && ctx.enemyEffectCount === 0) {
             return { ok: false, reason: 'Your opponent has no active effects.' };
         }
+        if (item.id === 'toll' && ctx.enemyCoins === 0) {
+            return { ok: false, reason: 'Your opponent has no coins to take.' };
+        }
         if (item.id === 'resurrect' && normalizeCaptured(ctx.captured).length === 0) {
             return { ok: false, reason: 'You have not lost a piece yet.' };
         }
@@ -538,7 +560,7 @@
         ITEMS, ITEM_LIST, SHOP_ORDER, TARGET_KINDS, FILES,
         CATEGORY_LABEL, CATEGORY_ORDER,
         getItem, upgradeOptions, UPGRADE_PATH,
-        STREAK_TIERS, streakMultiplier, coinsForHit,
+        STREAK_TIERS, streakMultiplier, coinsForHit, coinsForMiss,
         isOwnHalf, backRank, normalizeCaptured,
         isValidTarget, validTargetSquares, canBuy, describeEffect
     };
