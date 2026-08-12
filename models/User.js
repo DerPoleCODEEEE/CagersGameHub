@@ -13,7 +13,8 @@ const userSchema = new mongoose.Schema({
     stats: {
         chess: recordSchema,
         mutant: recordSchema,
-        bot: recordSchema
+        bot: recordSchema,
+        prediction: recordSchema
     }
 }, { timestamps: true });
 
@@ -25,5 +26,6 @@ userSchema.index({ displayName: 1 });
 userSchema.index({ 'stats.chess.wins': -1 });
 userSchema.index({ 'stats.mutant.wins': -1 });
 userSchema.index({ 'stats.bot.wins': -1 });
+userSchema.index({ 'stats.prediction.wins': -1 });
 
 module.exports = mongoose.model('User', userSchema);
