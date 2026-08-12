@@ -12,7 +12,7 @@
 (function () {
 
     // Damit man in der Konsole sofort sieht, welche Fassung geladen ist.
-    const CLIENT_VERSION = '2026-08-12d';
+    const CLIENT_VERSION = '2026-08-12f';
     window.PREDICTION_VERSION = CLIENT_VERSION;
     console.info('Prediction Chess Client ' + CLIENT_VERSION);
 
@@ -48,6 +48,7 @@
     }
     if (typeof Items !== 'object' || !Items || !Items.ITEMS) MISSING.push('/shared/items.js');
     if (typeof DomUtils !== 'object' || !DomUtils) MISSING.push('/shared/dom-utils.js');
+    if (typeof BoardArrows !== 'object' || !BoardArrows) MISSING.push('/shared/board-arrows.js');
     if (MISSING.length) { startupFailure(MISSING); return; }
 
     const $ = (id) => document.getElementById(id);
@@ -308,6 +309,12 @@
         if (S.targeting) return pickTarget(r, c);
         if (!isMyTurn() || S.pendingPromotion) return;
 
+        // Ein Klick aufs Brett heisst: ich will es anders machen. Der offene
+        // Zug wird zurueckgenommen und der Klick ganz normal weiterverarbeitet.
+        if (awaitingCall()) {
+            S.pendingMove = null; S.pendingBuy = null; S.arrow = null;
+        }
+
         const p = S.board[r][c];
 
         if (S.selected) {
@@ -440,13 +447,20 @@
         return isMyTurn() && awaitingCall();
     }
 
+    /**
+     * Der Pfeil wird nur vorgemerkt. Abgeschickt wird erst auf Bestaetigung —
+     * ein danebengezogener Pfeil waere sonst sofort verbindlich.
+     */
     function setArrow(a) {
         if (!canPredict()) {
             flashError('Choose your move first, then call their reply.');
             return;
         }
         S.arrow = a;
-        commitTurn();
+        render();
+        // Damit Enter direkt greift, wenn man per Tastatur gezeichnet hat.
+        const send = $('btn-send-turn');
+        if (!send.classList.contains('is-hidden')) send.focus();
     }
 
     const sameArrow = (a, b) => !!a && !!b && a.fromR === b.fromR && a.fromC === b.fromC &&
@@ -787,25 +801,29 @@
 
     function renderPredictBar() {
         const bar = $('predict-bar'), txt = $('predict-text');
+        const back = $('btn-clear-arrow'), send = $('btn-send-turn');
         bar.classList.remove('armed', 'locked', 'required');
-        $('btn-clear-arrow').classList.toggle('is-hidden', !awaitingCall());
+        back.classList.toggle('is-hidden', !awaitingCall());
+        send.classList.toggle('is-hidden', !(awaitingCall() && S.arrow));
 
         if (!S.started || S.over) { bar.classList.add('locked'); txt.textContent = 'No prediction right now.'; return; }
         if (S.doubleSecond) { bar.classList.add('locked'); txt.textContent = 'Double Move, second move — no capture, no check.'; return; }
         if (!isMyTurn()) { bar.classList.add('locked'); txt.textContent = 'Waiting for your opponent…'; return; }
 
-        if (S.pendingBuy) {
-            const item = Items.getItem(S.pendingBuy.itemId);
-            bar.classList.add('required');
-            txt.textContent = (item ? item.icon + ' ' + item.name : 'Item') +
-                ' ready — now call their reply to play it.';
+        const what = S.pendingBuy
+            ? ((Items.getItem(S.pendingBuy.itemId) || {}).name || 'Item')
+            : (S.pendingMove ? sqName(S.pendingMove.fromR, S.pendingMove.fromC) + '–' +
+                               sqName(S.pendingMove.toR, S.pendingMove.toC) : '');
+
+        if (awaitingCall() && S.arrow) {
+            bar.classList.add('armed');
+            txt.textContent = what + ', calling ' + arrowText(S.arrow) +
+                '. Redraw to change it, then send.';
             return;
         }
-        if (S.pendingMove) {
-            const m = S.pendingMove;
+        if (awaitingCall()) {
             bar.classList.add('required');
-            txt.textContent = 'Move ' + sqName(m.fromR, m.fromC) + '–' + sqName(m.toR, m.toC) +
-                ' ready — now call their reply. Nothing is sent until you do.';
+            txt.textContent = what + ' ready — now call their reply. Nothing is sent yet.';
             return;
         }
         txt.textContent = 'Your move first — then call their reply with a right-click drag.';
@@ -841,6 +859,36 @@
         pop.style.bottom = '90px';
         host.appendChild(pop);
         setTimeout(() => pop.remove(), 1200);
+    }
+
+    // =================================================================
+    // Raum-Chat
+    // =================================================================
+    function addChatMessage(msg) {
+        const log = $('chat-log');
+        const empty = log.querySelector('.chat-empty');
+        if (empty) empty.remove();
+        const row = el('div', { class: 'chat-msg ' + (msg.color === 'w' ? 'w' : 'b') });
+        // Name und Text ausschliesslich als Text — nie als HTML.
+        row.appendChild(el('span', { class: 'who' }, (msg.name || 'Player') + ':'));
+        row.appendChild(document.createTextNode(msg.text));
+        log.appendChild(row);
+        while (log.children.length > 60) log.removeChild(log.firstChild);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function chatNote(text) {
+        const log = $('chat-log');
+        const empty = log.querySelector('.chat-empty');
+        if (empty) empty.remove();
+        log.appendChild(el('div', { class: 'chat-msg system' }, text));
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function resetChat() {
+        const log = $('chat-log');
+        clear(log);
+        log.appendChild(el('div', { class: 'chat-empty' }, 'No messages yet.'));
     }
 
     // =================================================================
@@ -967,6 +1015,8 @@
 
     socket.on('apply_prediction_move', (d) => {
         absorb(d);
+        // Nach jedem Zug ist die Rechnung hinfaellig.
+        if (boardAnnotations) boardAnnotations.clear();
         S.lastMove = d.move;
         S.selected = null; S.legal = [];
 
@@ -1004,10 +1054,22 @@
         setTimeout(renderPredictBar, 2000);
     });
 
+    socket.on('room_chat', (msg) => { if (msg && msg.text) addChatMessage(msg); });
+    socket.on('room_chat_history', (list) => {
+        resetChat();
+        if (Array.isArray(list)) list.forEach(addChatMessage);
+    });
+
     socket.on('draw_offered', () => { $('draw-modal').style.display = 'flex'; });
     socket.on('draw_declined', () => flashError('Draw declined.'));
-    socket.on('opponent_disconnected', () => flashError('Opponent lost connection — they forfeit if they do not return.'));
-    socket.on('opponent_reconnected', () => flashError('Opponent is back.'));
+    socket.on('opponent_disconnected', () => {
+        flashError('Opponent lost connection — they forfeit if they do not return.');
+        chatNote('Opponent lost connection.');
+    });
+    socket.on('opponent_reconnected', () => {
+        flashError('Opponent is back.');
+        chatNote('Opponent is back.');
+    });
 
     socket.on('game_over', (d) => {
         S.over = true;
@@ -1066,6 +1128,17 @@
 
     $('btn-ready').addEventListener('click', () => socket.emit('player_ready', { roomCode: S.roomCode }));
     $('btn-clear-arrow').addEventListener('click', cancelPending);
+    $('btn-send-turn').addEventListener('click', () => { if (S.arrow && awaitingCall()) commitTurn(); });
+
+    $('chat-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = $('chat-input');
+        const text = input.value.trim();
+        if (!text || !S.roomCode) return;
+        socket.emit('room_chat', { roomCode: S.roomCode, text });
+        input.value = '';
+        input.focus();
+    });
     $('btn-resign').addEventListener('click', () => {
         if (confirm('Resign this game?')) socket.emit('resign', { roomCode: S.roomCode });
     });
@@ -1106,7 +1179,18 @@
     $('btn-menu-rules').addEventListener('click', () => rulesModal.open());
     $('close-rules-btn').addEventListener('click', () => rulesModal.close());
 
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cancelEverything(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') return cancelEverything();
+        // Enter bestaetigt den Zug — aber nicht, wenn gerade ein Feld oder ein
+        // anderer Knopf den Fokus hat, sonst feuert es doppelt.
+        if (e.key === 'Enter' && S.arrow && awaitingCall()) {
+            const t = e.target;
+            if (t && t.closest && t.closest('.square, input, select')) return;
+            if (t && t.id && t.id !== 'btn-send-turn' && t.tagName === 'BUTTON') return;
+            e.preventDefault();
+            commitTurn();
+        }
+    });
     document.addEventListener('mouseup', () => { if (drag.from) { drag.from = null; drag.draft = null; drawArrows(); } });
 
     // Regelbuch-Tabelle aus derselben Registry wie der Shop
@@ -1139,7 +1223,16 @@
         });
     })();
 
+    // Zeichenpfeile zum Rechnen — nur waehrend der Gegner am Zug ist. In der
+    // eigenen Zugphase gehoert der Rechtsklick dem Tipp, sonst kaeme man sich
+    // gegenseitig ins Gehege.
+    const boardAnnotations = BoardArrows.attach({
+        board: '#board',
+        enabled: () => S.started && !S.over && S.turn !== S.color
+    });
+
     buildShop();
+    resetChat();
     buildBoard();
     render();
     tickTimer();
