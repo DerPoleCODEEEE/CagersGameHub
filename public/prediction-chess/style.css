@@ -103,7 +103,7 @@ input[type="text"], .select-input {
 /* Der Container ist exakt so breit wie das Brett samt Rand. Ohne das bestimmt
    der laengste Text in der Tippzeile die Breite — und das Brett springt zur
    Seite, sobald sich dieser Text aendert (z. B. beim Zeichnen eines Pfeils). */
-#game-container { position: relative; width: calc(var(--board-size) + 8px); }
+#game-container { position: relative; width: var(--board-size); }
 #game-container > * { box-sizing: border-box; max-width: 100%; }
 
 .player-bar {
@@ -187,7 +187,9 @@ input[type="text"], .select-input {
 
 /* ------------------------------------------------------------------- Brett */
 #board-wrapper {
-    position: relative; width: var(--board-size); height: var(--board-size);
+    /* Breite kommt vom Container, damit Leisten und Balken exakt buendig
+       mit dem Brett abschliessen (vorher 8px Rahmen daneben). */
+    position: relative; width: 100%; height: var(--board-size);
     box-shadow: 6px 6px 0px rgba(0,0,0,0.9); border: 4px solid #000;
     background: var(--board-light); transition: filter 0.2s;
 }
