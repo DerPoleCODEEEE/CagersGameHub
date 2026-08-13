@@ -18,8 +18,30 @@
 
     /* Brett passt sich an: nie groesser als 600px, nie breiter als das
        Fenster, und immer so hoch, dass Leisten und Tippzeile daneben
-       noch ins Bild passen. Der Pfeil-Layer skaliert ueber seine viewBox mit. */
-    --board-size: min(600px, 92vw, calc(100vh - 300px));
+       noch ins Bild passen. Der Pfeil-Layer skaliert ueber seine viewBox mit.
+
+       Das `max(280px, ...)` ist neu und wichtig: ohne Untergrenze wurde der
+       Hoehen-Term im Landscape (360px Schirmhoehe) zu `360 - 300 = 60px` —
+       das Brett fiel auf 60x60px mit 7,5px-Feldern zusammen. Jetzt ist bei
+       280px Schluss und die Seite scrollt stattdessen. Fuer echtes
+       Landscape gibt es zusaetzlich die eigene Regel ganz unten. */
+    --board-size: max(280px, min(600px, calc(100vw - 24px), calc(100vh - 300px)));
+
+    /* Feste Hoehe der Tippzeile. Steht als Variable hier, weil sie an drei
+       Stellen gebraucht wird und pro Breakpoint anders ist: der Text bricht
+       auf schmalen Brettern in eine dritte Zeile um. Fest bleibt sie, damit
+       das Brett nicht springt — nur der Wert aendert sich. */
+    --predict-bar-h: 68px;
+
+    /* Streifen oben fuer den fixierten Sound-Knopf. */
+    --top-strip: 0px;
+}
+
+/* Mobile Browser rechnen 100vh inklusive der ein- und ausfahrenden
+   Adressleiste — das Brett wackelt beim Scrollen. Eigener Block, weil eine
+   unbekannte Einheit sonst die ganze Deklaration ungueltig macht. */
+@supports (height: 100dvh) {
+    :root { --board-size: max(280px, min(600px, calc(100vw - 24px), calc(100dvh - 300px))); }
 }
 
 body {
@@ -33,6 +55,12 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
+    padding-top: var(--top-strip);
+    box-sizing: border-box;
+}
+
+@supports (height: 100dvh) {
+    body { min-height: 100dvh; }
 }
 
 .hidden { display: none !important; }
@@ -63,7 +91,9 @@ input[type="text"], .select-input {
 }
 
 .btn {
-    width: 100%; padding: 12px; border: 3px solid #000;
+    /* Ohne border-box war ein Knopf mit width:100% um Innenabstand plus
+       Rahmen (30px) breiter als sein Container. */
+    width: 100%; padding: 12px; box-sizing: border-box; border: 3px solid #000;
     border-bottom-left-radius: 15px 255px; border-bottom-right-radius: 225px 15px;
     border-top-left-radius: 255px 15px; border-top-right-radius: 15px 225px;
     font-size: 22px; font-weight: bold; cursor: pointer; transition: transform 0.1s;
@@ -252,6 +282,15 @@ input[type="text"], .select-input {
 .pending-move .piece-img { opacity: 0.75; }
 .pending-item { box-shadow: inset 0 0 0 4px rgba(241, 196, 15, 0.95); }
 
+/* Erstes von zwei Feldern der Tipp-Eingabe (Antippen bzw. Enter). Gestrichelt
+   und in der Tipp-Farbe, damit es sich klar von einem vorgemerkten Zug
+   (durchgezogen) und von einer Auswahl (gelb) unterscheidet. */
+.call-from::before {
+    content: ''; position: absolute; inset: 3px;
+    border: 4px dashed var(--predict); background: var(--predict-soft);
+    pointer-events: none; z-index: 7;
+}
+
 .valid-move::after {
     content: ''; width: 30%; height: 30%; background: rgba(0,0,0,0.15);
     border-radius: 50%; position: absolute; pointer-events: none;
@@ -339,8 +378,9 @@ input[type="text"], .select-input {
     display: flex; justify-content: space-between; align-items: center; gap: 10px;
     /* FESTE Hoehe, nicht min-height: auf schmalen Brettern bricht der Text
        sonst in eine dritte Zeile um, die Leiste waechst und das zentrierte
-       Layout schiebt das Brett nach oben. */
-    height: 68px; overflow: hidden;
+       Layout schiebt das Brett nach oben. Der Wert kommt aus der Variable,
+       damit er pro Breakpoint anders sein kann — fest bleibt er immer. */
+    height: var(--predict-bar-h); overflow: hidden;
 }
 /* Platz bleibt reserviert, die Knoepfe werden nur unsichtbar — sonst
    aendert sich die Hoehe der Leiste und das Layout ruckelt. */
@@ -364,8 +404,19 @@ input[type="text"], .select-input {
     width: 300px; padding: 14px; display: flex; flex-direction: column;
     height: calc(var(--board-size) + 160px); max-height: 780px; box-sizing: border-box;
 }
-.chat-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.chat-hint { font-size: 14px; color: #777; }
+.chat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.chat-hint { font-size: 14px; color: #777; margin-left: auto; }
+/* Einklapp-Knopf: nur auf dem Handy sichtbar, dort steht der Chat unter dem
+   Brett und soll nicht die halbe Seite fuellen. */
+.chat-toggle {
+    display: none;
+    /* min-height, weil der Knopf sonst 28px hoch ist — mit dem Daumen nicht
+       zuverlaessig zu treffen. */
+    width: auto; flex: 0 0 auto; min-height: 36px; padding: 4px 12px; font-size: 15px; font-weight: bold;
+    background: var(--gold); color: #000; border: 2px solid #000;
+    border-radius: 8px; box-shadow: 2px 2px 0 rgba(0,0,0,0.85); cursor: pointer;
+    font-family: 'Patrick Hand', cursive, sans-serif; line-height: 1.3;
+}
 .chat-log {
     flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
     font-size: 16px; border: 2px solid #000; padding: 8px;
@@ -539,5 +590,180 @@ input[type="text"], .select-input {
     .chat-panel { width: var(--board-size); max-width: 600px; height: 260px; }
 }
 @media (max-width: 1010px) {
-    .sidebar { width: var(--board-size); max-width: 600px; }
+    /* box-sizing fehlte: 16px Innenabstand und 4px Rahmen kamen auf die
+       Brettbreite obendrauf, die Leiste war 40px breiter als das Brett. */
+    .sidebar { width: var(--board-size); max-width: 600px; box-sizing: border-box; }
+}
+
+/* =====================================================================
+   HANDY & TABLET
+
+   Im DOM steht Chat -> Brett -> Seitenleiste (bewusst so fuer den
+   Desktop). Gestapelt wuerde der Chat damit den ganzen ersten Bildschirm
+   fuellen. Auf dem Handy sortiert `order` um: Brett, dann Shop, dann
+   Chat — und der Chat startet eingeklappt. Die Desktop-Reihenfolge bleibt
+   unangetastet, weil `order` nur in diesem Block gesetzt wird.
+   ===================================================================== */
+@media (max-width: 900px) {
+    :root {
+        --top-strip: 40px;
+        /* Auf schmalen Brettern braucht die Tippzeile eine Zeile mehr. */
+        --predict-bar-h: 84px;
+    }
+
+    /* Bei zentriertem Flex-Inhalt, der hoeher ist als der Schirm, wird der
+       obere Teil unerreichbar. */
+    body { align-items: flex-start; padding-left: 8px; padding-right: 8px; }
+
+    .layout {
+        flex-direction: column;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 12px;
+        width: 100%;
+    }
+    #game-container { order: 1; }
+    .sidebar      { order: 2; }
+    .chat-panel   { order: 3; }
+
+    .sidebar {
+        width: 100%;
+        max-width: var(--board-size);
+        padding: 12px;
+        box-sizing: border-box;
+    }
+
+    /* Chat unten, einklappbar, und ohne die an die Brettgroesse gekoppelte
+       Hoehe — die ergibt gestapelt keinen Sinn mehr. */
+    .chat-panel {
+        width: 100%;
+        max-width: var(--board-size);
+        height: auto;
+        max-height: none;
+        padding: 12px;
+    }
+    .chat-toggle { display: block; }
+    .chat-log { height: 180px; flex: 0 0 auto; }
+    .chat-panel.collapsed .chat-log,
+    .chat-panel.collapsed .chat-form { display: none; }
+    .chat-panel.collapsed .chat-head { margin-bottom: 0; }
+
+    #menu-screen,
+    #lobby-screen,
+    .card {
+        width: 100%;
+        max-width: 420px;
+        padding: 20px 16px;
+        box-sizing: border-box;
+    }
+    .card h1 { font-size: clamp(26px, 7vw, 38px); }
+    .subtitle { font-size: 17px; }
+
+    .player-bar { font-size: 16px; padding: 6px 9px; }
+    .chess-avatar { width: 28px; height: 28px; }
+    .coin-box { font-size: 17px; padding: 2px 8px; }
+    .streak-dot { width: 9px; height: 9px; }
+    .score-cluster { gap: 7px; }
+    /* Lange Twitch-Namen sollen die Leiste nicht sprengen. */
+    #top-player-name, #bottom-player-name {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .player-info { min-width: 0; flex: 1; }
+
+    .predict-bar { font-size: 15px; padding: 6px 9px; }
+    .target-banner { font-size: 16px; padding: 5px 10px; }
+    .code-display { font-size: clamp(28px, 9vw, 42px); padding: 12px; }
+    .promo-piece { width: 52px; height: 52px; }
+    .gameover-box { min-width: 0; padding: 18px; }
+    .winner-text { font-size: 25px; }
+
+    /* Der Shop behaelt seine vier Spalten — auf 366px sind das rund 84px
+       pro Kachel, also ein brauchbares Tippziel. Nur die Kachel wird etwas
+       hoeher, damit der Name zweizeilig hineinpasst. */
+    .shop-card { height: 62px; }
+    .shop-card .nm { font-size: 11px; }
+    .shop-card .ico { font-size: 17px; }
+    .sq-marker { font-size: 22px; }
+    .sq-marker.mine { font-size: 19px; }
+    .fog-badge { font-size: 14px; padding: 3px 7px; }
+}
+
+/* Sehr schmale Geraete: bei vier Spalten bleiben unter ~340px nur noch
+   ~72px pro Kachel — dann lieber drei Spalten und lesbare Namen. */
+@media (max-width: 359px) {
+    .shop-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* =====================================================================
+   LANDSCAPE auf dem Handy: Brett links, Bedienung rechts.
+
+   Prediction Chess hat ueber und unter dem Brett deutlich mehr UI als die
+   anderen Modi (zwei Leisten, zwei Zeitbalken, Effektzeile, Tippzeile).
+   Auf 360px Schirmhoehe geht das nicht alles gleichzeitig hinein — das
+   Brett bekommt darum eine Untergrenze von 240px und die Seite scrollt
+   den Rest. Besser ein bedienbares Brett mit Scrollen als ein
+   vollstaendig sichtbares, das man nicht treffen kann.
+   ===================================================================== */
+@media (orientation: landscape) and (max-height: 600px) {
+    :root {
+        --board-size: max(240px, min(calc(100vh - 150px), calc(100vw - 330px)));
+        --predict-bar-h: 52px;
+        --top-strip: 0px;
+    }
+
+    body { align-items: flex-start; padding: 6px 8px; }
+
+    /* #game-screen ist Flex-Kind des body und bekam nur seine
+       Max-Content-Breite. Dadurch wurde der Brett-Container mitgeschrumpft
+       und das Brett war nicht mehr quadratisch. */
+    #game-screen { width: 100%; }
+
+    .layout {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 10px;
+        width: 100%;
+    }
+    /* Das Brett darf als Letztes nachgeben, nie als Erstes. */
+    #game-container { order: 1; flex: 0 0 auto; }
+    .sidebar      { order: 2; }
+    .chat-panel   { order: 3; }
+
+    .sidebar {
+        width: auto;
+        flex: 1 1 260px;
+        min-width: 240px;
+        max-width: 340px;
+        padding: 10px;
+    }
+    /* Platz fuer den Sound-Knopf in der Ecke — die Seitenleiste ist im
+       Landscape die rechte Spalte und lag sonst genau darunter. */
+    .logo-area { padding-right: 44px; }
+    /* Der Chat bekommt im Landscape die volle Breite unter beiden Spalten
+       und bleibt eingeklappt — sonst gibt es eine dritte Spalte, fuer die
+       kein Platz ist. */
+    .chat-panel { width: 100%; max-width: none; height: auto; padding: 10px; }
+    .chat-toggle { display: block; }
+    .chat-log { height: 120px; flex: 0 0 auto; }
+    .chat-panel.collapsed .chat-log,
+    .chat-panel.collapsed .chat-form { display: none; }
+    .chat-panel.collapsed .chat-head { margin-bottom: 0; }
+
+    .logo-area { padding-bottom: 6px; margin-bottom: 8px; }
+    .logo-area h2 { font-size: 20px; }
+    .mode-badge-box { padding: 5px 9px; margin-bottom: 8px; }
+    .btn-ready { font-size: 19px; padding: 8px; margin-bottom: 8px; }
+    .actions-row .btn { font-size: 16px; padding: 6px; }
+    .history-list { height: 48px; }
+    .shop-card { height: 54px; }
+    .player-bar { font-size: 15px; padding: 4px 8px; }
+    .chess-avatar { width: 24px; height: 24px; }
+    .predict-bar { font-size: 14px; padding: 4px 8px; }
+}
+
+@supports (height: 100dvh) {
+    @media (orientation: landscape) and (max-height: 600px) {
+        :root { --board-size: max(240px, min(calc(100dvh - 150px), calc(100vw - 330px))); }
+    }
 }

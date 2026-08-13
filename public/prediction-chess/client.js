@@ -190,7 +190,7 @@
 
                 sq.classList.remove('selected', 'valid-move', 'capture-move', 'last-move',
                                     'in-check', 'target-ok', 'target-chosen', 'fogged',
-                                    'pending-move', 'pending-item');
+                                    'pending-move', 'pending-item', 'call-from');
 
                 const marker = sq.lastChild;
                 marker.className = 'sq-marker';
@@ -215,6 +215,12 @@
             (S.pendingBuy.targets || []).forEach(t => {
                 if (t && MoveGen.validCoords(t.r, t.c)) squares[t.r][t.c].classList.add('pending-item');
             });
+        }
+        // Erstes von zwei Feldern der Tipp-Eingabe (Touch/Tastatur). Ohne
+        // Markierung weiss man nach dem ersten Antippen nicht, ob es gezaehlt
+        // hat.
+        if (keyArrowFrom && MoveGen.validCoords(keyArrowFrom.r, keyArrowFrom.c)) {
+            squares[keyArrowFrom.r][keyArrowFrom.c].classList.add('call-from');
         }
 
         renderEffectMarkers();
@@ -309,8 +315,16 @@
         if (S.targeting) return pickTarget(r, c);
         if (!isMyTurn() || S.pendingPromotion) return;
 
+        // TOUCH: Sobald der eigene Zug feststeht, meinen zwei Antipper den
+        // Tipp — erst das Startfeld des Gegners, dann sein Ziel. Auf Touch
+        // gibt es kein Rechtsklick-Ziehen, ohne das hier waere der Pflicht-
+        // Tipp auf dem Handy schlicht nicht eingebbar (man kaeme nie zum
+        // "Send turn"). Zuruecknehmen geht ueber "Take back".
+        if (isCoarsePointer() && awaitingCall()) return pickArrowSquare(r, c);
+
         // Ein Klick aufs Brett heisst: ich will es anders machen. Der offene
         // Zug wird zurueckgenommen und der Klick ganz normal weiterverarbeitet.
+        // Auf der Maus bleibt das so — dort zeichnet der Rechtsklick den Tipp.
         if (awaitingCall()) {
             S.pendingMove = null; S.pendingBuy = null; S.arrow = null;
         }
@@ -326,14 +340,49 @@
         if (p && MoveGen.colorOf(p) === S.color) select(r, c);
     }
 
-    /** Tastatur: erst Figur, dann Ziel — und für den Tipp zwei Felder. */
+    /**
+     * Erstes von zwei Feldern, aus denen der Tipp entsteht. Wird von Touch
+     * (Antippen) und Tastatur (Enter) gemeinsam benutzt.
+     */
     let keyArrowFrom = null;
+
+    /**
+     * Grobe Zeiger = Finger. Wird bei jedem Aufruf frisch ausgewertet, damit
+     * ein angestecktes Keyboard oder ein Wechsel Touch/Maus sofort greift.
+     */
+    function isCoarsePointer() {
+        return !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    }
+
+    /**
+     * Zwei-Felder-Eingabe fuer den Tipp. Erstes Antippen merkt das Startfeld,
+     * das zweite setzt den Pfeil. Dasselbe Feld zweimal hebt die Auswahl auf.
+     */
+    function pickArrowSquare(r, c) {
+        if (!canPredict()) return;
+        if (!keyArrowFrom) {
+            keyArrowFrom = { r, c };
+            render();
+            return;
+        }
+        if (keyArrowFrom.r === r && keyArrowFrom.c === c) {
+            keyArrowFrom = null;
+            render();
+            return;
+        }
+        const from = keyArrowFrom;
+        keyArrowFrom = null;
+        setArrow({ fromR: from.r, fromC: from.c, toR: r, toC: c });
+    }
+
+    /** Tastatur: erst Figur, dann Ziel — und für den Tipp zwei Felder. */
     function onSquareKey(r, c) {
         if (S.targeting) return pickTarget(r, c);
-        if (keyArrowFrom) {
-            setArrow({ fromR: keyArrowFrom.r, fromC: keyArrowFrom.c, toR: r, toC: c });
-            keyArrowFrom = null;
-            return;
+        // Steht der eigene Zug schon, gehoert Enter dem Tipp. Vorher war
+        // dieser Zweig toter Code: keyArrowFrom wurde nie gesetzt, der im
+        // Regelbuch beschriebene Tastaturweg funktionierte also nicht.
+        if (keyArrowFrom || (isMyTurn() && awaitingCall() && !S.pendingPromotion)) {
+            return pickArrowSquare(r, c);
         }
         onSquareClick(r, c);
     }
@@ -399,6 +448,7 @@
     function cancelPending() {
         if (!awaitingCall()) return false;
         S.pendingMove = null; S.pendingBuy = null; S.arrow = null;
+        keyArrowFrom = null;
         render();
         return true;
     }
@@ -815,18 +865,33 @@
             : (S.pendingMove ? sqName(S.pendingMove.fromR, S.pendingMove.fromC) + '–' +
                                sqName(S.pendingMove.toR, S.pendingMove.toC) : '');
 
+        // Auf Touch gibt es kein Rechtsklick-Ziehen — dort wird der Tipp
+        // angetippt. Die Leiste muss den jeweils gueltigen Weg nennen, sonst
+        // sucht man auf dem Handy nach einer Geste, die es nicht gibt.
+        const touch = isCoarsePointer();
+
         if (awaitingCall() && S.arrow) {
             bar.classList.add('armed');
             txt.textContent = what + ', calling ' + arrowText(S.arrow) +
-                '. Redraw to change it, then send.';
+                (touch ? '. Tap two squares to change it, then send.'
+                       : '. Redraw to change it, then send.');
             return;
         }
         if (awaitingCall()) {
             bar.classList.add('required');
-            txt.textContent = what + ' ready — now call their reply. Nothing is sent yet.';
+            if (touch) {
+                txt.textContent = keyArrowFrom
+                    ? what + ' ready — from ' + sqName(keyArrowFrom.r, keyArrowFrom.c) +
+                      ', now tap where they go.'
+                    : what + ' ready — tap the square they move from, then their target.';
+            } else {
+                txt.textContent = what + ' ready — now call their reply. Nothing is sent yet.';
+            }
             return;
         }
-        txt.textContent = 'Your move first — then call their reply with a right-click drag.';
+        txt.textContent = touch
+            ? 'Your move first — then tap two squares to call their reply.'
+            : 'Your move first — then call their reply with a right-click drag.';
     }
 
     const arrowText = (a) => a ? sqName(a.fromR, a.fromC) + '→' + sqName(a.toR, a.toC) : '';
@@ -875,6 +940,9 @@
         log.appendChild(row);
         while (log.children.length > 60) log.removeChild(log.firstChild);
         log.scrollTop = log.scrollHeight;
+        // Damit ein eingeklappter Chat (Handy) auf neue Nachrichten hinweisen
+        // kann, statt stumm zu bleiben.
+        markChatUnread();
     }
 
     function chatNote(text) {
@@ -890,6 +958,13 @@
         clear(log);
         log.appendChild(el('div', { class: 'chat-empty' }, 'No messages yet.'));
     }
+
+    /**
+     * Auf dem Handy steht der Chat eingeklappt unter dem Brett. Ohne Hinweis
+     * merkt man dort nicht, dass der Gegner geschrieben hat. Wird von
+     * setupChatCollapse ueberschrieben, sobald der Knopf existiert.
+     */
+    let markChatUnread = () => {};
 
     // =================================================================
     // Zug-Timer
@@ -1139,6 +1214,43 @@
         input.value = '';
         input.focus();
     });
+
+    /**
+     * Chat einklappen. Auf dem Handy steht der Chat unter dem Brett (siehe
+     * `order` in style.css) und startet zugeklappt — offen schiebt er den
+     * Rest sonst einen halben Bildschirm nach unten. Auf dem Desktop ist der
+     * Knopf per CSS unsichtbar und der Chat immer offen, damit sich an der
+     * gewohnten Ansicht nichts aendert.
+     */
+    (function setupChatCollapse() {
+        const panel = document.querySelector('.chat-panel');
+        const btn = $('chat-toggle');
+        if (!panel || !btn) return;
+
+        const setCollapsed = (yes) => {
+            panel.classList.toggle('collapsed', yes);
+            btn.textContent = yes ? 'Show' : 'Hide';
+            btn.setAttribute('aria-expanded', yes ? 'false' : 'true');
+        };
+
+        // Dieselbe Grenze wie der Media-Query, der den Knopf sichtbar macht.
+        const narrow = window.matchMedia(
+            '(max-width: 900px), (orientation: landscape) and (max-height: 600px)');
+        setCollapsed(narrow.matches);
+
+        btn.addEventListener('click', () => setCollapsed(!panel.classList.contains('collapsed')));
+
+        // Beim Drehen ins Breite wieder aufklappen — sonst bleibt der Chat auf
+        // dem Desktop heimlich zu, wo der Knopf unsichtbar ist.
+        const onChange = (e) => { if (!e.matches) setCollapsed(false); };
+        if (narrow.addEventListener) narrow.addEventListener('change', onChange);
+        else if (narrow.addListener) narrow.addListener(onChange);
+
+        markChatUnread = () => {
+            if (panel.classList.contains('collapsed')) btn.textContent = 'Show ●';
+        };
+    })();
+
     $('btn-resign').addEventListener('click', () => {
         if (confirm('Resign this game?')) socket.emit('resign', { roomCode: S.roomCode });
     });

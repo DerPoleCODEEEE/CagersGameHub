@@ -140,6 +140,10 @@
                 <div class="chat-head">
                     <span class="sidebar-title">Room Chat</span>
                     <span class="chat-hint">only you two</span>
+                    <!-- Nur auf dem Handy sichtbar (style.css): dort steht der
+                         Chat unter dem Brett und startet eingeklappt. -->
+                    <button type="button" id="chat-toggle" class="chat-toggle"
+                            aria-expanded="true" aria-controls="chat-log">Hide</button>
                 </div>
                 <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
                 <form id="chat-form" class="chat-form" autocomplete="off">
