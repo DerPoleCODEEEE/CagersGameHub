@@ -64,7 +64,9 @@
     </div>
 
     <!-- MAIN MENU -->
-    <div id="menu-screen" class="card scribble-box" style="width: 420px;">
+    <!-- Breite liegt in style.css (#menu-screen), damit sie auf schmalen
+         Schirmen ueberschrieben werden kann — inline geht das nicht. -->
+    <div id="menu-screen" class="card scribble-box">
         <h1>Cagers Quick Chess</h1>
         <p class="subtitle">Real-Time Multiplayer Chess</p>
         
@@ -145,7 +147,9 @@
         <div class="layout">
             <div id="game-container">
                 <!-- Status Indicator -->
-                <div id="status-indicator" class="status-offline scribble-box" style="position: absolute; top: 10px; right: 10px; z-index: 200;">Connecting...</div>
+                <!-- Position liegt in style.css, damit sie auf dem Handy nicht
+                     auf der oberen rechten Brettecke klebt. -->
+                <div id="status-indicator" class="status-offline scribble-box">Connecting...</div>
 
                 <div id="status-banner" class="status-banner hidden" role="status" aria-live="polite">
                     <span id="status-banner-text">Prepare for Battle!</span>
