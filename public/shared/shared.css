@@ -25,6 +25,32 @@
     .sfx-toggle-btn { top: 6px; right: 6px; font-size: 12px; padding: 4px 8px; }
 }
 
+/* Auf dem Handy sass der Umschalter exakt auf der oberen rechten Brettecke
+   (in Quick Chess zusaetzlich auf der Verbindungsanzeige). Die Spielseiten
+   reservieren ihm oben einen eigenen Streifen — siehe --top-strip dort. */
+@media (max-width: 900px) {
+    .sfx-toggle-btn { box-shadow: 1px 1px 0 #000; padding: 5px 9px; }
+}
+
+/* Im Landscape ist die Hoehe knapp — dort kann kein Streifen reserviert
+   werden, ohne dem Brett Platz zu nehmen. Der Knopf wird deshalb auf sein
+   Symbol eingekuerzt (🔊/🔇 tragen den Zustand ohnehin) und braucht nur noch
+   die Ecke. Das `aria-label` bleibt vollstaendig, der Knopf also weiter
+   fuer Screenreader beschriftet. */
+@media (orientation: landscape) and (max-height: 600px) {
+    .sfx-toggle-btn {
+        top: 4px;
+        right: 4px;
+        width: 36px;
+        padding: 5px 0;
+        font-size: 15px;
+        text-align: left;
+        text-indent: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+}
+
 /* --- Fokus muss sichtbar sein (Tastaturbedienung) --- */
 :focus-visible {
     outline: 3px solid #2563eb;
@@ -57,5 +83,86 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.001ms !important;
         scroll-behavior: auto !important;
+    }
+}
+
+/* =====================================================================
+   MOBILE-GRUNDLAGEN — gelten fuer alle fuenf Seiten.
+
+   Hier stehen bewusst NUR modusunabhaengige Dinge. Die Brettgroessen
+   bleiben im jeweiligen style.css: jeder Modus rahmt sein Brett anders
+   ein, und eine gemeinsame Regel wuerde hier stumm in einen Modus
+   hineinwirken, den man gerade nicht im Blick hat.
+   ===================================================================== */
+
+/* Safari blaeht Text beim Drehen ins Landscape sonst eigenmaechtig auf und
+   sprengt damit genau die Leisten, die vorher knapp gepasst haben. */
+html { -webkit-text-size-adjust: 100%; }
+
+/* Auf Touch wartet der Browser nach jedem Tipp 300ms auf einen moeglichen
+   Doppeltipp-Zoom. Auf einem Brett, auf dem man Figuren antippt, fuehlt
+   sich das wie ein Aussetzer an. `manipulation` schaltet nur den
+   Doppeltipp ab — Pinch-Zoom bleibt erlaubt (Barrierefreiheit). */
+.square,
+.btn,
+.scribble-btn,
+.shop-card,
+.promo-piece,
+.close-btn,
+.play-btn,
+.social-btn {
+    touch-action: manipulation;
+}
+
+/* Touch-Geraete haben kein echtes Hover: der Browser laesst :hover nach dem
+   Antippen stehen, die Karte bleibt also vergroessert liegen. */
+@media (hover: none) {
+    .btn:hover,
+    .scribble-btn:hover,
+    .shop-card:hover:not(:disabled),
+    .promo-piece:hover,
+    .game-card:hover:not(.locked),
+    .play-btn:hover:not(.disabled),
+    .social-btn:hover,
+    .hof-item:hover,
+    .profile-info:hover,
+    .twitch-btn:hover {
+        transform: none;
+    }
+}
+
+/* Die zwei Deko-Florks haengen fix am unteren Rand und sind je 200px breit.
+   Auf einem 390px-Schirm decken sie zusammen den ganzen unteren Bereich ab —
+   also genau die Knoepfe, die dort stehen. */
+@media (max-width: 900px) {
+    .flork-bg { display: none !important; }
+}
+
+/* Tippziele: alles unter ~40px trifft man mit dem Daumen nicht zuverlaessig.
+   Nur auf groben Zeigern, damit die Maus-Optik unveraendert bleibt. */
+@media (pointer: coarse) {
+    .btn,
+    .scribble-btn,
+    .play-btn {
+        min-height: 42px;
+    }
+    /* Send turn / Take back / Chat senden waren mit 3px Innenabstand
+       zusammen rund 26px hoch. */
+    .btn-mini {
+        min-height: 38px;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+    .close-btn { width: 44px; height: 44px; }
+}
+
+/* Eingabefelder unter 16px lassen iOS beim Fokussieren ins Feld zoomen und
+   die Seite verschoben zurueck. 16px ist eine Grenze, kein Geschmack. */
+@media (max-width: 900px) {
+    input[type="text"],
+    input[type="search"],
+    select,
+    textarea {
+        font-size: max(16px, 1em);
     }
 }
