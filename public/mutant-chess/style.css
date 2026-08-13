@@ -7,20 +7,38 @@
     --accent: #81b64c;
     --warning: #e67e22;
     --fusion-purple: #8e44ad;
+
+    /* Brettgroesse an einer Stelle. Auf dem Desktop bleibt es bei 600px —
+       der zweite Term greift erst, wenn das Fenster schmaler wird als das
+       Brett. Absichtlich kein Hoehen-Term: der wuerde das Brett auch auf
+       einem 1280x720-Desktop schrumpfen. Landscape loest eine eigene Regel. */
+    --board-size: min(600px, calc(100vw - 28px));
+
+    /* Streifen oben fuer den fixierten Sound-Knopf. */
+    --top-strip: 0px;
 }
 
 /* HUB STYLE FÜR HINTERGRUND & SCHRIFT */
-body { 
-    background-color: #ffffff; 
-    color: #111; 
+body {
+    background-color: #ffffff;
+    color: #111;
     font-family: 'Patrick Hand', cursive, sans-serif;
     background-image: radial-gradient(#ddd 1px, transparent 1px);
     background-size: 20px 20px;
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    min-height: 100vh; 
-    margin: 0; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding-top: var(--top-strip);
+    box-sizing: border-box;
+}
+
+/* Mobile Browser rechnen 100vh inklusive der ein- und ausfahrenden
+   Adressleiste. Eigener Block, weil eine unbekannte Einheit sonst die ganze
+   Deklaration ungueltig macht. */
+@supports (height: 100dvh) {
+    body { min-height: 100dvh; }
 }
 
 .hidden { display: none !important; }
@@ -71,10 +89,13 @@ input[type="text"], .select-input {
     cursor: pointer;
 }
 
-.btn { 
-    width: 100%; 
-    padding: 12px; 
-    border: 3px solid #000; 
+.btn {
+    width: 100%;
+    padding: 12px;
+    /* Ohne border-box war ein Knopf mit width:100% um Innenabstand plus
+       Rahmen (30px) breiter als sein Container. */
+    box-sizing: border-box;
+    border: 3px solid #000;
     border-bottom-left-radius: 15px 255px;
     border-bottom-right-radius: 225px 15px;
     border-top-left-radius: 255px 15px;
@@ -118,8 +139,13 @@ input[type="text"], .select-input {
     border-radius: 10px 30px; 
 }
 
-.layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 10; }
-#game-container { position: relative; border-radius: 4px; overflow: hidden; }
+/* align-items: flex-start — sonst schiebt eine wachsende Seitenleiste
+   (Zughistorie) das vertikal zentrierte Brett zur Seite. */
+.layout { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; position: relative; z-index: 10; }
+/* Der Container ist exakt so breit wie das Brett, damit die Spielerleisten
+   buendig abschliessen. */
+#game-container { position: relative; width: var(--board-size); border-radius: 4px; overflow: hidden; }
+#game-container > * { box-sizing: border-box; max-width: 100%; }
 
 .player-bar { 
     background: #fff; 
@@ -193,23 +219,26 @@ input[type="text"], .select-input {
     padding: 16px; 
     border-radius: 8px; 
     font-weight: bold; 
-    z-index: 130; 
-    border: 4px solid #000; 
-    font-size: 24px; 
+    z-index: 130;
+    border: 4px solid #000;
+    font-size: clamp(16px, 4.5vw, 24px);
 }
 
-#board-wrapper { 
-    position: relative; 
-    width: 600px; 
-    height: 600px; 
-    transition: filter 0.3s, opacity 0.3s; 
-    box-shadow: 6px 6px 0px rgba(0,0,0,0.9); 
-    border: 4px solid #000; 
-    background: var(--board-light); 
+/* Breite kommt vom Container, damit Leisten und Brett exakt buendig
+   abschliessen. Beide Achsen sind border-box (Regel oben), Breite und Hoehe
+   rechnen also identisch — das Brett bleibt quadratisch. */
+#board-wrapper {
+    position: relative;
+    width: 100%;
+    height: var(--board-size);
+    transition: filter 0.3s, opacity 0.3s;
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
+    border: 4px solid #000;
+    background: var(--board-light);
 }
 
 #board, .square, .piece-container { user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
-#board { display: grid; grid-template-columns: repeat(8, 12.5%); grid-template-rows: repeat(8, 12.5%); width: 600px; height: 600px; }
+#board { display: grid; grid-template-columns: repeat(8, 12.5%); grid-template-rows: repeat(8, 12.5%); width: 100%; height: 100%; }
 #board.flipped { transform: rotate(180deg); }
 #board.flipped .square { transform: rotate(180deg); }
 .square { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer; }
@@ -218,24 +247,27 @@ input[type="text"], .select-input {
 .dark { background-color: var(--board-dark); }
 .selected { background-color: var(--highlight) !important; }
 
-.valid-move::after { 
-    content: ''; 
-    width: 22px; 
-    height: 22px; 
-    background: rgba(0,0,0,0.15); 
-    border-radius: 50%; 
-    position: absolute; 
-    pointer-events: none; 
+/* Prozent statt Pixel: bei 22px/65px auf einem 41px-Feld war der Punkt halb
+   so gross wie das Feld und der Schlagkreis ragte darueber hinaus. */
+.valid-move::after {
+    content: '';
+    width: 30%;
+    height: 30%;
+    background: rgba(0,0,0,0.15);
+    border-radius: 50%;
+    position: absolute;
+    pointer-events: none;
 }
 
-.capture-move::after { 
-    content: ''; 
-    width: 65px; 
-    height: 65px; 
-    border-radius: 50%; 
-    border: 5px solid rgba(0,0,0,0.15); 
-    position: absolute; 
-    pointer-events: none; 
+.capture-move::after {
+    content: '';
+    width: 86%;
+    height: 86%;
+    border-radius: 50%;
+    border: 5px solid rgba(0,0,0,0.15);
+    position: absolute;
+    pointer-events: none;
+    box-sizing: border-box;
 }
 
 .merge-move::after { 
@@ -372,3 +404,111 @@ input[type="text"], .select-input {
 }
 .flork-left { left: 2%; }
 .flork-right { right: 2%; transform: scaleX(-1); }
+
+/* =====================================================================
+   HANDY & TABLET
+
+   Das Brett skaliert oben ueber --board-size mit. Hier kommt dazu, was
+   sonst noch fest war. Reihenfolge im DOM ist bereits Brett ->
+   Seitenleiste, gestapelt steht also automatisch das Brett oben.
+   ===================================================================== */
+@media (max-width: 900px) {
+    :root { --top-strip: 40px; }
+
+    /* Bei zentriertem Flex-Inhalt, der hoeher ist als der Schirm, wird der
+       obere Teil unerreichbar. Oben ausrichten loest genau das. */
+    body {
+        align-items: flex-start;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .layout { gap: 12px; width: 100%; }
+
+    .sidebar {
+        width: 100%;
+        max-width: var(--board-size);
+        padding: 14px;
+        box-sizing: border-box;
+    }
+
+    #menu-screen,
+    #lobby-screen,
+    .card {
+        width: 100%;
+        max-width: 420px;
+        padding: 20px 16px;
+        box-sizing: border-box;
+    }
+    .card h1 { font-size: clamp(26px, 7vw, 38px); }
+    .subtitle { font-size: 17px; margin-bottom: 16px; }
+
+    .player-bar { font-size: 16px; padding: 6px 9px; margin-top: 6px; margin-bottom: 6px; }
+    .chess-avatar { width: 28px; height: 28px; }
+    .clock-box { font-size: 18px; padding: 3px 9px; }
+    .fusion-dot { width: 10px; height: 10px; }
+    .fusion-dots { gap: 3px; margin-left: 4px; }
+    /* Lange Twitch-Namen sollen die Leiste nicht sprengen. */
+    #top-player-name, #bottom-player-name {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .player-info { min-width: 0; flex: 1; }
+
+    .code-display { font-size: clamp(28px, 9vw, 42px); padding: 12px; }
+    .promo-piece { width: 52px; height: 52px; }
+    .history-list { max-height: 120px; }
+
+    /* Das FUSION-Schild sass auf einem 41px-Feld fast ueber der ganzen
+       Kachel. */
+    .merge-move::after { font-size: 9px; padding: 1px 3px; top: 2px; right: 2px; }
+    .slider { height: 26px; }
+}
+
+/* =====================================================================
+   LANDSCAPE auf dem Handy: hier ist die HOEHE der Engpass. Brett links,
+   Bedienung rechts.
+   ===================================================================== */
+@media (orientation: landscape) and (max-height: 600px) {
+    :root {
+        /* Brett plus die zwei Spielerleisten (~92px) muessen auf den Schirm.
+           Untergrenze 200px, damit die Felder nicht mikroskopisch werden. */
+        --board-size: max(200px, min(calc(100vh - 104px), calc(100vw - 300px)));
+        --top-strip: 0px;
+    }
+
+    body { align-items: flex-start; padding: 6px 8px; }
+
+    /* #game-screen ist Flex-Kind des body und bekam nur seine
+       Max-Content-Breite. Dadurch wurde der Brett-Container mitgeschrumpft
+       und das Brett war nicht mehr quadratisch. */
+    #game-screen { width: 100%; }
+    .layout { flex-wrap: nowrap; align-items: flex-start; gap: 10px; width: 100%; }
+    /* Das Brett darf als Letztes nachgeben, nie als Erstes. */
+    #game-container { flex: 0 0 auto; }
+
+    .sidebar {
+        width: auto;
+        flex: 1 1 240px;
+        min-width: 210px;
+        max-width: 320px;
+        max-height: calc(100vh - 12px);
+        overflow-y: auto;
+        padding: 10px;
+    }
+    /* Platz fuer den Sound-Knopf in der Ecke. */
+    .logo-area { padding-right: 44px; }
+    .btn-ready { font-size: 19px; padding: 9px; margin-bottom: 8px; }
+    .sidebar .btn { font-size: 17px; padding: 8px; }
+    .logo-area { padding-bottom: 6px; margin-bottom: 8px; }
+    .logo-area h2 { font-size: 20px !important; }
+    .history-list { max-height: 70px; }
+    .player-bar { font-size: 15px; padding: 4px 8px; margin: 4px 0; }
+    .chess-avatar { width: 24px; height: 24px; }
+}
+
+@supports (height: 100dvh) {
+    @media (orientation: landscape) and (max-height: 600px) {
+        :root { --board-size: max(200px, min(calc(100dvh - 104px), calc(100vw - 300px))); }
+        .sidebar { max-height: calc(100dvh - 12px); }
+    }
+}
