@@ -3,24 +3,40 @@
     --board-dark: #b58863;
     --highlight: rgba(246, 246, 105, 0.7);
     --border-color: #000000;
+
+    /* Brettgroesse an einer Stelle. Auf dem Desktop bleibt es bei 560px —
+       der zweite Term greift erst, wenn das Fenster schmaler wird. Der
+       Abzug 40px ist der `padding: 20px` des body. */
+    --board-size: min(560px, calc(100vw - 40px));
+
+    /* Streifen oben fuer den fixierten Sound-Knopf. */
+    --top-strip: 0px;
 }
 
 * {
     box-sizing: border-box;
 }
 
-body { 
-    background-color: #ffffff; 
-    color: #111; 
+body {
+    background-color: #ffffff;
+    color: #111;
     font-family: 'Patrick Hand', cursive, sans-serif;
     background-image: radial-gradient(#ddd 1px, transparent 1px);
     background-size: 20px 20px;
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    min-height: 100vh; 
-    margin: 0; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
     padding: 20px;
+    padding-top: calc(20px + var(--top-strip));
+}
+
+/* Mobile Browser rechnen 100vh inklusive der ein- und ausfahrenden
+   Adressleiste. Eigener Block, weil eine unbekannte Einheit sonst die ganze
+   Deklaration ungueltig macht. */
+@supports (height: 100dvh) {
+    body { min-height: 100dvh; }
 }
 
 .hidden { display: none !important; }
@@ -83,10 +99,15 @@ body {
     z-index: 10; 
 }
 
-#game-container { 
+/* Feste Breite = Brettbreite, damit die Spielerleisten (width:100%) exakt
+   buendig mit dem Brett abschliessen und der laengste Botname sie nicht
+   auseinanderzieht. */
+#game-container {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: var(--board-size);
+    max-width: 100%;
 }
 
 /* PLAYER BARS */
@@ -155,14 +176,14 @@ body {
 }
 
 /* BOARD WRAPPER & BOARD */
-#board-wrapper { 
-    position: relative; 
-    width: 560px; 
-    height: 560px; 
-    box-shadow: 6px 6px 0px rgba(0,0,0,0.9); 
-    border: 4px solid var(--border-color); 
+#board-wrapper {
+    position: relative;
+    width: 100%;
+    height: var(--board-size);
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.9);
+    border: 4px solid var(--border-color);
     border-radius: 12px 255px 15px 225px / 255px 15px 225px 12px;
-    background: var(--board-light); 
+    background: var(--board-light);
     overflow: hidden;
 }
 
@@ -197,8 +218,10 @@ body {
 .dark { background-color: var(--board-dark); }
 .selected { background-color: var(--highlight) !important; }
 
-.valid-move::after { content: ''; width: 20px; height: 20px; background: rgba(0,0,0,0.3); border-radius: 50%; position: absolute; }
-.capture-move::after { content: ''; width: 58px; height: 58px; border-radius: 50%; border: 5px solid rgba(0,0,0,0.3); position: absolute; }
+/* Prozent statt Pixel: bei 20px/58px auf einem 41px-Feld war der Punkt halb
+   so gross wie das Feld und der Schlagkreis ragte darueber hinaus. */
+.valid-move::after { content: ''; width: 29%; height: 29%; background: rgba(0,0,0,0.3); border-radius: 50%; position: absolute; }
+.capture-move::after { content: ''; width: 83%; height: 83%; border-radius: 50%; border: 5px solid rgba(0,0,0,0.3); position: absolute; }
 
 .piece { width: 88%; height: 88%; object-fit: contain; pointer-events: none; z-index: 10; }
 
@@ -330,3 +353,86 @@ body {
 }
 
 .result-banner.hidden { display: none; }
+
+/* =====================================================================
+   HANDY & TABLET
+
+   Das Brett skaliert oben ueber --board-size mit. Reihenfolge im DOM ist
+   bereits Brett -> Seitenleiste, gestapelt steht also das Brett oben.
+   ===================================================================== */
+@media (max-width: 900px) {
+    :root { --top-strip: 34px; }
+
+    /* Bei zentriertem Flex-Inhalt, der hoeher ist als der Schirm, wird der
+       obere Teil unerreichbar. */
+    body {
+        align-items: flex-start;
+        padding: calc(10px + var(--top-strip)) 10px 10px 10px;
+    }
+
+    .layout { gap: 14px; width: 100%; }
+
+    .sidebar {
+        width: 100%;
+        max-width: var(--board-size);
+        padding: 14px;
+    }
+
+    .player-bar { font-size: 17px; padding: 5px 10px; margin: 6px 0; }
+    .chess-avatar { width: 30px; height: 30px; }
+    .clock-box { font-size: 18px; }
+    .bot-elo-tag { font-size: 13px; padding: 1px 6px; }
+    /* Lange Botnamen sollen die Leiste nicht sprengen. */
+    #bot-name, #my-name {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .player-info { min-width: 0; flex: 1; gap: 7px; }
+
+    /* Vier Auswahlfelder untereinander sind auf dem Handy viel Hoehe fuer
+       wenig Inhalt — enger zusammen. */
+    .sidebar { gap: 9px; }
+    .stats-section { padding: 8px; }
+    .chat-section { height: 150px; }
+}
+
+/* =====================================================================
+   LANDSCAPE auf dem Handy: Brett links, Bedienung rechts.
+   ===================================================================== */
+@media (orientation: landscape) and (max-height: 600px) {
+    :root {
+        /* Brett plus die zwei Spielerleisten (~100px) muessen auf den Schirm. */
+        --board-size: max(200px, min(calc(100vh - 112px), calc(100vw - 300px)));
+        --top-strip: 0px;
+    }
+
+    body { align-items: flex-start; padding: 6px 8px; }
+    .layout { flex-wrap: nowrap; align-items: flex-start; gap: 10px; width: 100%; }
+    /* Das Brett darf als Letztes nachgeben, nie als Erstes. */
+    #game-container { flex: 0 0 auto; }
+
+    .sidebar {
+        width: auto;
+        flex: 1 1 250px;
+        min-width: 220px;
+        max-width: 330px;
+        max-height: calc(100vh - 12px);
+        overflow-y: auto;
+        padding: 10px;
+        gap: 8px;
+    }
+    /* Platz fuer den Sound-Knopf in der Ecke. */
+    .logo-area { padding-right: 44px; }
+    .chat-section { height: 110px; }
+    .sidebar .btn, .sidebar .scribble-btn { font-size: 16px; padding: 6px 8px; }
+    .logo-area { padding-bottom: 6px; }
+    #sidebar-title { font-size: 19px !important; }
+    .player-bar { font-size: 15px; padding: 4px 8px; margin: 4px 0; }
+    .chess-avatar { width: 26px; height: 26px; }
+}
+
+@supports (height: 100dvh) {
+    @media (orientation: landscape) and (max-height: 600px) {
+        :root { --board-size: max(200px, min(calc(100dvh - 112px), calc(100vw - 300px))); }
+        .sidebar { max-height: calc(100dvh - 12px); }
+    }
+}
