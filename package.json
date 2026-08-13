@@ -12,7 +12,8 @@
     "test:smoke": "node test/smoke-socket.js",
     "test:ui": "node test/smoke-ui.js",
     "test:prediction": "node test/prediction-socket.js",
-    "test:prediction:ui": "node test/prediction-ui.js"
+    "test:prediction:ui": "node test/prediction-ui.js",
+    "test:mobile": "node test/mobile-ui.js"
   },
   "dependencies": {
     "connect-mongo": "^5.0.0",
